@@ -22,6 +22,9 @@ public final class LibraryIndex {
     private static final int RARE_DF = 50;
     private static final int MIN_TOKEN_HITS = 2;
     private static final int CANDIDATE_CAP = 300;
+    private static final int FALLBACK_LIMIT = 50;
+    /** rapidfuzz's 0-100 scale. */
+    private static final double FALLBACK_CUTOFF = 50;
 
     /** One library track, with everything the scorer needs precomputed. */
     public record IndexedTrack(Track track, Versions.TitleParts parts, String coreNorm,
@@ -91,6 +94,9 @@ public final class LibraryIndex {
                 selected.add(new int[]{count, ordinal});
             }
         });
+        if (selected.isEmpty()) {
+            return fallback(queryNorm);
+        }
 
         // Descending by hit count, then by ordinal, as Python's sort(reverse=True)
         // on (count, ordinal) tuples does.
@@ -100,6 +106,34 @@ public final class LibraryIndex {
         List<IndexedTrack> result = new ArrayList<>();
         for (int i = 0; i < Math.min(selected.size(), CANDIDATE_CAP); i++) {
             result.add(items.get(selected.get(i)[1]));
+        }
+        return result;
+    }
+
+    /**
+     * No token overlap at all: scan everything, keep the closest few. Equal
+     * scores keep library order (ordinal ascending, UD-8), which is not the
+     * order Python's sort gives.
+     */
+    private List<IndexedTrack> fallback(String queryNorm) {
+        if (queryNorm == null || queryNorm.isEmpty() || items.isEmpty()) {
+            return List.of();
+        }
+        record Scored(double score, int ordinal) {
+        }
+        List<Scored> scored = new ArrayList<>();
+        for (int ordinal = 0; ordinal < items.size(); ordinal++) {
+            double score = Fuzz.tokenSetRatio(queryNorm, items.get(ordinal).allNorm());
+            if (score >= FALLBACK_CUTOFF) {
+                scored.add(new Scored(score, ordinal));
+            }
+        }
+        scored.sort(Comparator.comparingDouble(Scored::score).reversed()
+                .thenComparingInt(Scored::ordinal));
+
+        List<IndexedTrack> result = new ArrayList<>();
+        for (int i = 0; i < Math.min(scored.size(), FALLBACK_LIMIT); i++) {
+            result.add(items.get(scored.get(i).ordinal()));
         }
         return result;
     }
