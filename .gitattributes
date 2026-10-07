@@ -1,2 +1,5 @@
 # Shell scripts run under bash in Archon worktrees: a CRLF checkout breaks them.
 *.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
