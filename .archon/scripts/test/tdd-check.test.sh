@@ -92,5 +92,24 @@ echo "FAILED" > "$d.art/red/step-1.log"
 commit "$d" "feat: Foo" src/main/java/Foo.java
 expect fail "unchecked step" "$d"
 
+# 10. A test commit that also changes a build file is a test commit.
+d=$(repo); writeplan "$d" "- [x] 1. Add Foo (FooTest)"
+commit "$d" "test: FooTest and test deps" src/test/java/FooTest.java mod/build.gradle.kts
+echo "FooTest FAILED" > "$d.art/red/step-1.log"
+commit "$d" "feat: Foo" src/main/java/Foo.java
+expect ok "test commit with a build file" "$d"
+
+# 11. A build-only commit with no test commit before it: fails.
+d=$(repo); writeplan "$d" "- [x] (done by the workflow's open-pr and ci nodes) 1. Push"
+commit "$d" "build: bump deps" build.gradle.kts
+expect fail "build-only commit without a test" "$d"
+
+# 12. A code commit that also changes a build file, after a test commit: passes.
+d=$(repo); writeplan "$d" "- [x] 1. Add Foo (FooTest)"
+commit "$d" "test: FooTest" src/test/java/FooTest.java
+echo "FooTest FAILED" > "$d.art/red/step-1.log"
+commit "$d" "feat: Foo with dep" src/main/java/Foo.java build.gradle.kts
+expect ok "code and build file together" "$d"
+
 echo "tdd-check tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
