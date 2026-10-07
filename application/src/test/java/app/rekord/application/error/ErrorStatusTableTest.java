@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class ErrorStatusTableTest {
 
@@ -193,6 +194,13 @@ class ErrorStatusTableTest {
         assertThat(ErrorStatusTable.statusOf(new NotFoundException(ErrorCode.NO_LIBRARY, "x"))).isEqualTo(404);
         assertThat(ErrorStatusTable.statusOf(
                 new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.NO_LIBRARY, "x"))).isEqualTo(409);
+    }
+
+    @ParameterizedTest
+    @EnumSource(RejectedException.Kind.class)
+    void a_rejected_status_comes_from_its_row_not_its_kind(RejectedException.Kind kind) {
+        assertThat(ErrorStatusTable.statusOf(new RejectedException(kind, ErrorCode.NO_LIBRARY, "x"))).isEqualTo(409);
+        assertThat(ErrorStatusTable.statusOf(new RejectedException(kind, ErrorCode.EMPTY_NAME, "x"))).isEqualTo(400);
     }
 
     @Test
