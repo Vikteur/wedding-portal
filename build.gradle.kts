@@ -28,6 +28,15 @@ subprojects {
             shouldRunAfter(tasks.named("test"))
         }
 
+        // Slow set, part two: the start-up refusal tests that boot Quarkus through QuarkusUnitTest.
+        val startupTest = tasks.register<Test>("startupTest") {
+            testClassesDirs = testSourceSet.output.classesDirs
+            classpath = testSourceSet.runtimeClasspath
+            include("**/*IT.class")
+            useJUnitPlatform { includeTags("quarkus-unit-test") }
+            shouldRunAfter(integrationTest)
+        }
+
         // Slow set, part three: resource tests in the datasource-less profile. They run in their own JVM because the
         // Testcontainers substitutor is read from the environment, and it makes any container start fail the boot.
         val resourceTest = tasks.register<Test>("resourceTest") {
@@ -36,15 +45,6 @@ subprojects {
             include("**/*IT.class")
             useJUnitPlatform { includeTags("resource-test") }
             environment("TESTCONTAINERS_IMAGE_SUBSTITUTOR", "app.rekord.application.ContainerTripwire")
-            shouldRunAfter(integrationTest)
-        }
-
-        // Slow set, part two: the start-up refusal tests that boot Quarkus through QuarkusUnitTest.
-        val startupTest = tasks.register<Test>("startupTest") {
-            testClassesDirs = testSourceSet.output.classesDirs
-            classpath = testSourceSet.runtimeClasspath
-            include("**/*IT.class")
-            useJUnitPlatform { includeTags("quarkus-unit-test") }
             shouldRunAfter(integrationTest)
         }
 

@@ -56,6 +56,26 @@ class ResourceTestTaggingTest {
                 .isEmpty();
     }
 
+    @Test
+    void every_resource_test_tagged_class_ends_in_it() throws IOException {
+        // Given
+        List<Path> withTag = sourcesMatching(TAG);
+
+        // When
+        List<Path> notIt = withTag.stream()
+                .filter(path -> !path.getFileName().toString().endsWith("IT.java"))
+                .toList();
+
+        // Then
+        assertThat(withTag)
+                .extracting(path -> path.getFileName().toString())
+                .contains("HealthResourceIT.java", "ResourceTestProfileIT.java");
+        assertThat(notIt)
+                .as("resource-test tagged tests not ending in IT (resourceTest skips them, the fast set runs them"
+                        + " without the tripwire)")
+                .isEmpty();
+    }
+
     private static List<Path> sourcesMatching(Pattern pattern) throws IOException {
         try (Stream<Path> files = Files.walk(TEST_SOURCES)) {
             return files.filter(path -> path.toString().endsWith(".java"))
