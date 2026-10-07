@@ -9,7 +9,9 @@
 #     position among the plan's checkbox lines) showing a failing test run;
 #   - every commit since the base that changes code comes after a commit holding only tests, written since
 #     the code commit before it (a commit may change tests and code together only after such a test commit).
-# Docs (*.md) need no test.
+# Docs (*.md) need no test. Build files (*.gradle, *.gradle.kts, gradle/libs.versions.toml, gradle.properties,
+# settings.gradle*, pom.xml, package.json, package-lock.json) are a fourth class: with tests and no code they
+# belong to the test commit (test dependencies); alone they are a code commit; beside code they change nothing.
 set -euo pipefail
 
 art="${1:?usage: tdd-check.sh <artifacts-dir> <base-branch>}"
@@ -43,18 +45,21 @@ from="$(git merge-base HEAD "origin/$base" 2>/dev/null || git merge-base HEAD "$
 red=0
 while IFS= read -r c; do
   [ -n "$c" ] || continue
-  tests=0; code=0
+  tests=0; code=0; build=0
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     if [[ "$f" =~ (^|/)src/test/|(^|/)tests?/|\.test\.[A-Za-z]+$|(Test|Tests|IT)\.java$ ]]; then
       tests=1
     elif [[ "$f" == *.md ]]; then
       :
+    elif [[ "$f" =~ (^|/)(build\.gradle(\.kts)?|settings\.gradle(\.kts)?|[^/]+\.gradle(\.kts)?|libs\.versions\.toml|gradle\.properties|pom\.xml|package(-lock)?\.json)$ ]]; then
+      build=1
     else
       code=1
     fi
   done < <(git diff-tree --no-commit-id --name-only -r "$c")
   subject="$(git log -1 --format=%s "$c")"
+  [ "$build" -eq 1 ] && [ "$tests" -eq 0 ] && code=1
   if [ "$code" -eq 0 ]; then
     [ "$tests" -eq 1 ] && red=1
   elif [ "$red" -eq 1 ]; then
