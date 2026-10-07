@@ -159,6 +159,12 @@ check "E6 pr.json empty" $([ -e "$art/retro/pr.json" ] && [ ! -s "$art/retro/pr.
 check "E6 evidence written" $([ -s "$ev" ]; echo $?)
 check "E6 runs fall back to nothing unavailable" $(grep -qF -- '--branch' "$log" || ! grep -q -- '--commit' "$log"; echo $?)
 
+# E7. The pull request lives in another repo than the umbrella: CI runs are asked of that repo.
+layout e7; main="$root/e7/wp"; log="$root/e7/gh.log"; : > "$log"
+evidpr "TASK-7.1 add the thing" https://github.com/Vikteur/wedding-portal/pull/9
+check "E7 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "E7 run list by SHA asks the pull request's repo" $(grep -E '^run list .*--commit .* -R Vikteur/wedding-portal( |$)|^run list -R Vikteur/wedding-portal .*--commit' "$log" >/dev/null; echo $?)
+
 # ---------- retro-commit.sh ----------
 lessons() { # lessons <file> <run id8> [skip heading] [empty heading]
   { echo "# Retro — TASK-7.1"; echo
