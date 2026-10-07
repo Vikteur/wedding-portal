@@ -48,3 +48,15 @@ jobs:
         with:
           name: test-reports
           path: "**/build/reports/tests/**"
+
+  image:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t wedding-portal:ci .
+
+      - name: Check image
+        run: bash .github/scripts/image-check.sh wedding-portal:ci
