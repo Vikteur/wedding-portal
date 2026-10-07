@@ -64,3 +64,9 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every `rekord-gateway` test is an IT, so that module alone sets `failOnNoDiscoveredTests = false` on its `test` task. The root keeps Gradle's guard on for every other module.
 - `ProbeStatusGateway` is test-only and may go once the first real gateway has its own WireMock test.
 - P-3 / PIN-AC-0655 is settled by the CI run of this PR (run id and SHA are filled in after CI).
+
+## 2026-10-07 — TASK-2.3 contract codegen
+
+- `rekord-adapter` runs `openApiGenerate` (OpenAPI Generator 7.25.0, plugin `org.openapi.generator` from the version catalog, declared `apply false` at the root so the Jandex plugin and this one share a classloader) with `jaxrs-spec` and the options `interfaceOnly`, `useJakartaEe`, `useTags` set, and `returnResponse`, `useSwaggerAnnotations`, `openApiNullable` off, `dateLibrary=java8`. API and model tests are off. Packages are `app.rekord.api` and `app.rekord.api.model`.
+- Output goes to `rekord-adapter/build/generated/openapi/src/gen/java`, a source root of `main` wired through the task provider. It sits under the `build/generated` edit-guard globs and is ignored by git; nothing generated is ever committed or edited.
+- `-Pcontract.spec=<rekord-contract checkout>/dist/openapi.yaml` is required on every compiling Gradle run (`help` works without it). Locally: `git clone --branch v0.1.0 C:/Users/Pascal/Documents/weddingapp/rekord-contract contract` (the dir is gitignored), then pass `-Pcontract.spec=contract/dist/openapi.yaml`. The test JVM receives it as the system property `contract.spec`.

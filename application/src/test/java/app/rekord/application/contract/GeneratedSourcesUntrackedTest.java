@@ -43,9 +43,9 @@ class GeneratedSourcesUntrackedTest {
         // Given the generated HealthApi on disk
         assertThat(healthApi()).isRegularFile();
 
-        // Then git lists nothing under build/ and nothing in a package directory app/rekord/api/
+        // Then git lists nothing under a root or module build/ directory and nothing in a package directory app/rekord/api/
         assertThat(git("ls-files").out().lines())
-                .noneMatch(line -> line.startsWith("build/") || line.contains("/build/"))
+                .noneMatch(line -> line.matches("([^/]+/)?build/.*"))
                 .noneMatch(line -> line.contains("app/rekord/api/"));
     }
 
