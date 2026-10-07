@@ -115,5 +115,11 @@ check "6 non-empty sibling kept" $([ -f "$d/old-full/f.txt" ]; echo $?)
 check "6 registered sibling kept" $([ -f "$d/other/README.md" ]; echo $?)
 check "6 main checkout kept" $([ -d "$main_dir/.git" ]; echo $?)
 
+# 7. Run from the main checkout (not a run worktree): the sweep is skipped, an empty folder beside the repos survives.
+scenario seven
+d=$(dirname "$main_dir"); mkdir "$d/empty-beside-main"
+out=$( (cd "$main_dir" && PATH="$root/bin:$PATH" STUB_HEAD="$head" ARCHON_LOG="$log"   bash "$script" "" https://github.com/o/repo/pull/7 "$main_dir") 2>&1 ); rc=$?
+check "7 empty folder beside the main checkout survives" $([ -d "$d/empty-beside-main" ]; echo $?)
+
 echo "close-out tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
