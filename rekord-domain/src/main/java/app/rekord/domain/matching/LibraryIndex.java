@@ -1,6 +1,7 @@
 package app.rekord.domain.matching;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,8 +54,9 @@ public final class LibraryIndex {
         }
     }
 
+    /** Read-only: one index is cached and shared by every match of a library. */
     public List<IndexedTrack> items() {
-        return items;
+        return Collections.unmodifiableList(items);
     }
 
     public IndexedTrack byId(String trackId) {
@@ -172,7 +174,7 @@ public final class LibraryIndex {
                 tokens.add(token);
             }
         }
-        return new IndexedTrack(track, parts, coreNorm, artistNorm, allNorm, tokens);
+        return new IndexedTrack(track, parts, coreNorm, artistNorm, allNorm, Collections.unmodifiableSet(tokens));
     }
 
     /** The tokens a query offers the index: title, artist and any remixer. */
