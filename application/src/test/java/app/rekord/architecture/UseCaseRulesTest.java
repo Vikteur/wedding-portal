@@ -342,6 +342,77 @@ class UseCaseRulesTest {
         assertThatCode(() -> UseCaseRules.A3.check(fixtures)).doesNotThrowAnyException();
     }
 
+    private static final String WEDDING_CLOCK =
+            """
+            package app.rekord.usecase.fixture.port;
+
+            public interface WeddingClock {
+                long now();
+            }
+            """;
+
+    @Test
+    void a_port_producer_throwing_a_use_case_package_exception_passes_a3() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                WEDDING_CLOCK,
+                """
+                package app.rekord.usecase.fixture;
+
+                public class UseCaseError extends RuntimeException {}
+                """,
+                """
+                package app.rekord.application.fixture;
+
+                import app.rekord.usecase.fixture.UseCaseError;
+                import app.rekord.usecase.fixture.port.WeddingClock;
+                import jakarta.enterprise.inject.Produces;
+
+                public class ThrowsError {
+                    @Produces
+                    WeddingClock clock() {
+                        if (System.getenv("X") == null) {
+                            throw new UseCaseError();
+                        }
+                        return () -> 0L;
+                    }
+                }
+                """);
+
+        assertThatCode(() -> UseCaseRules.A3.check(fixtures)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void a_port_producer_reading_a_use_case_package_value_type_passes_a3() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                WEDDING_CLOCK,
+                """
+                package app.rekord.usecase.fixture;
+
+                public record Settings(long offset) {
+                    public static Settings defaults() {
+                        return new Settings(0L);
+                    }
+                }
+                """,
+                """
+                package app.rekord.application.fixture;
+
+                import app.rekord.usecase.fixture.Settings;
+                import app.rekord.usecase.fixture.port.WeddingClock;
+                import jakarta.enterprise.inject.Produces;
+
+                public class UsesSettings {
+                    @Produces
+                    WeddingClock clock() {
+                        long offset = Settings.defaults().offset();
+                        return () -> offset;
+                    }
+                }
+                """);
+
+        assertThatCode(() -> UseCaseRules.A3.check(fixtures)).doesNotThrowAnyException();
+    }
+
     @Test
     void the_a3_description_names_the_producer_refusal() {
         assertThat(UseCaseRules.A3.getDescription()).contains("@Produces", "UD-15.a", "PIN-AC-0448");
