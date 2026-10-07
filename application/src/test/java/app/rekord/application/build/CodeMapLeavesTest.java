@@ -87,6 +87,19 @@ class CodeMapLeavesTest {
         assertLeaf(Path.of("docs", "memory.md"), "raised in the domain", "published by the use case");
     }
 
+    @Test
+    void memory_records_that_the_lint_commands_wait_for_the_formatter_decision() throws IOException {
+        // TASK-3.4 AC #2: hooks.env ships with the three gate commands unset, and why
+        assertLeaf(
+                Path.of("docs", "memory.md"),
+                "TASK-3.4",
+                "LINT_FIX_CMD",
+                "LINT_CHECK_CMD",
+                "formatter decision",
+                "ARCH_FITNESS_CMD",
+                "jq");
+    }
+
     private static void assertLeaf(Path relative, String... phrases) throws IOException {
         Path file = REPO_ROOT.resolve(relative);
         assertThat(file).as("the leaf %s", relative).isRegularFile();
