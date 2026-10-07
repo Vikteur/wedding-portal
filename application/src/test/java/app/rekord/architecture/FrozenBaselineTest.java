@@ -78,7 +78,7 @@ class FrozenBaselineTest {
         for (Class<?> suiteClass : SUITE) {
             for (Field field : suiteClass.getDeclaredFields()) {
                 if (field.isAnnotationPresent(ArchTest.class)) {
-                    descriptions.add(rule(field).getDescription());
+                    descriptions.add(rule(field).getDescription().replace("\r\n", "\n"));
                 }
             }
         }
