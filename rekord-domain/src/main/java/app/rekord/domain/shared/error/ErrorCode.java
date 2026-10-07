@@ -1,5 +1,6 @@
 package app.rekord.domain.shared.error;
 
+/** The domain's hand-kept copy of the contract's ErrorCode enum, so the domain never depends on generated code; ErrorCodeContractTest binds it to the pinned contract. */
 public enum ErrorCode {
     NO_LIBRARY, NO_LIBRARY_SELECTED, EMPTY_NAME, DUPLICATE_NAME, NO_SOURCE, EMPTY_FILE, FILE_TOO_LARGE, BAD_XML,
     BAD_PLAYLIST, NOTHING_RESOLVED, NO_PLAYLIST, FOLDER_NOT_FOUND, SCAN_IN_PROGRESS, BAD_URL,
