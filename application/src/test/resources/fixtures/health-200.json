@@ -1,0 +1,6 @@
+{
+  "capturedFrom": "rekord-api ec65ae35c182e6e25f571c76d45b15a78f183c10, ./mvnw quarkus:dev, GET /api/health without a cookie",
+  "status": 200,
+  "contentType": "application/json;charset=UTF-8",
+  "body": "{\"ok\":true}"
+}
