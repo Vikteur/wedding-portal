@@ -9,11 +9,20 @@ import app.rekord.domain.shared.error.UpstreamUnavailableException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** The only place where an {@link ErrorCode} in a family becomes an HTTP status (rekord-api's statuses). */
 public final class ErrorStatusTable {
 
     public record Row(ErrorCode code, Class<? extends RekordException> family, int status) {
+
+        public Row {
+            Objects.requireNonNull(code, "code");
+            Objects.requireNonNull(family, "family");
+            if (status < 400 || status > 599) {
+                throw new IllegalArgumentException("Status must be 400..599 but was " + status);
+            }
+        }
     }
 
     private static final List<Row> ROWS = List.of(
