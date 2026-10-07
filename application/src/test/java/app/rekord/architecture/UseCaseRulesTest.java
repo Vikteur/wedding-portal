@@ -182,6 +182,114 @@ class UseCaseRulesTest {
         assertBreaksA3On(fixtures, "app.rekord.application.fixture.UseCaseProducer");
     }
 
+    private static final String CREATE_WEDDING_COMMAND =
+            """
+            package app.rekord.usecase.fixture.port;
+
+            public interface CreateWeddingCommand {
+                void create();
+            }
+            """;
+
+    @Test
+    void a_producer_method_building_a_use_case_through_a_constructor_reference_breaks_a3() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                CREATE_WEDDING_COMMAND,
+                """
+                package app.rekord.usecase.fixture;
+
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+
+                public class CreateWedding implements CreateWeddingCommand {
+                    public void create() {}
+                }
+                """,
+                """
+                package app.rekord.application.fixture;
+
+                import app.rekord.usecase.fixture.CreateWedding;
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+                import jakarta.enterprise.inject.Produces;
+                import java.util.function.Supplier;
+
+                public class UseCaseProducer {
+                    @Produces
+                    CreateWeddingCommand createWedding() {
+                        Supplier<CreateWeddingCommand> factory = CreateWedding::new;
+                        return factory.get();
+                    }
+                }
+                """);
+
+        assertBreaksA3On(fixtures, "app.rekord.application.fixture.UseCaseProducer");
+    }
+
+    @Test
+    void a_producer_method_building_a_use_case_through_a_static_factory_breaks_a3() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                CREATE_WEDDING_COMMAND,
+                """
+                package app.rekord.usecase.fixture;
+
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+
+                public class CreateWedding implements CreateWeddingCommand {
+                    public static CreateWedding withDefaults() {
+                        return new CreateWedding();
+                    }
+
+                    public void create() {}
+                }
+                """,
+                """
+                package app.rekord.application.fixture;
+
+                import app.rekord.usecase.fixture.CreateWedding;
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+                import jakarta.enterprise.inject.Produces;
+
+                public class UseCaseProducer {
+                    @Produces
+                    CreateWeddingCommand createWedding() {
+                        return CreateWedding.withDefaults();
+                    }
+                }
+                """);
+
+        assertBreaksA3On(fixtures, "app.rekord.application.fixture.UseCaseProducer");
+    }
+
+    @Test
+    void a_producer_method_handing_on_the_injected_use_case_bean_through_its_port_passes_a3() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                CREATE_WEDDING_COMMAND,
+                """
+                package app.rekord.usecase.fixture;
+
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+
+                public class CreateWedding implements CreateWeddingCommand {
+                    public void create() {}
+                }
+                """,
+                """
+                package app.rekord.application.fixture;
+
+                import app.rekord.usecase.fixture.port.CreateWeddingCommand;
+                import jakarta.enterprise.inject.Instance;
+                import jakarta.enterprise.inject.Produces;
+
+                public class CommandProducer {
+                    @Produces
+                    CreateWeddingCommand createWedding(Instance<app.rekord.usecase.fixture.CreateWedding> bean) {
+                        return bean.get();
+                    }
+                }
+                """);
+
+        assertThatCode(() -> UseCaseRules.A3.check(fixtures)).doesNotThrowAnyException();
+    }
+
     @Test
     void a_producer_field_holding_a_use_case_breaks_a3() {
         JavaClasses fixtures = FixtureCompiler.compile(
