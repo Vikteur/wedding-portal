@@ -1,0 +1,178 @@
+name: build-feature
+description: |
+  Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
+  Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> implement step by
+  step with tests -> review -> your approval -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a
+  red run (at most 3 rounds) -> mark the pull request ready.
+  NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
+interactive: true
+
+# Model policy (UD-21.a): @analyse (Claude Opus 5.5) plans, reviews and diagnoses; @build (Claude Sonnet 5.5) writes
+# code, tests and the pull request text. Both aliases are defined in .archon/config.yaml.
+# Deterministic steps are scripts in .archon/scripts (P2): reading the ticket, routing the STOP gate, the push, CI by SHA.
+nodes:
+  - id: ticket
+    bash: |
+      bash .archon/scripts/ticket.sh "$ARGUMENTS"
+    output_format:
+      type: object
+      properties:
+        task: { type: string }
+        stop: { type: string }
+      required: [task, stop]
+
+  - id: plan
+    depends_on: [ticket]
+    model: "@analyse"
+    prompt: |
+      Request: $ARGUMENTS
+      Backlog ticket: $ticket.output.task (its full text is in $ARTIFACTS_DIR/ticket.md when the request names one).
+      Explore the codebase and write an implementation plan for exactly this request to $ARTIFACTS_DIR/plan.md.
+      Write every step as a Markdown checkbox line `- [ ] ...`; each step names its tests.
+      Then decide whether the plan touches the STOP list of .claude/CLAUDE.md (a contract push, a database migration,
+      authentication or authorization, encryption or what gets logged, deleting branches or history, production
+      configuration or secrets). Answer stop=true with the item in stop_reason, or stop=false with an empty reason.
+    output_format:
+      type: object
+      properties:
+        stop: { type: boolean }
+        stop_reason: { type: string }
+      required: [stop, stop_reason]
+
+  - id: stop-route
+    depends_on: [plan]
+    bash: |
+      labels=$ticket.output.stop
+      planned=$plan.output.stop
+      reason=$plan.output.stop_reason
+      why=""
+      [ -n "$labels" ] && why="ticket labels: $labels"
+      [ "$planned" = "true" ] && why="${why:+$why; }plan: $reason"
+      pause=false; [ -n "$why" ] && pause=true
+      node -e 'console.log(JSON.stringify({ pause: process.argv[1] === "true", why: process.argv[2] }))' "$pause" "$why"
+    output_format:
+      type: object
+      properties:
+        pause: { type: boolean }
+        why: { type: string }
+      required: [pause, why]
+
+  - id: stop-gate
+    depends_on: [stop-route]
+    when: "$stop-route.output.pause == 'true'"
+    approval:
+      message: |
+        STOP: $stop-route.output.why
+        Read the plan in $ARTIFACTS_DIR/plan.md before any code is written. Approve to implement it, reject to end
+        the run here.
+
+  - id: implement
+    depends_on: [stop-route, stop-gate]
+    trigger_rule: none_failed_min_one_success
+    model: "@build"
+    loop:
+      prompt: |
+        Request: $ARGUMENTS
+        Read $ARTIFACTS_DIR/plan.md. Implement the first step still marked `- [ ]`, with its tests, and run the tests.
+        When they pass, mark that step `- [x]` in the plan and commit the step.
+      until_bash: |
+        ! grep -qE '^\s*- \[ \]' "$ARTIFACTS_DIR/plan.md"
+      max_iterations: 10
+      fresh_context: true
+
+  - id: review
+    depends_on: [implement]
+    model: "@analyse"
+    prompt: |
+      Request: $ARGUMENTS
+      Review all changes on this branch against $ARTIFACTS_DIR/plan.md. Fix any issues, run the tests, and commit.
+
+  - id: approve
+    depends_on: [review]
+    model: "@build"
+    loop:
+      prompt: |
+        Request: $ARGUMENTS
+        Present the changes for review. Address any feedback, run the tests, and commit.
+      until: APPROVED
+      max_iterations: 5
+      interactive: true
+      gate_message: |
+        Review the changes. Reply APPROVED to push the branch and open a DRAFT pull request, or give feedback.
+
+  - id: pr-text
+    depends_on: [approve]
+    model: "@build"
+    prompt: |
+      Request: $ARGUMENTS
+      Write the pull request description for the changes on this branch to $ARTIFACTS_DIR/pr-body.md: what changed
+      and why, the tests, and the Backlog ticket ($ticket.output.task) when there is one. End it with:
+
+      🤖 Generated with [Claude Code](https://claude.com/claude-code)
+      Do not push and do not open the pull request; return only the title.
+    output_format:
+      type: object
+      properties:
+        title: { type: string }
+      required: [title]
+
+  - id: open-pr
+    depends_on: [pr-text]
+    bash: |
+      title=$pr-text.output.title
+      bash .archon/scripts/open-pr.sh "$BASE_BRANCH" "$title" "$ARTIFACTS_DIR/pr-body.md"
+    output_format:
+      type: object
+      properties:
+        pr: { type: string }
+        sha: { type: string }
+      required: [pr, sha]
+
+  - id: ci
+    depends_on: [open-pr]
+    timeout: 3600000
+    bash: |
+      bash .archon/scripts/ci-by-sha.sh
+    output_format: &ci_state
+      type: object
+      properties:
+        state: { type: string, enum: [green, red, none] }
+        sha: { type: string }
+        detail: { type: string }
+      required: [state, sha, detail]
+
+  # Red => escalate to the debugger (P5): Opus diagnoses from the failing logs, Sonnet fixes, until CI on the new
+  # HEAD is green. Exhausting the rounds fails the run; the pull request stays a draft.
+  - id: ci-fix
+    depends_on: [ci]
+    when: "$ci.output.state == 'red'"
+    loop_group:
+      max_iterations: 3
+      until_bash: bash .archon/scripts/ci-by-sha.sh --check
+      nodes:
+        - id: diagnose
+          model: "@analyse"
+          prompt: |
+            CI is red for the HEAD commit of this branch. Find the failing runs with
+            `gh run list --commit $(git rev-parse HEAD)` and read them with `gh run view <id> --log-failed`.
+            Write the root cause and the smallest fix to $ARTIFACTS_DIR/ci-diagnosis.md. Do not edit code.
+        - id: fix
+          depends_on: [diagnose]
+          model: "@build"
+          prompt: |
+            Read $ARTIFACTS_DIR/ci-diagnosis.md and apply the fix. Run the tests, commit, and `git push`.
+
+  - id: ready
+    depends_on: [ci, ci-fix]
+    trigger_rule: none_failed_min_one_success
+    timeout: 3600000
+    bash: |
+      set -euo pipefail
+      pr=$open-pr.output.pr
+      result=$(bash .archon/scripts/ci-by-sha.sh)
+      echo "$result"
+      case "$result" in
+        *'"state": "green"'*) gh pr ready "$pr" ;;
+        *'"state": "none"'*) echo "No CI run for this commit: the pull request stays a draft (P5)." >&2; exit 1 ;;
+        *) echo "CI is not green: the pull request stays a draft." >&2; exit 1 ;;
+      esac
