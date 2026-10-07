@@ -106,4 +106,47 @@ class LibraryIndexTest {
 
         assertThat(ids(candidatesFor(index, "Band", "Love Song"))).containsExactly("three", "two-b", "two-a");
     }
+
+    @Test
+    void with_no_shared_token_the_fallback_lists_equal_scores_in_library_order() {
+        LibraryIndex index = new LibraryIndex(List.of(
+                new Track("a", null, "Dancing Queen", null),
+                new Track("b", null, "Dancing Queen", null)));
+
+        assertThat(ids(candidatesFor(index, "", "Dancin Quen"))).containsExactly("a", "b");
+    }
+
+    @Test
+    void the_fallback_returns_nothing_for_an_empty_query() {
+        LibraryIndex index = new LibraryIndex(List.of(new Track("1", "Daft Punk", "One More Time", null)));
+
+        assertThat(candidatesFor(index, "", "")).isEmpty();
+    }
+
+    @Test
+    void the_fallback_keeps_scores_of_50_and_more_best_first() {
+        LibraryIndex index = new LibraryIndex(List.of(
+                new Track("low", null, "Zebra Xylophone", null),
+                new Track("worse", null, "Dancing Queen Extra Words Here", null),
+                new Track("best", null, "Dancing Queen", null)));
+
+        assertThat(Fuzz.tokenSetRatio("dancin quen", "zebra xylophone")).isLessThan(50);
+        assertThat(Fuzz.tokenSetRatio("dancin quen", "dancing queen extra words here")).isGreaterThanOrEqualTo(50);
+        assertThat(ids(index.candidates(Set.of("xqz"), "dancin quen"))).containsExactly("best", "worse");
+    }
+
+    @Test
+    void the_fallback_keeps_at_most_50() {
+        List<Track> tracks = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            tracks.add(new Track("f" + i, null, "Dancing Queen", null));
+        }
+        LibraryIndex index = new LibraryIndex(tracks);
+
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            expected.add("f" + i);
+        }
+        assertThat(ids(index.candidates(Set.of("xqz"), "dancin quen"))).containsExactlyElementsOf(expected);
+    }
 }
