@@ -34,7 +34,15 @@ class CodeMapLeavesTest {
                 "jaxrs-spec",
                 "interfaceOnly",
                 "build/generated",
-                "catalog");
+                "catalog",
+                "7.25.0",
+                "cleanupOutput",
+                "contract.spec",
+                "src/gen/java");
+        // TASK-2.3 built the task: the leaf must not still say it is missing
+        assertThat(Files.readString(REPO_ROOT.resolve(CODE_MAPS.resolve("code-generation.md"))).toLowerCase(Locale.ROOT))
+                .as("code-generation.md no longer claims codegen is not built")
+                .doesNotContain("not built yet");
     }
 
     @Test
