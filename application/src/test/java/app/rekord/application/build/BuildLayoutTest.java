@@ -198,9 +198,10 @@ class BuildLayoutTest {
         Path memory = REPO_ROOT.resolve("docs/memory.md");
         assertThat(memory).exists();
 
-        Matcher executor = Pattern.compile("(?m)^Executor \\(UD-17\\):\\s*(\\S.*)$").matcher(read(memory));
-        assertThat(executor.find()).as("an 'Executor (UD-17):' line").isTrue();
-        assertThat(executor.group(1)).containsIgnoringCase("Archon");
+        Matcher executor = Pattern.compile("(?m)^Executor \\(UD-17\\):\\s*(\\S.*)$(?:\\R-.*)*")
+                .matcher(read(memory));
+        assertThat(executor.find()).as("an 'Executor (UD-17):' section").isTrue();
+        assertThat(executor.group()).containsIgnoringCase("Archon").doesNotContainIgnoringCase("to be confirmed");
     }
 
     @Test

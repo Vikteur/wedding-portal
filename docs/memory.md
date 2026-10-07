@@ -10,6 +10,6 @@ Gradle: 9.8.0
 - Wrapper with the distribution checksum pinned (`distributionSha256Sum`). Java toolchain 25 and `options.release = 25` in every module.
 
 Executor (UD-17): the Archon build-feature workflow (.archon/workflows/build-feature.yaml) running Claude Code; code and tests by Claude Sonnet 5.5 (@build), planning and review by Claude Opus 5.5 (@analyse), per UD-21.a.
-- To be confirmed by the user: UD-17 says the user chooses; UD-21.a and `.archon/config.yaml` are the recorded evidence.
+- The user chose this executor by starting TASK-1.1 through the Archon build-feature workflow (Archon run 743a7815-4cff-4f5b-bca9-55841a44d63b); `.archon/config.yaml` and UD-21.a record the model split.
 
 Module layout: follows architecture-conventions §2.2 and §14.1. Library beans are discovered through each module's own Jandex index (PIN-AC-0153).
