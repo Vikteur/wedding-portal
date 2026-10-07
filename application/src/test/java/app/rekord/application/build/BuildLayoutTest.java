@@ -108,6 +108,23 @@ class BuildLayoutTest {
     }
 
     @Test
+    void catalog_declares_no_quarkus_version_besides_the_platform_bom() throws IOException {
+        List<String> versioned = catalogSection("libraries")
+                .filter(line -> line.matches(".*(module|group)\\s*=\\s*\"io\\.quarkus.*"))
+                .filter(line -> line.matches(".*\\bversion(\\.ref)?\\s*=.*"))
+                .toList();
+        assertThat(versioned).hasSize(1);
+        assertThat(versioned.get(0)).contains("module = \"io.quarkus.platform:quarkus-bom\"");
+
+        List<String> plugin = catalogSection("plugins")
+                .filter(line -> line.matches("^io\\.quarkus\\s*=.*|^\\S+\\s*=.*id\\s*=\\s*\"io\\.quarkus\".*"))
+                .toList();
+        assertThat(plugin).hasSize(1);
+        assertThat(plugin.get(0)).containsPattern("version\\.ref\\s*=\\s*\"quarkus\"");
+        assertThat(versioned.get(0)).containsPattern("version\\.ref\\s*=\\s*\"quarkus\"");
+    }
+
+    @Test
     void no_python_file_exists() throws IOException {
         List<Path> python = repoFiles().filter(file -> file.getFileName().toString().endsWith(".py")).toList();
 
@@ -209,6 +226,18 @@ class BuildLayoutTest {
             }
         }
         return "3.39.1";
+    }
+
+    /** The non-blank, non-comment lines of one {@code [section]} of the version catalog. */
+    private static Stream<String> catalogSection(String section) throws IOException {
+        List<String> lines = read(REPO_ROOT.resolve("gradle/libs.versions.toml")).lines().toList();
+        int start = lines.indexOf("[" + section + "]");
+        assertThat(start).as("a [%s] section in the catalog", section).isNotNegative();
+        return lines.stream()
+                .skip(start + 1)
+                .takeWhile(line -> !line.strip().startsWith("["))
+                .map(String::strip)
+                .filter(line -> !line.isEmpty() && !line.startsWith("#"));
     }
 
     private static List<Path> gradleKtsFiles() throws IOException {
