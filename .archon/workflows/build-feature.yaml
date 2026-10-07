@@ -2,8 +2,8 @@ name: build-feature
 description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> implement step by
-  step with tests -> review -> your approval -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a
-  red run (at most 3 rounds) -> mark the pull request ready.
+  step with tests -> review -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most
+  3 rounds) -> mark the pull request ready for your review and merge.
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -29,6 +29,8 @@ nodes:
       Backlog ticket: $ticket.output.task (its full text is in $ARTIFACTS_DIR/ticket.md when the request names one).
       Explore the codebase and write an implementation plan for exactly this request to $ARTIFACTS_DIR/plan.md.
       Write every step as a Markdown checkbox line `- [ ] ...`; each step names its tests.
+      Plan only code, tests and local commits: the push, the pull request and reading CI are later nodes of this
+      workflow, so never write them as a checkbox step.
       Then decide whether the plan touches the STOP list of .claude/CLAUDE.md (a contract push, a database migration,
       authentication or authorization, encryption or what gets logged, deleting branches or history, production
       configuration or secrets). Answer stop=true with the item in stop_reason, or stop=false with an empty reason.
@@ -75,6 +77,8 @@ nodes:
         Request: $ARGUMENTS
         Read $ARTIFACTS_DIR/plan.md. Implement the first step still marked `- [ ]`, with its tests, and run the tests.
         When they pass, mark that step `- [x]` in the plan and commit the step.
+        A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: do not do it,
+        mark it `- [x] (done by the workflow's open-pr and ci nodes)` and commit nothing for it.
       until_bash: |
         ! grep -qE '^\s*- \[ \]' "$ARTIFACTS_DIR/plan.md"
       max_iterations: 10
@@ -87,27 +91,9 @@ nodes:
       Request: $ARGUMENTS
       Review all changes on this branch against $ARTIFACTS_DIR/plan.md. Fix any issues, run the tests, and commit.
 
-  - id: approve
-    depends_on: [review]
-    model: "@build"
-    loop:
-      prompt: |
-        Request: $ARGUMENTS
-        The user's latest reply at the review gate: $LOOP_USER_INPUT
-        - No reply yet (first iteration): present the changes for review (what changed, the tests and their result,
-          open questions) and stop. Do not emit the completion signal.
-        - The reply asks for changes: make them, run the tests, commit, and present what changed.
-        - The reply explicitly approves ("APPROVED", "approved", "looks good"): first carry out any instruction that
-          comes with the approval, run the tests and commit; then end with <promise>APPROVED</promise>.
-        Never emit APPROVED unless the reply explicitly approves; questions and feedback are not approval.
-      until: APPROVED
-      max_iterations: 5
-      interactive: true
-      gate_message: |
-        Review the changes. Reply APPROVED to push the branch and open a DRAFT pull request, or give feedback.
-
+  # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
   - id: pr-text
-    depends_on: [approve]
+    depends_on: [review]
     model: "@build"
     prompt: |
       Request: $ARGUMENTS
