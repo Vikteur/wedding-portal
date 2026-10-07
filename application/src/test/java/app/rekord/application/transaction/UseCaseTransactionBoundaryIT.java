@@ -84,7 +84,7 @@ class UseCaseTransactionBoundaryIT {
         // When
         useCase.save("first");
 
-        // Then: the control that shows the discard above comes from the rollback
+        // Then: the write is kept on commit, so the empty list in the failing-call test comes from the rollback
         assertThat(port.completions()).containsExactly(Status.STATUS_COMMITTED);
         assertThat(port.committedWrites()).containsExactly("first");
     }

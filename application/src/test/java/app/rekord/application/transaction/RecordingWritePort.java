@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Test-only port that stages a write in the current transaction and keeps it only when the transaction commits. A
- * write made without a transaction is kept at once, so a use case that loses its boundary leaves a visible half write.
+ * write made outside an active transaction is kept at once, so a use case that loses its boundary leaves a visible half write.
  */
 @ApplicationScoped
 public class RecordingWritePort implements WritePort {

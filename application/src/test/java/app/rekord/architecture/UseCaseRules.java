@@ -32,7 +32,11 @@ public final class UseCaseRules {
             + " a use case is an @ApplicationScoped bean, never the result of an @Produces method or field,"
             + " because ArC binds @Transactional to managed beans only";
 
-    /** A use case is any usecase type except the ports, which stay producible (section 6.3). */
+    /**
+     * Every type in app.rekord.usecase.. except the ports in ..port.. (architecture-conventions section 6.1), which
+     * application may produce (section 6.3). Deliberately broad: commands, results and any other non-port usecase type
+     * count too, so a section 6.3 configuration record placed outside ..port.. would also be refused.
+     */
     private static final DescribedPredicate<JavaClass> USE_CASE_TYPE =
             JavaClass.Predicates.resideInAPackage("app.rekord.usecase..")
                     .and(JavaClass.Predicates.resideOutsideOfPackage("app.rekord.usecase..port.."))
