@@ -208,5 +208,24 @@ commit_run
 check "C9 exit 0 after a rebase" $([ "$rc" -eq 0 ]; echo $?)
 check "C9 retro on top of the other commit" $(origin_head c9 | grep -q '^retro: TASK-7.1'; echo $?)
 
+# C10. A stopped run's short section (cancelled or rejected) needs only What happened and Why it stopped.
+short_lessons() { # short_lessons <file> <outcome> [skip heading]
+  { echo "# Retro — TASK-7.1"; echo; echo "## Run 73ef1981 — 2026-10-07 — $2"; echo
+    for h in "What happened" "Why it stopped"; do
+      [ "$h" = "${3:-}" ] && continue
+      echo "### $h"; echo "- something real"; echo
+    done; } > "$1"
+}
+umbrella c10; short_lessons "$f/lessons-learned.md" cancelled
+commit_run
+check "C10 cancelled short section exit 0" $([ "$rc" -eq 0 ]; echo $?)
+umbrella c10b; short_lessons "$f/lessons-learned.md" rejected
+commit_run
+check "C10 rejected short section exit 0" $([ "$rc" -eq 0 ]; echo $?)
+umbrella C11; short_lessons "$f/lessons-learned.md" cancelled "Why it stopped"
+broken C11 "a stopped run without Why it stopped"
+umbrella C12; short_lessons "$f/lessons-learned.md" merged
+broken C12 "a merged run with only the short section"
+
 echo "retro: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
