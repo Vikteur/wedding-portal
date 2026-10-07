@@ -221,6 +221,11 @@ class BuildLayoutTest {
     }
 
     @Test
+    void memory_records_the_resource_test_profile() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("docs/memory.md"))).contains("resourceTest", "ContainerTripwire");
+    }
+
+    @Test
     void memory_records_the_pinned_quarkus_line_matching_the_catalog() throws IOException {
         Matcher memoryLine = Pattern.compile("(?m)^Quarkus platform:\\s*(\\S+)")
                 .matcher(read(REPO_ROOT.resolve("docs/memory.md")));
