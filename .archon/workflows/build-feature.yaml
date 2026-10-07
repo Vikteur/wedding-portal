@@ -3,8 +3,8 @@ description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> implement step by
   step with tests -> review -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most
-  3 rounds) -> mark the pull request ready for your review and merge -> wait for the merge -> finalize the Backlog
-  ticket (Done), commit and push it, and delete the run's branch and worktree.
+  3 rounds) -> wait for your "Approved" comment on the pull request -> mark it ready for your merge -> wait for the
+  merge -> finalize the Backlog ticket (Done), commit and push it, and delete the run's branch and worktree.
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -99,7 +99,10 @@ nodes:
     prompt: |
       Request: $ARGUMENTS
       Write the pull request description for the changes on this branch to $ARTIFACTS_DIR/pr-body.md: what changed
-      and why, the tests, and the Backlog ticket ($ticket.output.task) when there is one. End it with:
+      and why, the tests, and the Backlog ticket ($ticket.output.task) when there is one. Then add a section
+      `## Approval` saying that the run keeps this pull request a draft until a comment starting with "Approved"
+      records the human review and the approval of the STOP items, and name those items: "$stop-route.output.why"
+      (when that is empty, say that the ticket touches no STOP item and the comment records the review). End it with:
 
       🤖 Generated with [Claude Code](https://claude.com/claude-code)
       Do not push and do not open the pull request; return only the title.
@@ -155,9 +158,33 @@ nodes:
           prompt: |
             Read $ARTIFACTS_DIR/ci-diagnosis.md and apply the fix. Run the tests, commit, and `git push`.
 
-  - id: ready
+  # The review and the STOP approval are recorded on the pull request before it can be merged (DoD #5 and #11): the
+  # run keeps it a draft until your comment starting with "Approved" lands after the green head commit. The run never
+  # writes that comment. Merged or closed without one fails the run before anything is finalized.
+  - id: approval
     depends_on: [ci, ci-fix]
     trigger_rule: none_failed_min_one_success
+    timeout: 1209600000
+    bash: |
+      set -euo pipefail
+      pr=$open-pr.output.pr
+      result=$(bash .archon/scripts/ci-by-sha.sh)
+      case "$result" in
+        *'"state": "green"'*) ;;
+        *) echo "CI is not green ($result): the pull request stays a draft (P5)." >&2; exit 1 ;;
+      esac
+      bash .archon/scripts/wait-approval.sh "$pr" "$(git rev-parse HEAD)"
+    output_format:
+      type: object
+      properties:
+        approval: { type: string }
+        by: { type: string }
+        at: { type: string }
+        sha: { type: string }
+      required: [approval, by, at, sha]
+
+  - id: ready
+    depends_on: [approval]
     timeout: 3600000
     bash: |
       set -euo pipefail
@@ -203,7 +230,10 @@ nodes:
       1. Read `backlog instructions task-finalization` and `backlog task view <ticket> --plain`.
       2. Check each acceptance criterion and Definition of Done item only on evidence: the merged code and tests,
          and the CI runs of the head SHA (`gh run list --commit <head>`, `gh run view <id> --log`). Check an item
-         that does not apply, with its reason in the notes as `DoD #n N/A: <reason>`.
+         that does not apply, with its reason in the notes as `DoD #n N/A: <reason>`. The human review and the STOP
+         approval are the pull request comment $approval.output.approval by $approval.output.by at
+         $approval.output.at, made on head $approval.output.sha before the merge: cite it for the items on STOP
+         approval and on review. When the merged head is not $approval.output.sha, that comment is no evidence.
       3. Append the evidence to the implementation notes, write a final summary naming it (pull request, merge
          commit, CI run and SHA), and set the status Done.
       4. When the ticket has a parent and every sub-ticket of that parent is now Done, close the parent the same way.
