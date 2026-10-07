@@ -128,4 +128,12 @@ class ContractSpecWiringTest {
                 .filteredOn(l -> l.stripLeading().matches("(?i)(ARG|ENV)\\b.*"))
                 .noneMatch(l -> l.toLowerCase().contains("token"));
     }
+
+    @Test
+    void the_image_job_runs_only_on_a_push_to_main() throws IOException {
+        JsonNode jobs = workflow().path("jobs");
+        assertThat(jobs.path("image").path("if").asText("").trim())
+                .isEqualTo("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+        assertThat(jobs.path("build").has("if")).as("build job has an if").isFalse();
+    }
 }
