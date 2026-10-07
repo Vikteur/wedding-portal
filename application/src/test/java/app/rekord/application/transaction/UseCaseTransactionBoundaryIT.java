@@ -1,6 +1,7 @@
 package app.rekord.application.transaction;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InjectableBean;
@@ -56,5 +57,31 @@ class UseCaseTransactionBoundaryIT {
                 .filteredOn(constructor -> constructor.getParameterCount() > 0)
                 .singleElement()
                 .satisfies(constructor -> assertThat(constructor.getParameterTypes()).containsExactly(WritePort.class));
+    }
+
+    @Test
+    void a_failing_second_port_call_reaches_the_caller_and_the_recorded_write_is_rolled_back() {
+        // Given: the second port call is armed to fail
+        port.failNextConfirm();
+
+        // When
+        Throwable thrown = catchThrowable(() -> useCase.save("first"));
+
+        // Then: the exception reaches the caller unwrapped, the transaction rolled back, the write is gone
+        assertThat(thrown).isNotNull().isSameAs(port.failure());
+        assertThat(port.completions()).containsExactly(Status.STATUS_ROLLEDBACK);
+        assertThat(port.committedWrites()).isEmpty();
+    }
+
+    @Test
+    void a_successful_call_commits_the_recorded_write() {
+        // Given: nothing armed
+
+        // When
+        useCase.save("first");
+
+        // Then: the control that shows the discard above comes from the rollback
+        assertThat(port.completions()).containsExactly(Status.STATUS_COMMITTED);
+        assertThat(port.committedWrites()).containsExactly("first");
     }
 }
