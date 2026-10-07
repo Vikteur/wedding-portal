@@ -33,7 +33,7 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 
 - The workflow reads the private hub `Vikteur/rekord-contract` with the repository secret named `CONTRACT_TOKEN`: a fine-grained token, read-only Contents on `Vikteur/rekord-contract` only, created by the user (the STOP approval of this ticket; UD-15.e, RISK-51).
 - There is no fallback to the workflow's own token: an empty secret fails the checkout step, and nothing after it runs.
-- The hub is checked out at its default branch into `contract/` until TASK-2.2 pins a tag.
+- The hub is checked out into `contract/` at the ref named by `rekordContractTag` in `gradle.properties` (TASK-2.2): a tag (`refs/tags/<tag>`, vMAJOR.MINOR.PATCH) or, on a feature branch only, the rekord-contract branch of the SAME name as the wedding-portal branch (`refs/heads/<branch>`). `main` always pins a tag. `.github/scripts/contract-pin.sh` reads and validates the pin (exactly one line; outputs kind, ref, pin); `.github/scripts/contract-ref-check.sh` proves the checkout HEAD is exactly that tag or branch head. A branch pin builds and tests against its contract branch, but the last CI step (`.github/scripts/contract-pin-merge-check.sh`) fails until the pin names a tag, so a branch pin can never be merged green; raise the pin to the new tag before merging.
 - Every run proves the token read-only with a dry-run push (`.github/scripts/contract-read-only-check.sh`); a push that is accepted fails the run.
 - Every action is pinned by its 40-character commit SHA, with the version as a trailing comment.
 - CI runs on pushes to `main` and `feature/**` and on pull requests into `main`; `pull_request_target` is never used.
