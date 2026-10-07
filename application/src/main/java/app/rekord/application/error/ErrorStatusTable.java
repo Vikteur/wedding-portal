@@ -63,7 +63,7 @@ public final class ErrorStatusTable {
             row(ErrorCode.NO_TASK, NotFoundException.class, 404),
             row(ErrorCode.VALIDATION_FAILED, RejectedException.class, 422));
 
-    private static final Map<ErrorCode, Map<Class<? extends RekordException>, Integer>> BY_CODE = index();
+    private static final Map<ErrorCode, Map<Class<? extends RekordException>, Integer>> BY_CODE = index(ROWS);
 
     private ErrorStatusTable() {
     }
@@ -88,9 +88,10 @@ public final class ErrorStatusTable {
         return new Row(code, family, status);
     }
 
-    private static Map<ErrorCode, Map<Class<? extends RekordException>, Integer>> index() {
+    // Package-private so the duplicate-pair refusal can be tested on rows other than the table's own.
+    static Map<ErrorCode, Map<Class<? extends RekordException>, Integer>> index(List<Row> rows) {
         Map<ErrorCode, Map<Class<? extends RekordException>, Integer>> byCode = new HashMap<>();
-        for (Row r : ROWS) {
+        for (Row r : rows) {
             Integer previous = byCode.computeIfAbsent(r.code(), k -> new HashMap<>()).put(r.family(), r.status());
             if (previous != null) {
                 throw new IllegalStateException("Duplicate row for " + r.code() + " as " + r.family().getSimpleName());
