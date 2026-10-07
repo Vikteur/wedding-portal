@@ -43,8 +43,13 @@ public final class UseCaseRules {
                 @Override
                 public void check(JavaMethod method, ConditionEvents events) {
                     boolean returns = USE_CASE_TYPE.test(method.getRawReturnType());
+                    // new UseCase(), UseCase::new, or a static factory such as UseCase.of(...)
                     boolean builds = method.getConstructorCallsFromSelf().stream()
-                            .anyMatch(call -> USE_CASE_TYPE.test(call.getTargetOwner()));
+                                    .anyMatch(call -> USE_CASE_TYPE.test(call.getTargetOwner()))
+                            || method.getConstructorReferencesFromSelf().stream()
+                                    .anyMatch(reference -> USE_CASE_TYPE.test(reference.getTargetOwner()))
+                            || method.getMethodCallsFromSelf().stream()
+                                    .anyMatch(call -> USE_CASE_TYPE.test(call.getTarget().getRawReturnType()));
                     // noMethods() negates the condition: a satisfied event is the violation
                     if (returns || builds) {
                         events.add(SimpleConditionEvent.satisfied(
