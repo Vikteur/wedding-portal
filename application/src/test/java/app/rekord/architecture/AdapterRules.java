@@ -6,11 +6,15 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.CompositeArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import java.util.Map;
+import java.util.Set;
 
 public final class AdapterRules {
 
@@ -70,6 +74,66 @@ public final class AdapterRules {
             .that(isResource())
             .should(implementAGeneratedApiAndDeclareNoPath())
             .because("A11 (FW-C-27): a resource implements a generated Api interface and takes path, verb and media type from it");
+
+    private static final String RESPONSE_STATUS = "org.jboss.resteasy.reactive.ResponseStatus";
+
+    /** Types whose every method sets or builds a status. */
+    private static final Set<String> STATUS_BUILDERS =
+            Set.of("jakarta.ws.rs.core.Response$ResponseBuilder", "org.jboss.resteasy.reactive.RestResponse$ResponseBuilder");
+
+    /** Types whose static factories build a response with a status; reading it (getStatus, getStatusInfo) stays free. */
+    private static final Set<String> STATUS_FACTORIES =
+            Set.of("jakarta.ws.rs.core.Response", "org.jboss.resteasy.reactive.RestResponse");
+
+    /** Types whose named methods set a status. */
+    private static final Map<String, Set<String>> STATUS_SETTERS = Map.of(
+            "jakarta.ws.rs.container.ContainerResponseContext", Set.of("setStatus", "setStatusInfo"),
+            "io.vertx.core.http.HttpServerResponse", Set.of("setStatusCode"),
+            "jakarta.servlet.http.HttpServletResponse", Set.of("setStatus", "sendError"));
+
+    public static final ArchRule A14 = classes()
+            .that()
+            .resideInAPackage("app.rekord.adapter.web..")
+            .and()
+            .resideOutsideOfPackage("app.rekord.adapter.web.shared..")
+            .should(notSetAResponseStatus())
+            .because("A14 (architecture-conventions section 7.1; TASK-3.1): only the helper in app.rekord.adapter.web.shared sets a response status")
+            .allowEmptyShould(true);
+
+    private static ArchCondition<JavaClass> notSetAResponseStatus() {
+        return new ArchCondition<>("not set a response status") {
+            @Override
+            public void check(JavaClass webClass, ConditionEvents events) {
+                for (JavaMethodCall call : webClass.getMethodCallsFromSelf()) {
+                    if (setsStatus(call)) {
+                        events.add(SimpleConditionEvent.violated(
+                                webClass,
+                                webClass.getName() + " calls " + call.getTargetOwner().getName() + "."
+                                        + call.getName() + " in " + call.getSourceCodeLocation()));
+                    }
+                }
+                boolean annotated = webClass.isAnnotatedWith(RESPONSE_STATUS)
+                        || webClass.getMethods().stream().anyMatch(m -> m.isAnnotatedWith(RESPONSE_STATUS));
+                if (annotated) {
+                    events.add(SimpleConditionEvent.violated(
+                            webClass, webClass.getName() + " is or has a member annotated @ResponseStatus"));
+                }
+            }
+        };
+    }
+
+    private static boolean setsStatus(JavaMethodCall call) {
+        String owner = call.getTargetOwner().getName();
+        if (STATUS_BUILDERS.contains(owner)) {
+            return true;
+        }
+        if (STATUS_FACTORIES.contains(owner)) {
+            return call.getTarget().resolveMember()
+                    .map(m -> m.getModifiers().contains(JavaModifier.STATIC))
+                    .orElse(true);
+        }
+        return STATUS_SETTERS.getOrDefault(owner, Set.of()).contains(call.getName());
+    }
 
     private static DescribedPredicate<JavaClass> isResource() {
         return DescribedPredicate.describe(

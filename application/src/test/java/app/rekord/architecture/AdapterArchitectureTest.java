@@ -18,4 +18,7 @@ class AdapterArchitectureTest {
 
     @ArchTest
     static final ArchRule a11 = AdapterRules.A11;
+
+    @ArchTest
+    static final ArchRule a14 = AdapterRules.A14;
 }
