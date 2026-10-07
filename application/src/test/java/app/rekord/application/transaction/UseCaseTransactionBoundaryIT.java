@@ -51,6 +51,10 @@ class UseCaseTransactionBoundaryIT {
         // Then: a managed class bean, not a producer result
         assertThat(bean.getScope()).isEqualTo(ApplicationScoped.class);
         assertThat(bean.getKind()).isEqualTo(InjectableBean.Kind.CLASS);
-        assertThat(RecordWriteUseCase.class.getDeclaredConstructors()).hasSize(1);
+        // ArC adds a no-args constructor to a normal-scoped bean for its client proxy; the written one is the other
+        assertThat(RecordWriteUseCase.class.getDeclaredConstructors())
+                .filteredOn(constructor -> constructor.getParameterCount() > 0)
+                .singleElement()
+                .satisfies(constructor -> assertThat(constructor.getParameterTypes()).containsExactly(WritePort.class));
     }
 }
