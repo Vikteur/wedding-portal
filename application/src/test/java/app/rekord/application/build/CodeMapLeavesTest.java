@@ -64,6 +64,39 @@ class CodeMapLeavesTest {
     }
 
     @Test
+    void archunit_fitness_describes_the_built_suite() throws IOException {
+        // TASK-3.1 built the suite: the leaf names where it lives, its store and the pinned version
+        String catalog = Files.readString(REPO_ROOT.resolve("gradle/libs.versions.toml"));
+        java.util.regex.Matcher pinned =
+                java.util.regex.Pattern.compile("(?m)^archunit\\s*=\\s*\"([^\"]+)\"").matcher(catalog);
+        assertThat(pinned.find()).as("the catalog pins archunit").isTrue();
+        assertLeaf(
+                CODE_MAPS.resolve("archunit-fitness.md"),
+                "application/src/test/java/app/rekord/architecture",
+                "A14",
+                "archunit_store",
+                "allowStoreUpdate",
+                "ARCH_FITNESS_CMD",
+                pinned.group(1));
+        assertThat(Files.readString(REPO_ROOT.resolve(CODE_MAPS.resolve("archunit-fitness.md")))
+                        .toLowerCase(Locale.ROOT))
+                .as("archunit-fitness.md no longer claims the suite is not built")
+                .doesNotContain("not built yet");
+    }
+
+    @Test
+    void memory_records_the_archunit_pin_and_the_frozen_store() throws IOException {
+        String memory = Files.readString(REPO_ROOT.resolve(Path.of("docs", "memory.md")));
+        java.util.regex.Matcher heading =
+                java.util.regex.Pattern.compile("(?m)^## .*TASK-3\\.1.*$").matcher(memory);
+        assertThat(heading.find()).as("docs/memory.md has a TASK-3.1 section").isTrue();
+        int end = memory.indexOf("\n## ", heading.end());
+        String section = memory.substring(heading.end(), end < 0 ? memory.length() : end);
+
+        assertThat(section).contains("PIN-AC-0230", "allowStoreUpdate");
+    }
+
+    @Test
     void conventional_commits_adds_ci_to_the_type_set() throws IOException {
         // 18 C-18: the type set gains `ci`
         assertLeaf(CODE_MAPS.resolve("conventional-commits.md"), "`ci`", "feat", "fix");

@@ -23,6 +23,7 @@ dependencies {
     testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     testImplementation("io.rest-assured:rest-assured")
     testImplementation(libs.assertj.core)
+    testImplementation(libs.archunit.junit5)
 }
 
 tasks.test {

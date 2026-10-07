@@ -4,11 +4,13 @@ assertj = "3.27.7"
 jandex = "2.1.0"
 wiremock = "3.13.2"
 openapi-generator = "7.25.0"
+archunit = "1.5.1"
 
 [libraries]
 quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 wiremock = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
