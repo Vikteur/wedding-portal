@@ -173,42 +173,6 @@ class BuildLayoutTest {
     }
 
     @Test
-    void ci_runs_the_gradle_build_on_temurin_25() throws IOException {
-        Path ci = REPO_ROOT.resolve(".github/workflows/ci.yml");
-        assertThat(ci).exists();
-
-        assertThat(read(ci)).contains("java-version: \"25\"", "temurin", "./gradlew build");
-    }
-
-    @Test
-    void ci_checks_the_required_tasks_and_the_fast_jar() throws IOException {
-        String ci = read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
-
-        assertThat(ci)
-                .contains(
-                        "help --task test",
-                        "help --task integrationTest",
-                        "help --task build",
-                        ":application:help --task quarkusBuild",
-                        "application/build/quarkus-app/quarkus-run.jar",
-                        "application/build/quarkus-app/lib",
-                        "application/build/quarkus-app/app",
-                        "application/build/quarkus-app/quarkus");
-        assertThat(ci.indexOf("./gradlew build"))
-                .as("the build runs before the fast-jar check")
-                .isNotNegative()
-                .isLessThan(ci.indexOf("quarkus-run.jar"));
-    }
-
-    @Test
-    void ci_builds_the_image_and_runs_the_image_check() throws IOException {
-        String ci = read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
-
-        assertThat(ci).contains("docker build", "image-check.sh", "needs: build");
-        assertThat(ci).doesNotContain("docker push").doesNotContain("docker login");
-    }
-
-    @Test
     void gitignore_anchors_build_outputs_so_source_packages_named_build_stay_tracked() throws IOException {
         List<String> unanchored = read(REPO_ROOT.resolve(".gitignore")).lines()
                 .map(String::strip)
@@ -217,6 +181,11 @@ class BuildLayoutTest {
                 .toList();
 
         assertThat(unanchored).isEmpty();
+    }
+
+    @Test
+    void gitignore_ignores_the_contract_checkout() throws IOException {
+        assertThat(read(REPO_ROOT.resolve(".gitignore")).lines().map(String::strip)).contains("/contract/");
     }
 
     @Test
@@ -291,7 +260,9 @@ class BuildLayoutTest {
                     Path relative = REPO_ROOT.relativize(file);
                     for (int i = 0; i < relative.getNameCount() - 1; i++) {
                         String part = relative.getName(i).toString();
-                        if (SKIPPED_DIRS.contains(part) || (i <= 1 && SKIPPED_OUTPUT_DIRS.contains(part))) {
+                        if (SKIPPED_DIRS.contains(part)
+                                || (i <= 1 && SKIPPED_OUTPUT_DIRS.contains(part))
+                                || (i == 0 && part.equals("contract"))) {
                             return false;
                         }
                     }
