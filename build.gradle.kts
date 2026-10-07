@@ -27,6 +27,12 @@ subprojects {
             shouldRunAfter(tasks.named("test"))
         }
 
+        // The image runs with -Duser.timezone=UTC in JAVA_OPTS; every test JVM does the same, on any runner OS.
+        tasks.withType<Test>().configureEach {
+            // A provider, because the Quarkus plugin reassigns jvmArgs on the application's test tasks.
+            jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Duser.timezone=UTC") })
+        }
+
         tasks.named("check") {
             dependsOn(integrationTest)
         }
