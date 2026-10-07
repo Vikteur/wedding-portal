@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -107,5 +108,38 @@ class VersionsTest {
         assertThat(parts.coreTitle()).isEqualTo(core);
         assertThat(parts.descriptors()).isEqualTo(descriptors);
         assertThat(parts.featured()).isEqualTo(featured);
+    }
+
+    @Test
+    void a_descriptor_named_twice_is_listed_once() {
+        Versions.TitleParts parts = Versions.extract("Song (Remix) [Rmx]");
+
+        assertThat(parts.coreTitle()).isEqualTo("Song");
+        assertThat(parts.descriptors()).isEqualTo(List.of("remix"));
+    }
+
+    @Test
+    void a_featuring_segment_without_names_is_taken_but_adds_no_name() {
+        Versions.TitleParts parts = Versions.extract("Song (feat.)");
+
+        assertThat(parts.coreTitle()).isEqualTo("Song");
+        assertThat(parts.featured()).isEmpty();
+    }
+
+    @Test
+    void dangling_dashes_are_stripped_from_the_core() {
+        assertThat(Versions.extract("Song – (Remix)").coreTitle()).isEqualTo("Song");
+        assertThat(Versions.extract("Song — (Remix)").coreTitle()).isEqualTo("Song");
+        assertThat(Versions.extract("Song - (Remix)").coreTitle()).isEqualTo("Song");
+    }
+
+    @Test
+    void a_null_title_has_an_empty_core_and_no_version() {
+        Versions.TitleParts parts = Versions.extract(null);
+
+        assertThat(parts.coreTitle()).isEmpty();
+        assertThat(parts.descriptors()).isEmpty();
+        assertThat(parts.remixer()).isNull();
+        assertThat(parts.featured()).isEmpty();
     }
 }

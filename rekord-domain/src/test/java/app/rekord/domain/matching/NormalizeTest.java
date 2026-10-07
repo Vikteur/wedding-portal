@@ -67,4 +67,16 @@ class NormalizeTest {
     void keeps_letters_and_digits_of_every_script(String input, String expected) {
         assertThat(Normalize.normalize(input)).isEqualTo(expected);
     }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "Opus ٣|opus ٣",
+        "Song ४२|song ४२",
+        "٣+٤|٣ ٤"
+    })
+    void keeps_decimal_digits_of_every_script(String input, String expected) {
+        // Given Arabic-Indic and Devanagari digits (category Nd, untouched by NFKD), When normalised,
+        // Then they stay (UD-19.m6), and a + between them is a space because the + rule is ASCII-only
+        assertThat(Normalize.normalize(input)).isEqualTo(expected);
+    }
 }

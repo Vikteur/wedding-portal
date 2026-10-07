@@ -57,4 +57,10 @@ class SignatureTest {
                 .isEqualTo("b13c96a2b1b93681")
                 .isNotEqualTo("98c4b7d37a4c63c3");
     }
+
+    @Test
+    void an_empty_artist_and_title_give_the_empty_signature() {
+        assertThat(Signature.signatureOf(null, null)).isEqualTo("|||");
+        assertThat(Signature.signatureId(null, null)).isEqualTo("98c4b7d37a4c63c3");
+    }
 }
