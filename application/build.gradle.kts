@@ -13,4 +13,9 @@ dependencies {
     implementation("io.quarkus:quarkus-arc")
 
     testImplementation("io.quarkus:quarkus-junit")
+    testImplementation(libs.assertj.core)
+}
+
+tasks.test {
+    systemProperty("wedding.repoRoot", rootDir.absolutePath)
 }
