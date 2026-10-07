@@ -16,6 +16,9 @@ dependencies {
     api(project(":rekord-usecase"))
     api(project(":rekord-domain"))
     implementation(project(":logging"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 // The server interfaces come from the pinned contract (rekord-contract dist/openapi.yaml), never by hand.
