@@ -28,3 +28,12 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - The image is built and checked as a running container in CI (job `image`, `.github/scripts/image-check.sh`) and never pushed (UD-13.e): no registry login, no secret.
 - PIN-AC-1008 is settled by the green CI run 37596108025 of the TASK-1.3 PR (jobs `build` and `image`), read by commit SHA 9a6bcac.
 - The frontends' nginx images under BR-OPS-26 are deferred (H2).
+
+## 2026-10-07 — TASK-2.1 contract checkout in CI
+
+- The workflow reads the private hub `Vikteur/rekord-contract` with the repository secret named `CONTRACT_TOKEN`: a fine-grained token, read-only Contents on `Vikteur/rekord-contract` only, created by the user (the STOP approval of this ticket; UD-15.e, RISK-51).
+- There is no fallback to the workflow's own token: an empty secret fails the checkout step, and nothing after it runs.
+- The hub is checked out at its default branch into `contract/` until TASK-2.2 pins a tag.
+- Every run proves the token read-only with a dry-run push (`.github/scripts/contract-read-only-check.sh`); a push that is accepted fails the run.
+- Every action is pinned by its 40-character commit SHA, with the version as a trailing comment.
+- CI runs on pushes to `main` and `feature/**` and on pull requests into `main`; `pull_request_target` is never used.
