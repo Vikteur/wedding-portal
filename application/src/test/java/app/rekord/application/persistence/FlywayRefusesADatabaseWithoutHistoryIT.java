@@ -21,7 +21,8 @@ class FlywayRefusesADatabaseWithoutHistoryIT {
             .overrideConfigKey("quarkus.datasource.jdbc.url", DB.jdbcUrl())
             .overrideConfigKey("quarkus.datasource.username", DB.username())
             .overrideConfigKey("quarkus.datasource.password", DB.password())
-            .withApplicationRoot(jar -> jar.addAsResource("application.properties")
+            .withApplicationRoot(jar -> jar.addPackages(true, "app.rekord.adapter")
+                    .addAsResource("application.properties")
                     .addAsResource("db/migration/V1__baseline.sql"))
             .assertException(e -> {
                 // Then: Flyway refuses the non-empty schema that has no history table

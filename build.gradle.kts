@@ -1,3 +1,9 @@
+plugins {
+    // Declared once at the root so every module shares one plugin classloader (Jandex fails to apply otherwise).
+    alias(libs.plugins.jandex) apply false
+    alias(libs.plugins.openapi.generator) apply false
+}
+
 subprojects {
     plugins.withType<JavaPlugin> {
         extensions.configure<JavaPluginExtension> {

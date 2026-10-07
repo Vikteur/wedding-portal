@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon --version
 # Then the modules (.dockerignore lets in only build scripts and src/main).
 COPY . .
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon :application:quarkusBuild -x test -x integrationTest
+    ./gradlew --no-daemon :application:quarkusBuild -x test -x integrationTest -Pcontract.spec=contract/dist/openapi.yaml
 
 # ---- runtime stage: the fast-jar on the JRE, as uid 10001 ----
 FROM eclipse-temurin:25-jre AS runtime

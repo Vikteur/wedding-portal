@@ -3,6 +3,7 @@ quarkus = "3.39.1"
 assertj = "3.27.7"
 jandex = "2.1.0"
 wiremock = "3.13.2"
+openapi-generator = "7.25.0"
 
 [libraries]
 quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
@@ -12,3 +13,4 @@ wiremock = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremoc
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
 jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex" }
+openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
