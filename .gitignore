@@ -1,0 +1,9 @@
+# Build outputs are anchored to the root and module directories, so source packages named `build` stay tracked.
+/build/
+/*/build/
+/out/
+/*/out/
+.gradle/
+.kotlin/
+.idea/
+*.iml
