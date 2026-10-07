@@ -7,3 +7,7 @@ aliases:
   "@analyse":
     provider: claude
     model: claude-opus-5-5
+
+# Worktrees branch off main. Without this Archon fell back to a stale stored base branch that no longer exists.
+worktree:
+  baseBranch: main
