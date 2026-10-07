@@ -81,7 +81,12 @@ public final class ErrorStatusTable {
     }
 
     public static int statusOf(RekordException e) {
-        return statusOf(e.code(), e.getClass());
+        Integer status = BY_CODE.getOrDefault(e.code(), Map.of()).get(e.getClass());
+        if (status == null) {
+            throw new IllegalArgumentException(
+                    "No status for " + e.code() + " as " + e.getClass().getSimpleName(), e);
+        }
+        return status;
     }
 
     private static Row row(ErrorCode code, Class<? extends RekordException> family, int status) {
