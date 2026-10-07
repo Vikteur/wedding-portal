@@ -24,7 +24,7 @@ subprojects {
             classpath = testSourceSet.runtimeClasspath
             include("**/*IT.class")
             // QuarkusUnitTest and @QuarkusTest cannot share a JVM (ExclusivityChecker), so they run apart.
-            useJUnitPlatform { excludeTags("quarkus-unit-test") }
+            useJUnitPlatform { excludeTags("quarkus-unit-test", "resource-test") }
             shouldRunAfter(tasks.named("test"))
         }
 
@@ -37,6 +37,17 @@ subprojects {
             shouldRunAfter(integrationTest)
         }
 
+        // Slow set, part three: resource tests in the datasource-less profile. They run in their own JVM because the
+        // Testcontainers substitutor is read from the environment, and it makes any container start fail the boot.
+        val resourceTest = tasks.register<Test>("resourceTest") {
+            testClassesDirs = testSourceSet.output.classesDirs
+            classpath = testSourceSet.runtimeClasspath
+            include("**/*IT.class")
+            useJUnitPlatform { includeTags("resource-test") }
+            environment("TESTCONTAINERS_IMAGE_SUBSTITUTOR", "app.rekord.application.ContainerTripwire")
+            shouldRunAfter(integrationTest)
+        }
+
         // The image runs with -Duser.timezone=UTC in JAVA_OPTS; every test JVM does the same, on any runner OS.
         tasks.withType<Test>().configureEach {
             // A provider, because the Quarkus plugin reassigns jvmArgs on the application's test tasks.
@@ -44,7 +55,7 @@ subprojects {
         }
 
         tasks.named("check") {
-            dependsOn(integrationTest, startupTest)
+            dependsOn(integrationTest, startupTest, resourceTest)
         }
     }
 }

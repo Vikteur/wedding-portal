@@ -193,9 +193,20 @@ class BuildLayoutTest {
         String script = read(REPO_ROOT.resolve("build.gradle.kts"));
 
         assertThat(script)
-                .contains("useJUnitPlatform { excludeTags(\"quarkus-unit-test\") }")
+                .contains("useJUnitPlatform { excludeTags(\"quarkus-unit-test\", \"resource-test\") }")
                 .contains("useJUnitPlatform { includeTags(\"quarkus-unit-test\") }")
-                .contains("dependsOn(integrationTest, startupTest)");
+                .contains("dependsOn(integrationTest, startupTest, resourceTest)");
+    }
+
+    @Test
+    void resource_tests_run_in_their_own_task_under_check_with_the_container_tripwire() throws IOException {
+        String script = read(REPO_ROOT.resolve("build.gradle.kts"));
+
+        assertThat(script)
+                .contains("tasks.register<Test>(\"resourceTest\")")
+                .contains("useJUnitPlatform { includeTags(\"resource-test\") }")
+                .contains("environment(\"TESTCONTAINERS_IMAGE_SUBSTITUTOR\", \"app.rekord.application.ContainerTripwire\")")
+                .contains("dependsOn(integrationTest, startupTest, resourceTest)");
     }
 
     @Test
@@ -207,6 +218,11 @@ class BuildLayoutTest {
                 .matcher(read(memory));
         assertThat(executor.find()).as("an 'Executor (UD-17):' section").isTrue();
         assertThat(executor.group()).containsIgnoringCase("Archon").doesNotContainIgnoringCase("to be confirmed");
+    }
+
+    @Test
+    void memory_records_the_resource_test_profile() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("docs/memory.md"))).contains("resourceTest", "ContainerTripwire");
     }
 
     @Test
