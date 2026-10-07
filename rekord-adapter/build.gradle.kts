@@ -35,6 +35,8 @@ openApiGenerate {
     generatorName = "jaxrs-spec"
     inputSpec = contractSpec
     outputDir = layout.buildDirectory.dir("generated/openapi")
+    // Emptied before each run, so a tag or schema the spec no longer has leaves no stale type to compile against.
+    cleanupOutput = true
     apiPackage = "app.rekord.api"
     modelPackage = "app.rekord.api.model"
     generateApiTests = false
