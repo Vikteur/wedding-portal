@@ -8,11 +8,11 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-final class GradleSettings {
+public final class GradleSettings {
 
     private GradleSettings() {}
 
-    static Set<String> includedModules(Path repoRoot) throws IOException {
+    public static Set<String> includedModules(Path repoRoot) throws IOException {
         String settings = Files.readString(repoRoot.resolve("settings.gradle.kts"));
         Set<String> included = new TreeSet<>();
         Matcher include = Pattern.compile("include\\(([^)]*)\\)").matcher(settings);
