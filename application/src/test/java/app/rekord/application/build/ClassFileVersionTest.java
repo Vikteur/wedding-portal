@@ -18,8 +18,6 @@ class ClassFileVersionTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final int JAVA_25_MAJOR_VERSION = 69;
-    private static final List<String> MODULES = List.of(
-            "rekord-domain", "rekord-usecase", "rekord-adapter", "rekord-gateway", "application", "logging");
     private static final List<String> MODULES_WITH_CLASSES =
             List.of("rekord-usecase", "rekord-adapter", "rekord-gateway", "application");
 
@@ -28,7 +26,7 @@ class ClassFileVersionTest {
         Map<String, Integer> classesPerModule = new TreeMap<>();
         List<String> wrongVersions = new ArrayList<>();
 
-        for (String module : MODULES) {
+        for (String module : GradleSettings.includedModules(REPO_ROOT)) {
             int count = 0;
             for (String sourceSet : List.of("main", "test")) {
                 Path classesDir = REPO_ROOT.resolve(module).resolve("build/classes/java").resolve(sourceSet);

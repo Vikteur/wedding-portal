@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -26,19 +25,38 @@ class BuildLayoutTest {
         assertThat(REPO_ROOT.resolve("settings.gradle.kts")).exists();
         assertThat(REPO_ROOT.resolve("settings.gradle")).doesNotExist();
 
-        String settings = read(REPO_ROOT.resolve("settings.gradle.kts"));
-        Set<String> included = new TreeSet<>();
-        Matcher include = Pattern.compile("include\\(([^)]*)\\)").matcher(settings);
-        while (include.find()) {
-            Matcher name = Pattern.compile("\"([^\"]+)\"").matcher(include.group(1));
-            while (name.find()) {
-                included.add(name.group(1));
-            }
-        }
-
-        assertThat(included)
+        assertThat(GradleSettings.includedModules(REPO_ROOT))
                 .containsExactlyInAnyOrder(
                         "rekord-domain", "rekord-usecase", "rekord-adapter", "rekord-gateway", "application", "logging");
+    }
+
+    @Test
+    void every_module_compiles_on_the_java_25_toolchain_with_release_25() throws IOException {
+        Path rootScript = REPO_ROOT.resolve("build.gradle.kts");
+        String root = read(rootScript);
+        int subprojects = root.indexOf("subprojects {");
+        assertThat(subprojects).as("a subprojects block in the root build script").isNotNegative();
+        String block = root.substring(subprojects);
+        assertThat(block).containsPattern("languageVersion\\s*=\\s*JavaLanguageVersion\\.of\\(25\\)");
+        assertThat(block).containsPattern("options\\.release\\s*=\\s*25\\b");
+
+        Pattern override = Pattern.compile(
+                "languageVersion|JavaLanguageVersion\\.of\\(|options\\.release|sourceCompatibility|targetCompatibility");
+        for (Path file : gradleKtsFiles()) {
+            if (file.equals(rootScript)) {
+                continue;
+            }
+            assertThat(override.matcher(read(file)).find())
+                    .as("%s overrides the toolchain or compiler release", file)
+                    .isFalse();
+        }
+
+        Pattern javaPlugin = Pattern.compile("(?m)^\\s*(java|`java-library`)\\s*$");
+        for (String module : GradleSettings.includedModules(REPO_ROOT)) {
+            assertThat(javaPlugin.matcher(read(REPO_ROOT.resolve(module).resolve("build.gradle.kts"))).find())
+                    .as("%s applies java or java-library", module)
+                    .isTrue();
+        }
     }
 
     @Test
