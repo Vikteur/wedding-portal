@@ -1,10 +1,10 @@
 name: build-feature
 description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
-  Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> implement step by
-  step with tests -> review -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most
-  3 rounds) -> mark it ready for your merge -> wait for your merge, which is the review and the STOP
-  approval -> finalize the Backlog ticket (Done), commit and push it, and delete the run's branch and worktree.
+  Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> per step, the test
+  agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> push and open a
+  DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
+  wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done), commit and push it, and delete the run's branch and worktree.
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -29,7 +29,8 @@ nodes:
       Request: $ARGUMENTS
       Backlog ticket: $ticket.output.task (its full text is in $ARTIFACTS_DIR/ticket.md when the request names one).
       Explore the codebase and write an implementation plan for exactly this request to $ARTIFACTS_DIR/plan.md.
-      Write every step as a Markdown checkbox line `- [ ] ...`; each step names its tests.
+      Write every step as a Markdown checkbox line `- [ ] ...`; each step names the tests that are written first and fail
+      until the step is built (tests first, always). Fold a docs-only change into the step it documents.
       Plan only code, tests and local commits: the push, the pull request and reading CI are later nodes of this
       workflow, so never write them as a checkbox step.
       Then decide whether the plan touches the STOP list of .claude/CLAUDE.md (a contract push, a database migration,
@@ -69,32 +70,59 @@ nodes:
         Read the plan in $ARTIFACTS_DIR/plan.md before any code is written. Approve to implement it, reject to end
         the run here.
 
+  # Tests first, always (TDD): per plan step the test agent writes the failing tests and commits them alone, then the
+  # build agent writes the code that makes them pass. tdd-check proves the order before anything is pushed.
   - id: implement
     depends_on: [stop-route, stop-gate]
     trigger_rule: none_failed_min_one_success
-    model: "@build"
-    loop:
-      prompt: |
-        Request: $ARGUMENTS
-        Read $ARTIFACTS_DIR/plan.md. Implement the first step still marked `- [ ]`, with its tests, and run the tests.
-        When they pass, mark that step `- [x]` in the plan and commit the step.
-        A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: do not do it,
-        mark it `- [x] (done by the workflow's open-pr and ci nodes)` and commit nothing for it.
+    loop_group:
+      max_iterations: 10
       until_bash: |
         ! grep -qE '^\s*- \[ \]' "$ARTIFACTS_DIR/plan.md"
-      max_iterations: 10
-      fresh_context: true
+      nodes:
+        - id: write-tests
+          model: "@build"
+          prompt: |
+            Request: $ARGUMENTS
+            You are the test agent: you write tests, never production code.
+            Read $ARTIFACTS_DIR/plan.md and take the first step still marked `- [ ]`; n is its position among the
+            plan's checkbox lines (the first checkbox is 1).
+            A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: write
+            nothing for it and stop.
+            Otherwise write the tests the step names, and only tests: they state the behaviour the step adds, so they
+            must fail now because that behaviour is missing (a compile error for a class the step creates counts).
+            Run them and save the full output to $ARTIFACTS_DIR/red/step-<n>.log. If they pass already, they do not
+            test the step: rewrite them. Commit the tests alone as `test(step <n>): <what they prove>`.
+            Do not edit the plan.
+        - id: build-step
+          depends_on: [write-tests]
+          model: "@build"
+          prompt: |
+            Request: $ARGUMENTS
+            Read $ARTIFACTS_DIR/plan.md and take the first step still marked `- [ ]`.
+            A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: do not do
+            it, mark it `- [x] (done by the workflow's open-pr and ci nodes)` and commit nothing for it.
+            Otherwise the test agent has committed this step's failing tests. Write the code that makes them pass,
+            without weakening them; when a test is wrong, fix it in the same commit and say why in the message. Run
+            the whole test suite. When it passes, mark the step `- [x]` in the plan and commit the code.
 
   - id: review
     depends_on: [implement]
     model: "@analyse"
     prompt: |
       Request: $ARGUMENTS
-      Review all changes on this branch against $ARTIFACTS_DIR/plan.md. Fix any issues, run the tests, and commit.
+      Review all changes on this branch against $ARTIFACTS_DIR/plan.md, including that every behaviour has a test.
+      Fix any issue tests first: commit the test that shows the issue alone, then the fix. Run the tests.
+
+  # Deterministic test-first gate (P2): every built step has a red run, and every code commit follows a test commit.
+  - id: tdd-check
+    depends_on: [review]
+    bash: |
+      bash .archon/scripts/tdd-check.sh "$ARTIFACTS_DIR" "$BASE_BRANCH"
 
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
   - id: pr-text
-    depends_on: [review]
+    depends_on: [tdd-check]
     model: "@build"
     prompt: |
       Request: $ARGUMENTS
@@ -156,7 +184,8 @@ nodes:
           depends_on: [diagnose]
           model: "@build"
           prompt: |
-            Read $ARTIFACTS_DIR/ci-diagnosis.md and apply the fix. Run the tests, commit, and `git push`.
+            Read $ARTIFACTS_DIR/ci-diagnosis.md and apply the fix, tests first: when the fix changes behaviour, commit
+            the test that shows the failure alone, then the fix. Run the tests, commit, and `git push`.
 
   # Green CI by SHA marks the pull request ready for your merge. The merge is the human review and the STOP approval
   # (UD-21.e): the run asks for no approval comment.
