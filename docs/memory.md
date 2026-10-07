@@ -37,3 +37,13 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every run proves the token read-only with a dry-run push (`.github/scripts/contract-read-only-check.sh`); a push that is accepted fails the run.
 - Every action is pinned by its 40-character commit SHA, with the version as a trailing comment.
 - CI runs on pushes to `main` and `feature/**` and on pull requests into `main`; `pull_request_target` is never used.
+
+## 2026-10-07 — TASK-4.1 datasource and Flyway
+
+- The database is named `wedding_portal` in every profile. `%prod` reads `DB_URL`, `DB_USER` and `DB_PASSWORD` from the environment, with no default URL and no default password.
+- `V1__baseline.sql` is a comment-only baseline: wedding-portal's own empty history, no import and no shared database (UD-13.b). This migration was the STOP approval of this ticket; business tables arrive in later migrations, each a STOP item.
+- `*.sql` is pinned to LF in `.gitattributes`, because the Flyway checksum is computed over the bytes.
+- Every Gradle test JVM runs with `-Duser.timezone=UTC`, as the image does.
+- The start-up refusals (Flyway on a database without history, Hibernate validate on an unmigrated entity) are tested with `QuarkusUnitTest`, a test-owned Testcontainers PostgreSQL and a stray entity mapped through `stray-entity-orm.xml`, so no annotated entity reaches the `@QuarkusTest` classes.
+- The image check now starts a throwaway `postgres:17-alpine` on a per-run network with a generated password, and checks that Flyway ran.
+- Every `@QuarkusTest` needs Docker (Dev Services PostgreSQL) until TASK-4.3 adds the datasource-less test profile.
