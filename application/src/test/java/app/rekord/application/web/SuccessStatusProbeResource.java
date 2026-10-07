@@ -7,6 +7,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 
 /** Test-only: stands in for a generated-interface resource, which cannot set a status by annotation. */
@@ -29,6 +30,13 @@ public class SuccessStatusProbeResource {
     public Health noContent() {
         successStatus.answer(204);
         return new Health().ok(true);
+    }
+
+    @POST
+    @Path("/created-then-refused")
+    public Health createdThenRefused() {
+        successStatus.answer(201);
+        throw new WebApplicationException(409);
     }
 
     @GET

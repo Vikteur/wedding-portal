@@ -35,6 +35,13 @@ class SuccessStatusIT {
     }
 
     @Test
+    void a_refusal_after_the_helper_named_201_keeps_its_error_status() {
+        Response response = given().when().post(BASE + "/created-then-refused");
+
+        assertThat(response.statusCode()).isEqualTo(409);
+    }
+
+    @Test
     void a_method_that_does_not_call_the_helper_answers_200_with_its_body() {
         Response response = given().when().get(BASE + "/untouched");
 

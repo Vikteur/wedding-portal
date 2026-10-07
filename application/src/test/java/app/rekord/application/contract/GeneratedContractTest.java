@@ -155,6 +155,25 @@ class GeneratedContractTest {
     }
 
     @Test
+    void the_generated_apis_are_exactly_the_spec_tags_with_no_stale_interface_left_over() throws Exception {
+        // Given the spec's tags
+        String spec = System.getProperty("contract.spec");
+        assertThat(spec).as("contract.spec system property").isNotBlank();
+        List<String> expected = new ArrayList<>();
+        for (JsonNode tag : new YAMLMapper().readTree(java.nio.file.Path.of(spec).toFile()).get("tags")) {
+            String name = tag.get("name").asText();
+            expected.add(Character.toUpperCase(name.charAt(0)) + name.substring(1).toLowerCase(Locale.ROOT) + "Api");
+        }
+
+        // Then the output holds one interface per tag and nothing an earlier spec left behind
+        List<String> generated = generatedJava().stream()
+                .filter(GeneratedContractTest::inApiPackage)
+                .map(p -> p.getFileName().toString().replace(".java", ""))
+                .toList();
+        assertThat(generated).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
     void api_and_model_tests_are_not_generated() throws IOException {
         assertThat(generatedFiles()).isNotEmpty();
         assertThat(GENERATED.resolve("src/test")).doesNotExist();
