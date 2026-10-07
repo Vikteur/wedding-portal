@@ -19,3 +19,12 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - `/api` is rooted by `@ApplicationPath("/api")` on `app.rekord.application.config.ApiApplication`, not by `quarkus.http.root-path`, so `/q/*` stays where the readiness probe looks for it.
 - `application/src/test/resources/fixtures/health-200.json` was captured from rekord-api at commit `ec65ae35c182e6e25f571c76d45b15a78f183c10` with `./mvnw quarkus:dev` (`GET /api/health`, no cookie): 200, `application/json;charset=UTF-8`, body `{"ok":true}`.
 - The hand-written `HealthResource` and `Health` record are temporary; P0-E02-T03 replaces them with the generated `HealthApi`.
+
+## 2026-10-07 — TASK-1.3 image
+
+- Build stage is `eclipse-temurin:25-jdk` using the checked-in Gradle wrapper: `./gradlew --no-daemon :application:quarkusBuild -x test -x integrationTest` (no test compiled or run). The runtime stage is the `eclipse-temurin:25-jre` fast-jar image running as `USER 10001:10001`.
+- The gid is explicit (10001, matching the uid), so `USER 10001:10001` names a real group.
+- `QUARKUS_HTTP_HOST=0.0.0.0` is kept in the image environment so the container answers on its published port.
+- The image is built and checked as a running container in CI (job `image`, `.github/scripts/image-check.sh`) and never pushed (UD-13.e): no registry login, no secret.
+- PIN-AC-1008 settles on the green CI run of this PR, read by commit SHA. That run is still pending.
+- The frontends' nginx images under BR-OPS-26 are deferred (H2).
