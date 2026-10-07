@@ -29,6 +29,13 @@ fi
 branch=$3
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$branch" '/^worktree /{w=substr($0,10)} $1=="branch" && $2==b {print w}')
 [ -n "$wt" ] && git worktree remove --force "$wt"
+if [ -n "${STUB_LOCKED:-}" ]; then
+  # Windows: the files are gone and git forgot the worktree, but a process holds the directory as its cwd.
+  mkdir -p "$wt"
+  [ "$STUB_LOCKED" = full ] && echo left > "$wt/left.txt"
+  echo "error: failed to delete '$wt': Permission denied" >&2
+  exit 1
+fi
 git branch -D "$branch" > /dev/null
 git push -q origin --delete "$branch"
 STUB
@@ -78,6 +85,35 @@ run
 check "3 exit 1" $([ "$rc" -eq 1 ]; echo $?)
 check "3 archon not called" $(! called; echo $?)
 check "3 worktree kept" $([ -d "$wt" ]; echo $?)
+
+# 4. Windows: git unregistered the worktree, an empty directory is left, archon fails: branch gone, exit 0, warning.
+scenario four
+STUB_LOCKED=empty run
+check "4 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "4 json deleted/removed" $(echo "$out" | grep -q '"branch":"deleted","worktree":"removed"'; echo $?)
+check "4 local branch deleted" $(! git -C "$main_dir" show-ref --verify --quiet refs/heads/feat; echo $?)
+check "4 remote branch deleted" $(! git -C "$main_dir" ls-remote --exit-code --heads origin feat >/dev/null 2>&1; echo $?)
+check "4 warning names the directory" $(echo "$out" | grep -qi "empty director.*$(basename "$wt")"; echo $?)
+
+# 5. Unregistered but the directory still holds files: still fails, branch kept.
+scenario five
+STUB_LOCKED=full run
+check "5 exit 1" $([ "$rc" -eq 1 ]; echo $?)
+check "5 incomplete" $(echo "$out" | grep -q "Close-out incomplete"; echo $?)
+check "5 branch kept" $(git -C "$main_dir" show-ref --verify --quiet refs/heads/feat; echo $?)
+check "5 files kept" $([ -f "$wt/left.txt" ]; echo $?)
+
+# 6. An empty unregistered sibling of the run worktree is swept; a non-empty one and a registered one are not.
+scenario six
+d=$(dirname "$main_dir")
+mkdir "$d/old-empty" "$d/old-full"; echo x > "$d/old-full/f.txt"
+git -C "$main_dir" worktree add -q -b other "$d/other"
+run
+check "6 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "6 empty sibling swept" $([ ! -e "$d/old-empty" ]; echo $?)
+check "6 non-empty sibling kept" $([ -f "$d/old-full/f.txt" ]; echo $?)
+check "6 registered sibling kept" $([ -f "$d/other/README.md" ]; echo $?)
+check "6 main checkout kept" $([ -d "$main_dir/.git" ]; echo $?)
 
 echo "close-out tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
