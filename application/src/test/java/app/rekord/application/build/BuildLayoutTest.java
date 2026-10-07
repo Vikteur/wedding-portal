@@ -269,6 +269,11 @@ class BuildLayoutTest {
     }
 
     @Test
+    void memory_records_the_wiremock_harness() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("docs/memory.md"))).contains("org.wiremock", "legacyWireMockCheck");
+    }
+
+    @Test
     void memory_records_the_resource_test_profile() throws IOException {
         assertThat(read(REPO_ROOT.resolve("docs/memory.md"))).contains("resourceTest", "ContainerTripwire");
     }

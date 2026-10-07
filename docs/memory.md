@@ -55,3 +55,11 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - `ResourceTestProfile` (a `QuarkusTestProfile` in `application/src/test`, so the main `application.properties` stays unchanged) overrides six keys: `quarkus.devservices.enabled=false`, `quarkus.datasource.devservices.enabled=false`, `quarkus.datasource.active=false`, `quarkus.flyway.active=false`, `quarkus.flyway.migrate-at-start=false` and `quarkus.hibernate-orm.active=false`. No key was dropped; Quarkus accepted all of them.
 - Resource tests carry `@TestProfile(ResourceTestProfile.class)` and `@Tag("resource-test")`, and run in their own `resourceTest` task, which `check` (and so `build`) depends on. `integrationTest` excludes the tag. `ResourceTestTaggingTest` keeps the tag and the profile together.
 - `ContainerTripwire` is a Testcontainers `ImageNameSubstitutor`, set through `TESTCONTAINERS_IMAGE_SUBSTITUTOR` for `resourceTest` only. It throws for any image, so a container start in that JVM fails the boot. Removing the Dev Services keys from the profile made the boot fail in the tripwire, which shows it works.
+
+## 2026-10-07 — TASK-4.4 WireMock harness
+
+- WireMock is `org.wiremock:wiremock-standalone` 3.13.2, pinned in the catalog. It is shaded, so it brings no Jetty or Jackson conflict with the Quarkus BOM. 4.x is still beta.
+- The Java packages stay `com.github.tomakehurst.wiremock.*`. The ban is on the artifact group `com.github.tomakehurst`, enforced by the `legacyWireMockCheck` task, which `check` depends on.
+- Gateway tests that do not boot Quarkus live in the gateway module, end in `IT` and run in `integrationTest`.
+- `ProbeStatusGateway` is test-only and may go once the first real gateway has its own WireMock test.
+- P-3 / PIN-AC-0655 is settled by the CI run of this PR (run id and SHA are filled in after CI).
