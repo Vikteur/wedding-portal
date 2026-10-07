@@ -69,3 +69,10 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 
 - Domain events are raised in the domain (the aggregate records past-tense event records) and published by the use case through the `DomainEventPublisher` port after the change is valid. Publishing from the domain would put a bus or a port call inside the aggregate, which FW-C-01 forbids. Sources: 18 C-01, architecture-conventions §5.4, CT-22.
 - The per-repo code-map leaves live in `docs/code-maps` of this repository; the generic skills and rules live in the umbrella `.claude`. A skill says how, a leaf says what.
+
+## 2026-10-07 — TASK-24.1 matcher text core
+
+- The matcher text core lives in `app.rekord.domain.matching` (module `rekord-domain`), not `domain.shared`: the shared kernel is limited to what 41 D-10 lists, and the song identity belongs to the Matching and export boundary.
+- `rekord-domain` has test-only dependencies (JUnit 5, AssertJ, launcher); the main classpath stays `java..` only (ArchUnit rule A1).
+- UD-19.m6: `Normalize` keeps Unicode letters and decimal digits (`[^\p{L}\p{Nd}]+`), where rekord-api uses `[^a-z0-9]+`. For "Кино", "Мумий Тролль", "Άλφα Βήτα", "東京事変", "ABBA Ёлка", "ＡＢＢＡ", "Кино+Ария" rekord-api answers "", "", "", "", "abba", "abba", "". The `+` rule still uses ASCII `\w`, as rekord-api does.
+- Signature id: `norm(artist)|norm(core)|descriptors joined "+"|norm(remixer)`, featured left out, id = first 16 hex of SHA-1 over the UTF-8 bytes. P3-E05's remembered choices are keyed by it, so any change to `Normalize`, `Versions` or `Signature` output orphans them silently.
