@@ -213,6 +213,15 @@ class ErrorStatusTableTest {
     }
 
     @Test
+    void an_exception_without_a_row_is_refused_and_kept_as_the_cause() {
+        NotFoundException original = new NotFoundException(ErrorCode.BAD_LINK, "x");
+        assertThatThrownBy(() -> ErrorStatusTable.statusOf(original))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasCause(original)
+                .hasCauseInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void a_pair_without_a_row_is_refused() {
         assertThatThrownBy(() -> ErrorStatusTable.statusOf(ErrorCode.BAD_LINK, NotFoundException.class))
                 .isInstanceOf(IllegalArgumentException.class);
