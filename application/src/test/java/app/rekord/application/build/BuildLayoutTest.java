@@ -109,26 +109,40 @@ class BuildLayoutTest {
 
     @Test
     void catalog_declares_no_quarkus_version_besides_the_platform_bom() throws IOException {
-        List<String> versioned = catalogSection("libraries")
-                .filter(line -> line.matches(".*(module|group)\\s*=\\s*\"io\\.quarkus.*"))
-                .filter(line -> line.matches(".*\\bversion(\\.ref)?\\s*=.*"))
+        // Sub-tables such as [libraries.quarkus-arc] would hide entries from the line checks below.
+        List<String> headings = read(REPO_ROOT.resolve("gradle/libs.versions.toml")).lines()
+                .map(String::strip)
+                .filter(line -> line.startsWith("["))
                 .toList();
-        assertThat(versioned).hasSize(1);
-        assertThat(versioned.get(0)).contains("module = \"io.quarkus.platform:quarkus-bom\"");
+        assertThat(headings).isSubsetOf("[versions]", "[libraries]", "[plugins]", "[bundles]");
 
+        // Table notation { module = ..., version = ... } and string notation "group:name:version".
+        Pattern quarkusLibrary = Pattern.compile("=\\s*(\"io\\.quarkus[\\w.-]*:|\\{.*\\b(module|group)\\s*=\\s*\"io\\.quarkus)");
+        Pattern versioned = Pattern.compile("\\bversion(\\.ref)?\\s*=|=\\s*\"[^\":]+:[^\":]+:[^\"]+\"");
+        List<String> versionedQuarkus = catalogSection("libraries")
+                .filter(line -> quarkusLibrary.matcher(line).find())
+                .filter(line -> versioned.matcher(line).find())
+                .toList();
+        assertThat(versionedQuarkus).hasSize(1);
+        assertThat(versionedQuarkus.get(0)).contains("module = \"io.quarkus.platform:quarkus-bom\"");
+
+        // Table notation { id = "io.quarkus", ... } and string notation "io.quarkus:version".
+        Pattern quarkusPlugin = Pattern.compile("=\\s*\"io\\.quarkus:|\\bid\\s*=\\s*\"io\\.quarkus\"");
         List<String> plugin = catalogSection("plugins")
-                .filter(line -> line.matches("^io\\.quarkus\\s*=.*|^\\S+\\s*=.*id\\s*=\\s*\"io\\.quarkus\".*"))
+                .filter(line -> quarkusPlugin.matcher(line).find())
                 .toList();
         assertThat(plugin).hasSize(1);
         assertThat(plugin.get(0)).containsPattern("version\\.ref\\s*=\\s*\"quarkus\"");
-        assertThat(versioned.get(0)).containsPattern("version\\.ref\\s*=\\s*\"quarkus\"");
+        assertThat(versionedQuarkus.get(0)).containsPattern("version\\.ref\\s*=\\s*\"quarkus\"");
     }
 
     @Test
     void no_python_file_exists() throws IOException {
-        List<Path> python = repoFiles().filter(file -> file.getFileName().toString().endsWith(".py")).toList();
+        try (Stream<Path> files = repoFiles()) {
+            List<Path> python = files.filter(file -> file.getFileName().toString().endsWith(".py")).toList();
 
-        assertThat(python).isEmpty();
+            assertThat(python).isEmpty();
+        }
     }
 
     @Test
@@ -174,6 +188,7 @@ class BuildLayoutTest {
                         "help --task build",
                         ":application:help --task quarkusBuild",
                         "application/build/quarkus-app/quarkus-run.jar",
+                        "application/build/quarkus-app/lib",
                         "application/build/quarkus-app/app",
                         "application/build/quarkus-app/quarkus");
         assertThat(ci.indexOf("./gradlew build"))
