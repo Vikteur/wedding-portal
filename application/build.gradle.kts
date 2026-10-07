@@ -14,6 +14,7 @@ dependencies {
     implementation("io.quarkus:quarkus-rest-jackson")
 
     testImplementation("io.quarkus:quarkus-junit")
+    testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     testImplementation("io.rest-assured:rest-assured")
     testImplementation(libs.assertj.core)
 }
