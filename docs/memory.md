@@ -122,3 +122,7 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - `ErrorCode` has the 43 codes rekord-api throws through `ApiException`. Left out: the six codes rekord-api never produces (EMPTY_FOLDER, BAD_FORMAT, NO_COUPLE, BAD_TOKEN_KIND, BAD_CODE, NO_BUILD), `UNKNOWN` (only the catch-all mapper of TASK-5.2 emits it), and the seven Python-only codes (UX-10). Adding a code means adding its `ErrorStatusTable` row in the same change.
 - `ErrorStatusTable` (`app.rekord.application.error`) is the only place where a code in a family becomes an HTTP status. The family follows rekord-api's status: 404 NotFound; 400, 409, 410, 413, 422, 429 Rejected; 401, 403 NotPermitted; 502, 503 UpstreamUnavailable. It has 45 rows (NO_LIBRARY and SPOTIFY_FETCH_FAILED have two each), is not a CDI bean, and building it throws on a duplicate pair. The envelope mapper (TASK-5.2) and the 409 race answer (TASK-5.5) are not in it.
 - `ErrorCodeContractTest` binds the domain `ErrorCode` to the pinned contract enum (`components.schemas.ErrorCode.enum`, read from `contract.spec`), so a code missing from the enum fails the build (PIN-20-0205).
+
+## 2026-10-08 — TASK-35 image job on main only
+
+- The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
