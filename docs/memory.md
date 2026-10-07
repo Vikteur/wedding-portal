@@ -64,3 +64,9 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every `rekord-gateway` test is an IT, so that module alone sets `failOnNoDiscoveredTests = false` on its `test` task. The root keeps Gradle's guard on for every other module.
 - `ProbeStatusGateway` is test-only and may go once the first real gateway has its own WireMock test.
 - P-3 / PIN-AC-0655 is settled by the CI run of this PR (run id and SHA are filled in after CI).
+
+## 2026-10-07 — TASK-24.1 matcher text core
+
+- The matcher text core lives in `app.rekord.domain.matching` (module `rekord-domain`), not `domain.shared`: the shared kernel is limited to what 41 D-10 lists, and the song identity belongs to the Matching and export boundary.
+- `rekord-domain` has test-only dependencies (JUnit 5, AssertJ, launcher); the main classpath stays `java..` only (ArchUnit rule A1).
+- UD-19.m6: `Normalize` keeps Unicode letters and decimal digits (`[^\p{L}\p{Nd}]+`), where rekord-api uses `[^a-z0-9]+`. For "Кино", "Мумий Тролль", "Άλφα Βήτα", "東京事変", "ABBA Ёлка", "ＡＢＢＡ", "Кино+Ария" rekord-api answers "", "", "", "", "abba", "abba", "". The `+` rule still uses ASCII `\w`, as rekord-api does.
