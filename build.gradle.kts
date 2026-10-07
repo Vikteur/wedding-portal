@@ -15,6 +15,8 @@ subprojects {
         tasks.named<Test>("test") {
             useJUnitPlatform()
             exclude("**/*IT.class")
+            // A module whose tests are all ITs (rekord-gateway) has an empty fast set.
+            failOnNoDiscoveredTests = false
         }
 
         // Slow set: the same src/test classes, only those ending in IT.
