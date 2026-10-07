@@ -11,8 +11,10 @@ dependencies {
     implementation(project(":rekord-gateway"))
     implementation(project(":logging"))
     implementation("io.quarkus:quarkus-arc")
+    implementation("io.quarkus:quarkus-rest-jackson")
 
     testImplementation("io.quarkus:quarkus-junit")
+    testImplementation("io.rest-assured:rest-assured")
     testImplementation(libs.assertj.core)
 }
 
