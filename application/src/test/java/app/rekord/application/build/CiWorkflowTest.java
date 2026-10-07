@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class CiWorkflowTest {
@@ -160,6 +161,82 @@ class CiWorkflowTest {
         assertThat(text).contains("docker build", "image-check.sh");
         assertThat(text).doesNotContain("docker push").doesNotContain("docker login");
         assertThat(texts(ci.path("jobs").path("image").path("needs"))).containsExactly("build");
+    }
+
+    @Test
+    void build_job_checks_out_rekord_contract_with_the_contract_token_secret() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        int checkout = indexOfStep(steps, step -> "Check out rekord-contract".equals(step.path("name").asText()));
+        int gradle = indexOfStep(steps, step -> "gradle".equals(step.path("id").asText()));
+
+        // Then
+        assertThat(checkout).as("the contract checkout step").isNotNegative();
+        JsonNode step = steps.get(checkout);
+        assertThat(step.path("uses").asText()).startsWith("actions/checkout@");
+        assertThat(step.path("with").path("repository").asText()).isEqualTo("Vikteur/rekord-contract");
+        assertThat(step.path("with").path("path").asText()).isEqualTo("contract");
+        assertThat(step.path("with").path("token").asText()).isEqualTo("${{ secrets.CONTRACT_TOKEN }}");
+        assertThat(step.has("continue-on-error")).isFalse();
+        assertThat(checkout).as("the checkout runs before the build").isLessThan(gradle);
+    }
+
+    @Test
+    void no_workflow_falls_back_to_the_workflows_own_token() throws IOException {
+        // Given
+        var workflows = Workflows.files(REPO_ROOT);
+        Pattern fallback = Pattern.compile("\\$\\{\\{[^}]*\\|\\|[^}]*}}");
+
+        // When / Then
+        assertThat(workflows).isNotEmpty();
+        for (Path file : workflows) {
+            String text = Files.readString(file);
+            assertThat(text).as("%s", file).doesNotContain("GITHUB_TOKEN").doesNotContain("github.token");
+            assertThat(fallback.matcher(text).find()).as("a || fallback in %s", file).isFalse();
+        }
+    }
+
+    @Test
+    void the_contract_token_is_named_only_by_its_secret_name() throws IOException {
+        // Given
+        var workflows = Workflows.files(REPO_ROOT);
+        int occurrences = 0;
+
+        // When
+        for (Path file : workflows) {
+            JsonNode workflow = Workflows.read(file);
+            occurrences += Files.readString(file).split("secrets\\.", -1).length - 1;
+            workflow.path("jobs").forEach(job -> {
+                assertThat(job.path("env").toString()).doesNotContain("secrets");
+                job.path("steps").forEach(step -> {
+                    String run = step.path("run").asText();
+                    assertThat(run).doesNotContain("CONTRACT_TOKEN").doesNotContain("secrets");
+                    assertThat(step.path("env").toString()).doesNotContain("secrets");
+                });
+            });
+        }
+
+        // Then
+        assertThat(occurrences).as("secrets. references across all workflows").isEqualTo(1);
+    }
+
+    @Test
+    void contract_bundle_is_checked_before_the_build() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        int bundle = indexOfStep(steps, step -> "Contract bundle present".equals(step.path("name").asText()));
+        int gradle = indexOfStep(steps, step -> "gradle".equals(step.path("id").asText()));
+
+        // Then
+        assertThat(bundle).as("the bundle check step").isNotNegative();
+        assertThat(steps.get(bundle).path("run").asText()).contains("test -f contract/dist/openapi.yaml");
+        assertThat(bundle).isLessThan(gradle);
     }
 
     @Test

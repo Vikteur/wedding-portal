@@ -184,6 +184,11 @@ class BuildLayoutTest {
     }
 
     @Test
+    void gitignore_ignores_the_contract_checkout() throws IOException {
+        assertThat(read(REPO_ROOT.resolve(".gitignore")).lines().map(String::strip)).contains("/contract/");
+    }
+
+    @Test
     void memory_names_the_chosen_executor() throws IOException {
         Path memory = REPO_ROOT.resolve("docs/memory.md");
         assertThat(memory).exists();
@@ -255,7 +260,9 @@ class BuildLayoutTest {
                     Path relative = REPO_ROOT.relativize(file);
                     for (int i = 0; i < relative.getNameCount() - 1; i++) {
                         String part = relative.getName(i).toString();
-                        if (SKIPPED_DIRS.contains(part) || (i <= 1 && SKIPPED_OUTPUT_DIRS.contains(part))) {
+                        if (SKIPPED_DIRS.contains(part)
+                                || (i <= 1 && SKIPPED_OUTPUT_DIRS.contains(part))
+                                || (i == 0 && part.equals("contract"))) {
                             return false;
                         }
                     }
