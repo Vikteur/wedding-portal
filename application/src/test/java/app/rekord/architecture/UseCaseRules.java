@@ -43,13 +43,18 @@ public final class UseCaseRules {
                 @Override
                 public void check(JavaMethod method, ConditionEvents events) {
                     boolean returns = USE_CASE_TYPE.test(method.getRawReturnType());
-                    // new UseCase(), UseCase::new, or a static factory such as UseCase.of(...)
+                    // a use-case type that can be the produced value: new UseCase(), UseCase::new, or any call
+                    // declared to return one (static factory or instance helper). Instance<UseCase>.get() erases
+                    // to Object, so handing on the managed bean passes.
+                    DescribedPredicate<JavaClass> produced = USE_CASE_TYPE.and(describe(
+                            "assignable to the produced type",
+                            c -> c.isAssignableTo(method.getRawReturnType().getName())));
                     boolean builds = method.getConstructorCallsFromSelf().stream()
-                                    .anyMatch(call -> USE_CASE_TYPE.test(call.getTargetOwner()))
+                                    .anyMatch(call -> produced.test(call.getTargetOwner()))
                             || method.getConstructorReferencesFromSelf().stream()
-                                    .anyMatch(reference -> USE_CASE_TYPE.test(reference.getTargetOwner()))
+                                    .anyMatch(reference -> produced.test(reference.getTargetOwner()))
                             || method.getMethodCallsFromSelf().stream()
-                                    .anyMatch(call -> USE_CASE_TYPE.test(call.getTarget().getRawReturnType()));
+                                    .anyMatch(call -> produced.test(call.getTarget().getRawReturnType()));
                     // noMethods() negates the condition: a satisfied event is the violation
                     if (returns || builds) {
                         events.add(SimpleConditionEvent.satisfied(
