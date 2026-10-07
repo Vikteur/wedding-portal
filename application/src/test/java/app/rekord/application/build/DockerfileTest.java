@@ -136,6 +136,28 @@ class DockerfileTest {
         }
     }
 
+    @Test
+    void image_check_script_asserts_every_acceptance_criterion() throws IOException {
+        // Given
+        Path script = REPO_ROOT.resolve(".github/scripts/image-check.sh");
+        assertThat(script).as("image check script").isRegularFile();
+
+        // When
+        String content = Files.readString(script);
+
+        // Then
+        assertThat(content)
+                .contains("10001:10001")
+                .contains("MaxRAMPercentage=70")
+                .contains("8080/tcp")
+                .contains("30000000000")
+                .contains("40000000000")
+                .contains("healthy")
+                .contains("/proc/1")
+                .contains("/api/health")
+                .contains("health-200.json");
+    }
+
     private static Stage lastStage() throws IOException {
         List<Stage> stages = stages();
         return stages.get(stages.size() - 1);
