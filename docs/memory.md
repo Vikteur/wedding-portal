@@ -93,3 +93,10 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - `ARCH_FITNESS_CMD` stays unset because CI runs ArchUnit as part of the build (architecture-conventions §14.3).
 - `LINT_FIX_CMD` and `LINT_CHECK_CMD` wait for the formatter decision: set them only once a formatter plugin is applied to the build, and re-wire `lint-format.sh` in `.claude/settings.json` in the same change. A gate registered with no command exits 0 on every run and buys false confidence.
 - Both PreToolUse guards (`guard-generated.sh`, `scope-guard.sh`) fail closed when `jq` is missing (PIN-17-0755): without jq, scope-guard cannot tell which agent is calling and denies every Write, Edit and Bash call, the main session's included, until jq is installed. Every machine that runs the hooks needs `jq` on the PATH.
+
+## 2026-10-07 — TASK-24.2 candidate retrieval
+
+- `Fuzz`, `LibraryIndex`, `QueryText` and `TrackMatcher` live in `app.rekord.domain.matching`. `TrackMatcher` is not named `Matcher`, because `Versions` imports `java.util.regex.Matcher`. The fuzzy fallback breaks ties by ordinal ascending (UD-8); Python's order is not followed.
+- The library order is the order the database returns for `order by t.path` with no collation. The tracks repository built with the library schema (TASK-22.1, read by TASK-24.5) must keep that query. Until the real tables exist, `LibraryPathOrderIT` pins it on a test-owned schema in a throwaway container.
+- This ticket ported part of `Score` and `matchOne`: the facets, the weighted mean, the 0.45 floor, the cap of 8 and rekord-api's three-guard bucket. The playlist nudge, `duration_delta_sec` and the UD-19.c auto rule are left to TASK-24.3, and remembered choices to P3-E05-T02.
+- `rekord-domain` gains test-only `jackson-databind` (from the Quarkus BOM) for the fuzz fixture. Its main classpath stays `java..` only.
