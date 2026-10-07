@@ -3,3 +3,5 @@
 gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+# The Flyway checksum is computed over the bytes: a CRLF checkout on Windows would change it.
+*.sql text eol=lf
