@@ -1,7 +1,9 @@
 package app.rekord.domain.matching;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,11 @@ import java.util.Set;
  * ties depend on it.
  */
 public final class LibraryIndex {
+
+    /** A token appearing in no more than this many tracks counts as rare. */
+    private static final int RARE_DF = 50;
+    private static final int MIN_TOKEN_HITS = 2;
+    private static final int CANDIDATE_CAP = 300;
 
     /** One library track, with everything the scorer needs precomputed. */
     public record IndexedTrack(Track track, Versions.TitleParts parts, String coreNorm,
@@ -53,6 +60,48 @@ public final class LibraryIndex {
 
     public int size() {
         return items.size();
+    }
+
+    /**
+     * The files that share enough tokens with the query: two tokens, or one
+     * that is rare in the library. Most hits first, then the later file first,
+     * capped at {@value #CANDIDATE_CAP}.
+     */
+    public List<IndexedTrack> candidates(Set<String> queryTokens, String queryNorm) {
+        Map<Integer, Integer> hits = new HashMap<>();
+        Set<Integer> rareHit = new HashSet<>();
+
+        for (String token : queryTokens) {
+            List<Integer> posting = postings.get(token);
+            if (posting == null || posting.isEmpty()) {
+                continue;
+            }
+            boolean rare = posting.size() <= RARE_DF;
+            for (Integer ordinal : posting) {
+                hits.merge(ordinal, 1, Integer::sum);
+                if (rare) {
+                    rareHit.add(ordinal);
+                }
+            }
+        }
+
+        List<int[]> selected = new ArrayList<>();
+        hits.forEach((ordinal, count) -> {
+            if (count >= MIN_TOKEN_HITS || rareHit.contains(ordinal)) {
+                selected.add(new int[]{count, ordinal});
+            }
+        });
+
+        // Descending by hit count, then by ordinal, as Python's sort(reverse=True)
+        // on (count, ordinal) tuples does.
+        selected.sort(Comparator.<int[]>comparingInt(pair -> pair[0]).reversed()
+                .thenComparing(Comparator.<int[]>comparingInt(pair -> pair[1]).reversed()));
+
+        List<IndexedTrack> result = new ArrayList<>();
+        for (int i = 0; i < Math.min(selected.size(), CANDIDATE_CAP); i++) {
+            result.add(items.get(selected.get(i)[1]));
+        }
+        return result;
     }
 
     private static IndexedTrack build(Track track) {
