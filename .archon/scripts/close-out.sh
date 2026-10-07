@@ -73,11 +73,14 @@ fi
 # otherwise archon is not called and the branch and worktree are kept and reported.
 # First sweep the empty directories earlier runs left in the worktrees parent (rmdir only: a non-empty directory or a
 # registered worktree is never touched).
-for leftover in "$(dirname "$here_git")"/*/; do
-  leftover=${leftover%/}
-  [ "$leftover" = "$here_git" ] && continue
-  registered "$leftover" || rmdir "$leftover" 2> /dev/null || true
-done
+# Skipped when this runs from the main checkout: its siblings are not worktrees.
+if [ "$here_git" != "$main" ]; then
+  for leftover in "$(dirname "$here_git")"/*/; do
+    leftover=${leftover%/}
+    [ "$leftover" = "$here_git" ] && continue
+    registered "$leftover" || rmdir "$leftover" 2> /dev/null || true
+  done
+fi
 case "$branch" in
   main|master|"") failed="$failed; refusing to delete branch '$branch'" ;;
   *)
