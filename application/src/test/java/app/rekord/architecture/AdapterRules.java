@@ -77,11 +77,17 @@ public final class AdapterRules {
 
     private static final String RESPONSE_STATUS = "org.jboss.resteasy.reactive.ResponseStatus";
 
+    // Every type below is matched with its subtypes, so a call through an implementation type (ResponseImpl,
+    // ContainerResponseContextImpl, Http1xServerResponse) is caught as well.
+
     /** Types whose every method sets or builds a status. */
     private static final Set<String> STATUS_BUILDERS =
             Set.of("jakarta.ws.rs.core.Response$ResponseBuilder", "org.jboss.resteasy.reactive.RestResponse$ResponseBuilder");
 
-    /** Types whose static factories build a response with a status; reading it (getStatus, getStatusInfo) stays free. */
+    /**
+     * Types whose static factories build a response with a status, and whose implementations may set it; reading it
+     * (getStatus, getStatusInfo) stays free.
+     */
     private static final Set<String> STATUS_FACTORIES =
             Set.of("jakarta.ws.rs.core.Response", "org.jboss.resteasy.reactive.RestResponse");
 
@@ -123,16 +129,18 @@ public final class AdapterRules {
     }
 
     private static boolean setsStatus(JavaMethodCall call) {
-        String owner = call.getTargetOwner().getName();
-        if (STATUS_BUILDERS.contains(owner)) {
+        JavaClass owner = call.getTargetOwner();
+        if (STATUS_BUILDERS.stream().anyMatch(owner::isAssignableTo)) {
             return true;
         }
-        if (STATUS_FACTORIES.contains(owner)) {
-            return call.getTarget().resolveMember()
-                    .map(m -> m.getModifiers().contains(JavaModifier.STATIC))
-                    .orElse(true);
+        if (STATUS_FACTORIES.stream().anyMatch(owner::isAssignableTo)) {
+            return call.getName().startsWith("setStatus")
+                    || call.getTarget().resolveMember()
+                            .map(m -> m.getModifiers().contains(JavaModifier.STATIC))
+                            .orElse(true);
         }
-        return STATUS_SETTERS.getOrDefault(owner, Set.of()).contains(call.getName());
+        return STATUS_SETTERS.entrySet().stream()
+                .anyMatch(e -> owner.isAssignableTo(e.getKey()) && e.getValue().contains(call.getName()));
     }
 
     private static DescribedPredicate<JavaClass> isResource() {

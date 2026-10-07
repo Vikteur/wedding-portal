@@ -25,6 +25,6 @@ Decided in architecture-conventions §3 (line 199); built by TASK-3.1. The suite
 - **A8.** The providers of `Clock` and the id ports (`IdGenerator`, `TokenGenerator`) in `app.rekord.application.config` may read the system clock and randomness; nobody else may.
 - **A10.** A context may reach another only through `shared`, through a port the origin implements (shape b), or through a domain event a use case listens to (shape a, the marker is `DomainEvent`).
 - **A13.** The helper that may build a `WebApplicationException` is not exempted yet; the §4.1 ticket writes that exemption when the helper exists.
-- **A14.** Only `app.rekord.adapter.web.shared` sets a response status; the check covers `@ResponseStatus`, `Response`/`RestResponse` static factories and the status setters.
+- **A14.** Only `app.rekord.adapter.web.shared` sets a response status; the check covers `@ResponseStatus`, `Response`/`RestResponse` static factories and the status setters, matched with their subtypes so a call through an implementation type (`ResponseImpl`, `ContainerResponseContextImpl`, `Http1xServerResponse`) is caught too.
 
 **Running it.** The suite runs in the ordinary `test` task and boots nothing. `ARCH_FITNESS_CMD` is therefore unset: there is no separate command and no tag.
