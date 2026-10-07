@@ -9,7 +9,7 @@ import app.rekord.domain.shared.error.NotPermittedException;
 import app.rekord.domain.shared.error.RejectedException;
 import app.rekord.domain.shared.error.RekordException;
 import app.rekord.domain.shared.error.UpstreamUnavailableException;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -172,16 +172,16 @@ class ErrorStatusTableTest {
 
     @Test
     void the_five_codes_shared_with_python_take_rekord_apis_status() {
-        // rekord-api: BAD_LINK 401
+        // rekord-api PortalGate.java:151-154
         assertThat(ErrorStatusTable.statusOf(ErrorCode.BAD_LINK, NotPermittedException.class)).isEqualTo(401);
-        // rekord-api: LINK_REVOKED 410
+        // rekord-api PortalGate.java:86
         assertThat(ErrorStatusTable.statusOf(ErrorCode.LINK_REVOKED, RejectedException.class)).isEqualTo(410);
-        // rekord-api: FOLDER_NOT_FOUND 400
+        // rekord-api ScanService.java:166-176
         assertThat(ErrorStatusTable.statusOf(ErrorCode.FOLDER_NOT_FOUND, RejectedException.class)).isEqualTo(400);
-        // rekord-api: NO_LIBRARY_SELECTED 400
+        // rekord-api LibraryRepository.java:218
         assertThat(ErrorStatusTable.statusOf(ErrorCode.NO_LIBRARY_SELECTED, RejectedException.class))
                 .isEqualTo(400);
-        // rekord-api: SPOTIFY_FETCH_FAILED 404 or 502
+        // rekord-api SpotifyPlaylistFetch.java:60 (404) and SpotifyPlaylistFetch.java:72 (502)
         assertThat(ErrorStatusTable.statusOf(ErrorCode.SPOTIFY_FETCH_FAILED, NotFoundException.class))
                 .isEqualTo(404);
         assertThat(ErrorStatusTable.statusOf(ErrorCode.SPOTIFY_FETCH_FAILED, UpstreamUnavailableException.class))
@@ -193,6 +193,15 @@ class ErrorStatusTableTest {
         assertThat(ErrorStatusTable.statusOf(new NotFoundException(ErrorCode.NO_LIBRARY, "x"))).isEqualTo(404);
         assertThat(ErrorStatusTable.statusOf(
                 new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.NO_LIBRARY, "x"))).isEqualTo(409);
+    }
+
+    @Test
+    void building_the_table_refuses_a_second_row_for_the_same_pair() {
+        ErrorStatusTable.Row first = new ErrorStatusTable.Row(ErrorCode.NO_LIBRARY, NotFoundException.class, 404);
+        ErrorStatusTable.Row second = new ErrorStatusTable.Row(ErrorCode.NO_LIBRARY, NotFoundException.class, 409);
+        assertThatThrownBy(() -> ErrorStatusTable.index(List.of(first, second)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("NO_LIBRARY");
     }
 
     @Test

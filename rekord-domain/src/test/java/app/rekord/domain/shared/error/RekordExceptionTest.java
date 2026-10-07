@@ -71,6 +71,12 @@ class RekordExceptionTest {
                 .isEqualTo(RejectedException.Kind.VALIDATION);
     }
 
+    @Test
+    void rejected_requires_its_kind() {
+        assertThatThrownBy(() -> new RejectedException(null, ErrorCode.EMPTY_NAME, "x"))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     @ParameterizedTest
     @MethodSource("factories")
     void code_and_message_are_required(Factory factory) {
