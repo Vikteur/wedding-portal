@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ErrorStatusTableTest {
 
@@ -194,6 +195,33 @@ class ErrorStatusTableTest {
         assertThat(ErrorStatusTable.statusOf(new NotFoundException(ErrorCode.NO_LIBRARY, "x"))).isEqualTo(404);
         assertThat(ErrorStatusTable.statusOf(
                 new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.NO_LIBRARY, "x"))).isEqualTo(409);
+    }
+
+    static List<ErrorStatusTable.Row> tableRows() {
+        return ErrorStatusTable.rows();
+    }
+
+    private static RekordException exceptionOf(ErrorStatusTable.Row row) {
+        Class<? extends RekordException> family = row.family();
+        if (family == NotFoundException.class) {
+            return new NotFoundException(row.code(), "x");
+        }
+        if (family == RejectedException.class) {
+            return new RejectedException(RejectedException.Kind.VALIDATION, row.code(), "x");
+        }
+        if (family == NotPermittedException.class) {
+            return new NotPermittedException(row.code(), "x");
+        }
+        if (family == UpstreamUnavailableException.class) {
+            return new UpstreamUnavailableException(row.code(), "x");
+        }
+        throw new AssertionError("Unknown family " + family);
+    }
+
+    @ParameterizedTest
+    @MethodSource("tableRows")
+    void the_status_of_an_exception_is_its_rows_status(ErrorStatusTable.Row row) {
+        assertThat(ErrorStatusTable.statusOf(exceptionOf(row))).isEqualTo(row.status());
     }
 
     @ParameterizedTest
