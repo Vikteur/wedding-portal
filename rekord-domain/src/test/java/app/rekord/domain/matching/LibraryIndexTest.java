@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LibraryIndexTest {
 
@@ -175,5 +176,18 @@ class LibraryIndexTest {
                 .containsExactlyElementsOf(gate);
         assertThat(ids(candidatesFor(new LibraryIndex(bandFiles(51)), "Band", "Other")))
                 .containsExactlyElementsOf(fallback);
+    }
+
+    @Test
+    void the_index_cannot_be_changed_through_what_it_hands_out() {
+        // One index is cached and shared by every match of a library (TASK-24.5), so no caller may reorder its
+        // files or change their tokens.
+        LibraryIndex index = new LibraryIndex(List.of(new Track("1", "Band", "Love", null)));
+
+        assertThatThrownBy(() -> index.items().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> index.items().get(0).tokens().add("x"))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(index.items()).hasSize(1);
+        assertThat(index.items().get(0).tokens()).containsExactly("band", "love");
     }
 }
