@@ -108,3 +108,10 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every rule is frozen, but the store `application/src/test/archunit_store` holds no violation: all files are empty. `archunit.properties` sets `allowStoreCreation=false` and `allowStoreUpdate=false`, so a new violation fails and nothing rewrites the store. A renamed `because` text or a new rule needs its empty entry added on purpose (both flags on, run once, flags off).
 - Rule fixtures are compiled at test time by `FixtureCompiler`, so no fixture lives under a reserved layer package.
 - Rule-shape decisions: A8 exempts only the Clock and id-port providers in `application.config`; A10 treats a class implementing `DomainEvent` as shape (a) and a port the origin implements as shape (b); A13's helper exemption is deferred to the §4.1 ticket; A14 limits status setting to `adapter.web.shared` and checks `@ResponseStatus` plus the `Response`/`RestResponse` static factories (not every method, so `getStatusInfo()` stays legal); A3 also allows `Transactional$TxType`.
+
+## 2026-10-07 — TASK-3.2 use-case transaction boundary
+
+- A3 now also refuses an `@Produces` method that returns or constructs a type of `app.rekord.usecase..` and an `@Produces` field of such a type (UD-15.a, PIN-AC-0448). Ports in `app.rekord.usecase..port..` stay producible. A3 is one composite rule, so the suite still has A1 to A14 and the store keeps its 14 entries, all empty (A3's key was re-written on its existing id).
+- The boundary is proven at transaction level by `UseCaseTransactionBoundaryIT` with a test-only port and no database: a transaction is active inside the `@Transactional` method, and a failing second port call reaches the caller, ends in `STATUS_ROLLEDBACK` and discards the recorded write. The row-level rollback with real rows is PIN-AC-0452 (P0-E04-T02).
+- The same use case built by an `@Produces` method was observed to run without a transaction (`STATUS_NO_TRANSACTION`, no completion). That pins PIN-AC-0448 and is the reason for the A3 producer refusal.
+- `application` now declares `io.quarkus:quarkus-narayana-jta` itself instead of getting it only through Hibernate ORM.
