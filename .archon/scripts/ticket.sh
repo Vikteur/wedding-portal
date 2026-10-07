@@ -5,7 +5,8 @@
 # A request without a TASK id prints {"task": "", "stop": ""}. A TASK id that Backlog cannot find fails the node.
 #
 # The Backlog lives in the umbrella repo. A run in the umbrella finds it in its own worktree; a run in a product repo
-# (a nested clone such as wedding-portal/) finds it in the parent of that repo's main checkout. BACKLOG_CWD overrides.
+# finds it in a sibling of that repo's main checkout (the product repo is cloned beside the umbrella, not inside it:
+# Archon resolves a path inside the umbrella to the umbrella's codebase). BACKLOG_CWD overrides.
 set -euo pipefail
 
 task=$(printf '%s' "${1:-}" | grep -oiE 'task-[0-9]+(\.[0-9]+)*' | head -1 | tr '[:lower:]' '[:upper:]' || true)
@@ -16,7 +17,7 @@ fi
 
 if [ -z "${BACKLOG_CWD:-}" ]; then
   main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
-  for dir in "$PWD" "$main" "$main/.."; do
+  for dir in "$PWD" "$main" "$main"/../*; do
     if [ -f "$dir/backlog/config.yml" ]; then BACKLOG_CWD=$(cd "$dir" && pwd); break; fi
   done
 fi
