@@ -159,7 +159,7 @@ class DockerfileTest {
                 .contains("postgres:17-alpine")
                 .contains("DB_URL=jdbc:postgresql://")
                 .contains("DB_PASSWORD")
-                .contains("pg_isready")
+                .contains("pg_isready -h 127.0.0.1")
                 .contains("flyway_schema_history")
                 .doesNotContainPattern("POSTGRES_PASSWORD=[A-Za-z0-9]");
     }

@@ -99,6 +99,9 @@ class DatasourceSettingsTest {
                     .as("value of %s", name)
                     .isFalse();
         }
+        assertThat(properties.stringPropertyNames())
+                .filteredOn(name -> name.endsWith("db-name"))
+                .allSatisfy(name -> assertThat(properties.getProperty(name)).isNotEqualToIgnoringCase("rekord"));
         assertThat(properties.getProperty("%dev.quarkus.datasource.devservices.db-name"))
                 .isEqualTo("wedding_portal");
         try (Stream<Path> files = Files.walk(RESOURCES)) {

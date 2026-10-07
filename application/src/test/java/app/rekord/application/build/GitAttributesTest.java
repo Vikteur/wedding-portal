@@ -20,7 +20,7 @@ class GitAttributesTest {
     void sql_files_are_checked_out_with_lf_endings() throws IOException {
         // Given the repository attributes file
         List<String> rules = Files.readAllLines(REPO_ROOT.resolve(".gitattributes")).stream()
-                .map(line -> line.trim().replaceAll("\s+", " "))
+                .map(line -> line.trim().replaceAll("\\s+", " "))
                 .toList();
 
         // Then SQL files are pinned to LF

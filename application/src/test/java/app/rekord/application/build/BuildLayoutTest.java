@@ -189,6 +189,16 @@ class BuildLayoutTest {
     }
 
     @Test
+    void quarkus_unit_tests_run_in_their_own_task_under_check() throws IOException {
+        String script = read(REPO_ROOT.resolve("build.gradle.kts"));
+
+        assertThat(script)
+                .contains("useJUnitPlatform { excludeTags(\"quarkus-unit-test\") }")
+                .contains("useJUnitPlatform { includeTags(\"quarkus-unit-test\") }")
+                .contains("dependsOn(integrationTest, startupTest)");
+    }
+
+    @Test
     void memory_names_the_chosen_executor() throws IOException {
         Path memory = REPO_ROOT.resolve("docs/memory.md");
         assertThat(memory).exists();

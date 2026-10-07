@@ -77,11 +77,12 @@ docker network create "$network" >/dev/null
 db_container="$(docker run -d --network "$network" --name "$run_id-db" \
   -e POSTGRES_DB="$db_name" -e POSTGRES_USER="$db_user" -e POSTGRES_PASSWORD="$db_password" \
   postgres:17-alpine)"
+# Over TCP: during initdb the entrypoint runs a temporary server on the socket only, which must not count as ready.
 for _ in $(seq 1 30); do
-  docker exec "$db_container" pg_isready -U "$db_user" -d "$db_name" >/dev/null 2>&1 && break
+  docker exec "$db_container" pg_isready -h 127.0.0.1 -U "$db_user" -d "$db_name" >/dev/null 2>&1 && break
   sleep 2
 done
-docker exec "$db_container" pg_isready -U "$db_user" -d "$db_name" >/dev/null || fail "postgres did not become ready"
+docker exec "$db_container" pg_isready -h 127.0.0.1 -U "$db_user" -d "$db_name" >/dev/null || fail "postgres did not become ready"
 
 container="$(docker run -d --network "$network" -p "127.0.0.1:$port:8080" \
   -e DB_URL=jdbc:postgresql://"$run_id"-db:5432/"$db_name" \
