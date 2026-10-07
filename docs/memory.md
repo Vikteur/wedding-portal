@@ -87,6 +87,13 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - The two `QuarkusUnitTest` start-up refusal tests add `addPackages(true, "app.rekord.adapter")` to their application root. Their root is a bare jar, so the adapter's classes (indexed by Jandex) were loaded by the parent class loader, and the first `@Provider` (`SuccessStatusFilter`) failed with a cross-loader cast. Any new `QuarkusUnitTest` needs the same line. `SuccessStatusFilter` takes its bean through a public constructor for the same reason.
 - Both CI jobs (`build` and `image`) check out the pinned `rekord-contract` into `contract/` (pin, read-only token check, ref check, bundle present) and pass `-Pcontract.spec=contract/dist/openapi.yaml`. The image build gets only `contract/dist/openapi.yaml` through `.dockerignore`, and the token stays on the runner: it is never an `ARG`, `ENV` or secret of `docker build`. `ContractSpecWiringTest` guards all of it.
 
+## 2026-10-07 — TASK-3.4 governance hooks
+
+- `.claude/hooks/hooks.env` (in the umbrella repo weddingapp, where the agent hooks live) ships with `ARCH_FITNESS_CMD`, `LINT_FIX_CMD` and `LINT_CHECK_CMD` unset.
+- `ARCH_FITNESS_CMD` stays unset because CI runs ArchUnit as part of the build (architecture-conventions §14.3).
+- `LINT_FIX_CMD` and `LINT_CHECK_CMD` wait for the formatter decision: set them only once a formatter plugin is applied to the build, and re-wire `lint-format.sh` in `.claude/settings.json` in the same change. A gate registered with no command exits 0 on every run and buys false confidence.
+- Both PreToolUse guards (`guard-generated.sh`, `scope-guard.sh`) fail closed when `jq` is missing (PIN-17-0755): without jq, scope-guard cannot tell which agent is calling and denies every Write, Edit and Bash call, the main session's included, until jq is installed. Every machine that runs the hooks needs `jq` on the PATH.
+
 ## 2026-10-07 — TASK-24.2 candidate retrieval
 
 - `Fuzz`, `LibraryIndex`, `QueryText` and `TrackMatcher` live in `app.rekord.domain.matching`. `TrackMatcher` is not named `Matcher`, because `Versions` imports `java.util.regex.Matcher`. The fuzzy fallback breaks ties by ordinal ascending (UD-8); Python's order is not followed.
