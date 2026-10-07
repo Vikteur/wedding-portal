@@ -104,7 +104,7 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 ## 2026-10-07 — TASK-3.1 ArchUnit suite
 
 - ArchUnit is `archunit-junit5` 1.5.1 (catalog key `archunit`). The suite is in `application/src/test/java/app/rekord/architecture`, rules A1 to A14, and runs in `test`.
-- It reads the release-25 class files of all six modules from `build/classes/java/main` through `ProductionClasses` (PIN-AC-0230: ArchUnit 1.5.1 reading Java 25 class files; settled by the CI run of this PR, run id and SHA are filled in after CI).
+- It reads the release-25 class files of all six modules from `build/classes/java/main` through `ProductionClasses` (PIN-AC-0230: ArchUnit 1.5.1 reading Java 25 class files; settled by CI run 37652403500, green on fd40198 (PR #15, merged as 5f7f1df)).
 - Every rule is frozen, but the store `application/src/test/archunit_store` holds no violation: all files are empty. `archunit.properties` sets `allowStoreCreation=false` and `allowStoreUpdate=false`, so a new violation fails and nothing rewrites the store. A renamed `because` text or a new rule needs its empty entry added on purpose (both flags on, run once, flags off).
 - Rule fixtures are compiled at test time by `FixtureCompiler`, so no fixture lives under a reserved layer package.
 - Rule-shape decisions: A8 exempts only the Clock and id-port providers in `application.config`; A10 treats a class implementing `DomainEvent` as shape (a) and a port the origin implements as shape (b); A13's helper exemption is deferred to the §4.1 ticket; A14 limits status setting to `adapter.web.shared` and checks `@ResponseStatus` plus the `Response`/`RestResponse` static factories (not every method, so `getStatusInfo()` stays legal); A3 also allows `Transactional$TxType`.
