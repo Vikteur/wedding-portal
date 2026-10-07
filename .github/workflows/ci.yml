@@ -26,6 +26,9 @@ jobs:
           path: contract
           token: ${{ secrets.CONTRACT_TOKEN }}
 
+      - name: Contract token is read-only
+        run: bash .github/scripts/contract-read-only-check.sh contract
+
       - name: Contract bundle present
         run: test -f contract/dist/openapi.yaml
 

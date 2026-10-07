@@ -240,6 +240,42 @@ class CiWorkflowTest {
     }
 
     @Test
+    void build_job_proves_the_contract_token_is_read_only_right_after_the_checkout() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        int checkout = indexOfStep(steps, step -> "Check out rekord-contract".equals(step.path("name").asText()));
+
+        // Then
+        assertThat(checkout).as("the contract checkout step").isNotNegative();
+        JsonNode probe = steps.get(checkout + 1);
+        assertThat(probe.path("name").asText()).isEqualTo("Contract token is read-only");
+        assertThat(probe.path("run").asText().trim().split("\\s+"))
+                .containsExactly("bash", ".github/scripts/contract-read-only-check.sh", "contract");
+        assertThat(probe.has("if")).isFalse();
+        assertThat(probe.has("continue-on-error")).isFalse();
+    }
+
+    @Test
+    void read_only_check_fails_when_the_push_is_accepted_and_accepts_only_a_refusal() throws IOException {
+        // Given
+        String script = Files.readString(REPO_ROOT.resolve(".github/scripts/contract-read-only-check.sh"));
+
+        // When / Then
+        assertThat(script).contains("set -euo pipefail");
+        assertThat(script).contains("push --dry-run origin");
+        assertThat(script)
+                .containsPattern("(?s)if \\[\\[ \\$status -eq 0 \\]\\]; then.*?FAIL: the contract token can push.*?exit 1");
+        assertThat(script).contains("grep -Eq '403|denied|Permission'");
+        assertThat(script)
+                .doesNotContain("CONTRACT_TOKEN")
+                .doesNotContain("extraheader")
+                .doesNotContain("git config");
+    }
+
+    @Test
     void ci_result_is_read_by_the_commit_sha() throws IOException {
         // Given
         String script = Files.readString(REPO_ROOT.resolve(".archon/scripts/ci-by-sha.sh"));
