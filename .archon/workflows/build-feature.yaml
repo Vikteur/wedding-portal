@@ -3,7 +3,8 @@ description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> implement step by
   step with tests -> review -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most
-  3 rounds) -> mark the pull request ready for your review and merge.
+  3 rounds) -> mark the pull request ready for your review and merge -> wait for the merge -> finalize the Backlog
+  ticket (Done), commit and push it, and delete the run's branch and worktree.
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -168,3 +169,65 @@ nodes:
         *'"state": "none"'*) echo "No CI run for this commit: the pull request stays a draft (P5)." >&2; exit 1 ;;
         *) echo "CI is not green: the pull request stays a draft." >&2; exit 1 ;;
       esac
+
+  # After `ready` the run waits for your merge. The merge is the human approval for closing the ticket out (UD-21.c):
+  # finalize it in Backlog, commit and push its Backlog files, delete the run's own branch and worktree. A pull request
+  # closed without a merge ends the run here; a merge whose head SHA is not green fails it before anything changes.
+  # If the run dies while waiting, `archon workflow resume <run-id>` picks the wait up again.
+  - id: merged
+    depends_on: [ready]
+    timeout: 1209600000
+    bash: |
+      pr=$open-pr.output.pr
+      bash .archon/scripts/wait-merge.sh "$pr"
+    output_format:
+      type: object
+      properties:
+        state: { type: string, enum: [merged, closed] }
+        merge: { type: string }
+        head: { type: string }
+        branch: { type: string }
+        ci: { type: string }
+        backlog: { type: string }
+      required: [state, merge, head, branch, ci, backlog]
+
+  - id: finalize
+    depends_on: [merged]
+    when: "$merged.output.state == 'merged'"
+    model: "@analyse"
+    prompt: |
+      Pull request $open-pr.output.pr was merged as $merged.output.merge; CI on its head $merged.output.head is green.
+      Backlog ticket: $ticket.output.task. When it is empty there is no ticket: change nothing and return close=true.
+      Otherwise finalize the ticket. Run every backlog command with BACKLOG_CWD=$merged.output.backlog, change Backlog
+      only through the backlog CLI, and commit nothing: the close-out node commits.
+      1. Read `backlog instructions task-finalization` and `backlog task view <ticket> --plain`.
+      2. Check each acceptance criterion and Definition of Done item only on evidence: the merged code and tests,
+         and the CI runs of the head SHA (`gh run list --commit <head>`, `gh run view <id> --log`). Check an item
+         that does not apply, with its reason in the notes as `DoD #n N/A: <reason>`.
+      3. Append the evidence to the implementation notes, write a final summary naming it (pull request, merge
+         commit, CI run and SHA), and set the status Done.
+      4. When the ticket has a parent and every sub-ticket of that parent is now Done, close the parent the same way.
+      5. When an item has no evidence, leave it unchecked and the status unchanged, explain it in the notes, and
+         return close=false: the run stops before anything is committed or deleted.
+      Do not create or start follow-up tickets; name them in the notes.
+    output_format:
+      type: object
+      properties:
+        close: { type: boolean }
+      required: [close]
+
+  - id: close-out
+    depends_on: [finalize]
+    when: "$finalize.output.close == 'true'"
+    bash: |
+      task=$ticket.output.task
+      pr=$open-pr.output.pr
+      home=$merged.output.backlog
+      bash .archon/scripts/close-out.sh "$task" "$pr" "$home"
+    output_format:
+      type: object
+      properties:
+        backlog: { type: string }
+        branch: { type: string }
+        worktree: { type: string }
+      required: [backlog, branch, worktree]
