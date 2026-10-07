@@ -108,3 +108,8 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every rule is frozen, but the store `application/src/test/archunit_store` holds no violation: all files are empty. `archunit.properties` sets `allowStoreCreation=false` and `allowStoreUpdate=false`, so a new violation fails and nothing rewrites the store. A renamed `because` text or a new rule needs its empty entry added on purpose (both flags on, run once, flags off).
 - Rule fixtures are compiled at test time by `FixtureCompiler`, so no fixture lives under a reserved layer package.
 - Rule-shape decisions: A8 exempts only the Clock and id-port providers in `application.config`; A10 treats a class implementing `DomainEvent` as shape (a) and a port the origin implements as shape (b); A13's helper exemption is deferred to the §4.1 ticket; A14 limits status setting to `adapter.web.shared` and checks `@ResponseStatus` plus the `Response`/`RestResponse` static factories (not every method, so `getStatusInfo()` stays legal); A3 also allows `Transactional$TxType`.
+
+## 2026-10-08 — TASK-5.1 error families and code table
+
+- `RekordException` (`app.rekord.domain.shared.error`) is sealed over `NotFoundException`, `RejectedException` (with `Kind` VALIDATION or CONFLICT), `NotPermittedException` and `UpstreamUnavailableException`. It carries an `ErrorCode` and a message, never a status (FW-C-10).
+- `ErrorCode` has the 43 codes rekord-api throws through `ApiException`. Left out: the six codes rekord-api never produces (EMPTY_FOLDER, BAD_FORMAT, NO_COUPLE, BAD_TOKEN_KIND, BAD_CODE, NO_BUILD), `UNKNOWN` (only the catch-all mapper of TASK-5.2 emits it), and the seven Python-only codes (UX-10). Adding a code means adding its `ErrorStatusTable` row in the same change.
