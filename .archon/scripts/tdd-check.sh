@@ -5,7 +5,8 @@
 #
 # Fails unless
 #   - plan.md has no step left `- [ ]`;
-#   - every checked step that is not done by the workflow's own nodes has red/step-<n>.log (n = the step's
+#   - every checked step that is not done by the workflow's own nodes and not marked `(verify only)` (it adds no
+#     behaviour: it only runs checks or reads/updates docs) has red/step-<n>.log (n = the step's
 #     position among the plan's checkbox lines) showing a failing test run;
 #   - every commit since the base that changes code comes after a commit holding only tests, written since
 #     the code commit before it (a commit may change tests and code together only after such a test commit).
@@ -29,7 +30,7 @@ while IFS= read -r line; do
     *'- [ ]'*) n=$((n + 1)); err "step $n is not done: $line" ;;
     *'- [x]'*|*'- [X]'*)
       n=$((n + 1))
-      case "$line" in *'(done by the workflow'*) continue ;; esac
+      case "$line" in *'(done by the workflow'*|*'(verify only)'*) continue ;; esac
       log="$art/red/step-$n.log"
       if [ ! -s "$log" ]; then
         err "step $n has no red test run ($log)"

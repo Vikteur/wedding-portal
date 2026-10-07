@@ -33,6 +33,8 @@ nodes:
       Explore the codebase and write an implementation plan for exactly this request to $ARTIFACTS_DIR/plan.md.
       Write every step as a Markdown checkbox line `- [ ] ...`; each step names the tests that are written first and fail
       until the step is built (tests first, always). Fold a docs-only change into the step it documents.
+      A step that adds no behaviour (it only runs checks, or only reads or updates docs) cannot have a failing test:
+      write it as `- [ ] (verify only) ...`.
       Plan only code, tests and local commits: the push, the pull request and reading CI are later nodes of this
       workflow, so never write them as a checkbox step.
       Then decide whether the plan touches the STOP list of .claude/CLAUDE.md (a contract push, a database migration,
@@ -91,6 +93,7 @@ nodes:
             plan's checkbox lines (the first checkbox is 1).
             A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: write
             nothing for it and stop.
+            A step marked `- [ ] (verify only)` adds no behaviour: write nothing for it and stop.
             Otherwise write the tests the step names, and only tests: they state the behaviour the step adds, so they
             must fail now because that behaviour is missing (a compile error for a class the step creates counts).
             Run them and save the full output to $ARTIFACTS_DIR/red/step-<n>.log. If they pass already, they do not
@@ -104,6 +107,8 @@ nodes:
             Read $ARTIFACTS_DIR/plan.md and take the first step still marked `- [ ]`.
             A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: do not do
             it, mark it `- [x] (done by the workflow's open-pr and ci nodes)` and commit nothing for it.
+            A step marked `- [ ] (verify only)` has no tests: run the checks the step names, fix nothing but docs,
+            commit only the docs that changed (if any), and mark it `- [x] (verify only) ...`.
             Otherwise the test agent has committed this step's failing tests. Write the code that makes them pass,
             without weakening them; when a test is wrong, fix it in the same commit and say why in the message. Run
             the whole test suite. When it passes, mark the step `- [x]` in the plan and commit the code.
