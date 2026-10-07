@@ -64,6 +64,12 @@ class CodeMapLeavesTest {
     }
 
     @Test
+    void archunit_fitness_records_the_a3_producer_refusal() throws IOException {
+        assertLeaf(
+                CODE_MAPS.resolve("archunit-fitness.md"), "@Produces", "PIN-AC-0448", "UseCaseTransactionBoundaryIT");
+    }
+
+    @Test
     void archunit_fitness_describes_the_built_suite() throws IOException {
         // TASK-3.1 built the suite: the leaf names where it lives, its store and the pinned version
         String catalog = Files.readString(REPO_ROOT.resolve("gradle/libs.versions.toml"));
