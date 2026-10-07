@@ -147,6 +147,25 @@ class BuildLayoutTest {
     }
 
     @Test
+    void ci_checks_the_required_tasks_and_the_fast_jar() throws IOException {
+        String ci = read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        assertThat(ci)
+                .contains(
+                        "help --task test",
+                        "help --task integrationTest",
+                        "help --task build",
+                        ":application:help --task quarkusBuild",
+                        "application/build/quarkus-app/quarkus-run.jar",
+                        "application/build/quarkus-app/app",
+                        "application/build/quarkus-app/quarkus");
+        assertThat(ci.indexOf("./gradlew build"))
+                .as("the build runs before the fast-jar check")
+                .isNotNegative()
+                .isLessThan(ci.indexOf("quarkus-run.jar"));
+    }
+
+    @Test
     void gitignore_anchors_build_outputs_so_source_packages_named_build_stay_tracked() throws IOException {
         List<String> unanchored = read(REPO_ROOT.resolve(".gitignore")).lines()
                 .map(String::strip)

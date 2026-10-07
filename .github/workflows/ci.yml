@@ -36,7 +36,11 @@ jobs:
           ./gradlew -q :application:help --task quarkusBuild
 
       - name: Fast-jar built
-        run: test -f application/build/quarkus-app/quarkus-run.jar && test -d application/build/quarkus-app/lib
+        run: >
+          test -f application/build/quarkus-app/quarkus-run.jar
+          && test -d application/build/quarkus-app/lib
+          && test -d application/build/quarkus-app/app
+          && test -d application/build/quarkus-app/quarkus
 
       - name: Upload test reports
         if: failure()
