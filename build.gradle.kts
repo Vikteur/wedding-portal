@@ -23,12 +23,28 @@ subprojects {
             testClassesDirs = testSourceSet.output.classesDirs
             classpath = testSourceSet.runtimeClasspath
             include("**/*IT.class")
-            useJUnitPlatform()
+            // QuarkusUnitTest and @QuarkusTest cannot share a JVM (ExclusivityChecker), so they run apart.
+            useJUnitPlatform { excludeTags("quarkus-unit-test") }
             shouldRunAfter(tasks.named("test"))
         }
 
+        // Slow set, part two: the start-up refusal tests that boot Quarkus through QuarkusUnitTest.
+        val startupTest = tasks.register<Test>("startupTest") {
+            testClassesDirs = testSourceSet.output.classesDirs
+            classpath = testSourceSet.runtimeClasspath
+            include("**/*IT.class")
+            useJUnitPlatform { includeTags("quarkus-unit-test") }
+            shouldRunAfter(integrationTest)
+        }
+
+        // The image runs with -Duser.timezone=UTC in JAVA_OPTS; every test JVM does the same, on any runner OS.
+        tasks.withType<Test>().configureEach {
+            // A provider, because the Quarkus plugin reassigns jvmArgs on the application's test tasks.
+            jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Duser.timezone=UTC") })
+        }
+
         tasks.named("check") {
-            dependsOn(integrationTest)
+            dependsOn(integrationTest, startupTest)
         }
     }
 }

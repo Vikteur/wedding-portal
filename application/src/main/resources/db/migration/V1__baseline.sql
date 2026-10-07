@@ -1,0 +1,3 @@
+-- wedding-portal's own empty Flyway baseline (UD-13.b).
+-- It creates nothing: no import from another application and no shared database.
+-- Business tables arrive in later migrations, each one a STOP item that needs approval.

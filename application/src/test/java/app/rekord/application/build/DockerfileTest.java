@@ -155,7 +155,13 @@ class DockerfileTest {
                 .contains("healthy")
                 .contains("/proc/1")
                 .contains("/api/health")
-                .contains("health-200.json");
+                .contains("health-200.json")
+                .contains("postgres:17-alpine")
+                .contains("DB_URL=jdbc:postgresql://")
+                .contains("DB_PASSWORD")
+                .contains("pg_isready -h 127.0.0.1")
+                .contains("flyway_schema_history")
+                .doesNotContainPattern("POSTGRES_PASSWORD=[A-Za-z0-9]");
     }
 
     private static Stage lastStage() throws IOException {

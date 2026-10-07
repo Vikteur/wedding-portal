@@ -51,18 +51,42 @@ expect "Healthcheck.StartPeriod" '40000000000' "$(cfg '.Healthcheck.StartPeriod'
 expect "Healthcheck.Retries" '3' "$(cfg '.Healthcheck.Retries')"
 
 echo "Check: running container"
-container="$(docker run -d -p "127.0.0.1:$port:8080" "$image")"
+# Flyway migrates at start, so the image cannot start without a database: run a throwaway postgres next to it.
+run_id="wedding-image-check-$$"
+network="$run_id"
+db_container=""
+container=""
 workdir="$(mktemp -d)"
 cleanup() {
   status=$?
-  if [[ $status -ne 0 ]]; then
+  if [[ $status -ne 0 && -n "$container" ]]; then
     docker logs "$container" >&2 || true
   fi
-  docker rm -f "$container" >/dev/null 2>&1 || true
+  [[ -z "$container" ]] || docker rm -f "$container" >/dev/null 2>&1 || true
+  [[ -z "$db_container" ]] || docker rm -f "$db_container" >/dev/null 2>&1 || true
+  docker network rm "$network" >/dev/null 2>&1 || true
   rm -rf "$workdir"
   exit $status
 }
 trap cleanup EXIT
+
+db_user="wedding_portal"
+db_name="wedding_portal"
+db_password="$(openssl rand -hex 16)"
+docker network create "$network" >/dev/null
+db_container="$(docker run -d --network "$network" --name "$run_id-db" \
+  -e POSTGRES_DB="$db_name" -e POSTGRES_USER="$db_user" -e POSTGRES_PASSWORD="$db_password" \
+  postgres:17-alpine)"
+# Over TCP: during initdb the entrypoint runs a temporary server on the socket only, which must not count as ready.
+for _ in $(seq 1 30); do
+  docker exec "$db_container" pg_isready -h 127.0.0.1 -U "$db_user" -d "$db_name" >/dev/null 2>&1 && break
+  sleep 2
+done
+docker exec "$db_container" pg_isready -h 127.0.0.1 -U "$db_user" -d "$db_name" >/dev/null || fail "postgres did not become ready"
+
+container="$(docker run -d --network "$network" -p "127.0.0.1:$port:8080" \
+  -e DB_URL=jdbc:postgresql://"$run_id"-db:5432/"$db_name" \
+  -e DB_USER="$db_user" -e DB_PASSWORD="$db_password" "$image")"
 
 health=""
 for _ in $(seq 1 60); do
@@ -83,5 +107,10 @@ code="$(curl -sS -o "$workdir/body" -w '%{http_code}' "http://127.0.0.1:$port/ap
 expect "GET /api/health status" "200" "$code"
 expected_body="$(jq -r .body "$repo_root/application/src/test/resources/fixtures/health-200.json")"
 expect "GET /api/health body" "$expected_body" "$(cat "$workdir/body")"
+
+echo "Check: flyway ran in the started image"
+expect "successful flyway_schema_history rows" "1" \
+  "$(docker exec "$db_container" psql -U "$db_user" -d "$db_name" -tAc \
+    'select count(*) from flyway_schema_history where success')"
 
 echo "OK: $image"
