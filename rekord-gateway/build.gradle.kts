@@ -15,3 +15,8 @@ dependencies {
     testImplementation(libs.assertj.core)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+
+// Every gateway test opens a socket and ends in IT, so the fast set of this module is empty on purpose.
+tasks.named<Test>("test") {
+    failOnNoDiscoveredTests = false
+}

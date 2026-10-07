@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -156,16 +157,29 @@ class BuildLayoutTest {
 
     @Test
     void no_build_file_names_a_com_github_tomakehurst_artifact() throws IOException {
-        List<Path> files = new java.util.ArrayList<>(gradleKtsFiles());
+        List<Path> files = new ArrayList<>(gradleKtsFiles());
         files.add(REPO_ROOT.resolve("gradle/libs.versions.toml"));
 
-        // The root build file is the one place that names the group: legacyWireMockCheck bans it.
+        // The root build file names the group only where legacyWireMockCheck bans it: its comment and its comparison.
         Path rootBuild = REPO_ROOT.resolve("build.gradle.kts");
         for (Path file : files) {
+            String text = read(file);
             if (file.equals(rootBuild)) {
-                continue;
+                text = text.replace("// The legacy WireMock group (com.github.tomakehurst)", "")
+                        .replace("id.group == \"com.github.tomakehurst\"", "");
             }
-            assertThat(read(file)).as("%s", file).doesNotContain("com.github.tomakehurst");
+            assertThat(text).as("%s", file).doesNotContain("com.github.tomakehurst");
+        }
+    }
+
+    @Test
+    void only_the_all_it_gateway_module_allows_an_empty_fast_test_set() throws IOException {
+        Path gateway = REPO_ROOT.resolve("rekord-gateway/build.gradle.kts");
+        assertThat(read(gateway)).contains("failOnNoDiscoveredTests = false");
+        for (Path file : gradleKtsFiles()) {
+            if (!file.equals(gateway)) {
+                assertThat(read(file)).as("%s", file).doesNotContain("failOnNoDiscoveredTests");
+            }
         }
     }
 

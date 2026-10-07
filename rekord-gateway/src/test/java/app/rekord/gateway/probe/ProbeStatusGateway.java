@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 /** Test-only gateway used by the WireMock harness tests; it logs nothing and sends no identifiers. */
 final class ProbeStatusGateway {
 
-    private static final Pattern STATUS = Pattern.compile("\"status\"\s*:\s*\"([^\"]*)\"");
+    private static final Pattern STATUS = Pattern.compile("\"status\"\\s*:\\s*\"([^\"]*)\"");
 
     private final URI baseUrl;
     private final Duration timeout;

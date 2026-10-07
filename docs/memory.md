@@ -61,5 +61,6 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - WireMock is `org.wiremock:wiremock-standalone` 3.13.2, pinned in the catalog. It is shaded, so it brings no Jetty or Jackson conflict with the Quarkus BOM. 4.x is still beta.
 - The Java packages stay `com.github.tomakehurst.wiremock.*`. The ban is on the artifact group `com.github.tomakehurst`, enforced by the `legacyWireMockCheck` task, which `check` depends on.
 - Gateway tests that do not boot Quarkus live in the gateway module, end in `IT` and run in `integrationTest`.
+- Every `rekord-gateway` test is an IT, so that module alone sets `failOnNoDiscoveredTests = false` on its `test` task. The root keeps Gradle's guard on for every other module.
 - `ProbeStatusGateway` is test-only and may go once the first real gateway has its own WireMock test.
 - P-3 / PIN-AC-0655 is settled by the CI run of this PR (run id and SHA are filled in after CI).

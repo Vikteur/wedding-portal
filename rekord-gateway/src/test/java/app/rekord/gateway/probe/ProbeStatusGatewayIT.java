@@ -55,7 +55,8 @@ class ProbeStatusGatewayIT {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"status\":\"up\"}")));
+                        // Pretty-printed on purpose: the gateway must accept any JSON whitespace.
+                        .withBody("{\n\t\"status\" : \"up\"\n}")));
 
         // When
         String status = gateway.status();
