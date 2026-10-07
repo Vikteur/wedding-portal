@@ -86,4 +86,118 @@ class TrackMatcherTest {
         assertThat(dropped.candidates()).isEmpty();
         assertThat(dropped.bucket()).isEqualTo(Bucket.UNMATCHED);
     }
+
+    // The cases below use the query "Daft Punk" / "One More Time" and scores computed with rekord-api's
+    // matcher classes (recorded in TASK-24.3). They pin the facets, the score order and rekord-api's
+    // three-guard bucket as ported here; TASK-24.3 tightens auto under UD-19.c.
+
+    private static Track daftPunk(String id, String title, Double durationSec) {
+        return new Track(id, "Daft Punk", title, durationSec);
+    }
+
+    private static MatchResult match(Double queryDuration, Track... tracks) {
+        return TrackMatcher.matchOne(new MatchQuery(0, "Daft Punk", "One More Time", queryDuration),
+                new LibraryIndex(List.of(tracks)));
+    }
+
+    @Test
+    void a_close_single_file_is_auto_with_every_facet_at_1() {
+        MatchResult result = match(320.0, daftPunk("f", "One More Time", 322.0));
+
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("f");
+        ScoredCandidate only = result.candidates().get(0);
+        assertThat(only.score()).isEqualTo(1.0);
+        assertThat(only.parts()).containsExactly(
+                java.util.Map.entry("title", 1.0), java.util.Map.entry("artist", 1.0),
+                java.util.Map.entry("version", 1.0), java.util.Map.entry("duration", 1.0));
+    }
+
+    @Test
+    void without_a_duration_only_an_exact_version_is_auto() {
+        MatchResult exact = match(null, daftPunk("f", "One More Time", 322.0));
+        MatchResult extended = match(null, daftPunk("f", "One More Time (Extended Mix)", 400.0));
+
+        assertThat(exact.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(extended.candidates().get(0).score()).isEqualTo(0.9294);
+        assertThat(extended.candidates().get(0).parts().get("version")).isEqualTo(0.6);
+        assertThat(extended.candidates().get(0).parts().get("duration")).isNull();
+        assertThat(extended.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(extended.autoSelectedId()).isNull();
+    }
+
+    @Test
+    void another_version_is_never_auto() {
+        MatchResult result = match(320.0, daftPunk("f", "One More Time (Kygo Remix)", 320.0));
+
+        assertThat(result.candidates().get(0).score()).isEqualTo(0.8875);
+        assertThat(result.candidates().get(0).parts().get("version")).isEqualTo(0.25);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_far_duration_is_never_auto() {
+        MatchResult result = match(320.0, daftPunk("f", "One More Time", 380.0));
+
+        assertThat(result.candidates().get(0).score()).isEqualTo(0.85);
+        assertThat(result.candidates().get(0).parts().get("duration")).isEqualTo(0.0);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void candidates_are_ordered_by_score_and_a_clear_leader_is_auto() {
+        // Retrieval lists b first (same hit count, later file); the score puts a first.
+        MatchResult result = match(320.0,
+                daftPunk("a", "One More Time", 320.0),
+                daftPunk("b", "One More Time (Kygo Remix)", 320.0));
+
+        assertThat(ids(result)).containsExactly("a", "b");
+        assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(1.0, 0.8875);
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("a");
+    }
+
+    @Test
+    void two_equal_leaders_are_ambiguous_and_keep_retrieval_order() {
+        MatchResult result = match(320.0, daftPunk("x", "One More Time", 320.0), daftPunk("y", "One More Time", 320.0));
+
+        assertThat(ids(result)).containsExactly("y", "x");
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    @Test
+    void nine_identical_files_list_8_and_are_ambiguous() {
+        Track[] tracks = new Track[9];
+        for (int i = 0; i < 9; i++) {
+            tracks[i] = daftPunk("f" + i, "One More Time", 320.0);
+        }
+
+        MatchResult result = match(320.0, tracks);
+
+        assertThat(result.candidates()).hasSize(8);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_listed_candidate_under_060_leaves_the_song_unmatched() {
+        MatchResult listed = match(320.0, new Track("o", "Other Band", "One More Night", 200.0));
+        MatchResult dropped = match(320.0, daftPunk("l", "Da Funk (Live)", 500.0));
+
+        assertThat(ids(listed)).containsExactly("o");
+        assertThat(listed.candidates().get(0).score()).isEqualTo(0.4502);
+        assertThat(listed.bucket()).isEqualTo(Bucket.UNMATCHED);
+        assertThat(dropped.candidates()).isEmpty();
+        assertThat(dropped.bucket()).isEqualTo(Bucket.UNMATCHED);
+    }
+
+    @Test
+    void a_query_without_artist_drops_the_artist_facet_from_the_mean() {
+        MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, null, "One More Time", 320.0),
+                new LibraryIndex(List.of(daftPunk("f", "One More Time", 320.0))));
+
+        ScoredCandidate only = result.candidates().get(0);
+        assertThat(only.parts()).containsEntry("artist", null);
+        assertThat(only.score()).isEqualTo(1.0);
+    }
 }

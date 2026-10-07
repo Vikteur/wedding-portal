@@ -149,4 +149,31 @@ class LibraryIndexTest {
         }
         assertThat(ids(index.candidates(Set.of("xqz"), "dancin quen"))).containsExactlyElementsOf(expected);
     }
+
+    private static List<Track> bandFiles(int count) {
+        List<Track> tracks = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            tracks.add(new Track("f" + i, "Band", "Love", null));
+        }
+        return tracks;
+    }
+
+    @Test
+    void a_token_in_exactly_50_files_is_rare_and_in_51_is_not() {
+        // "band" is the only shared token. In 50 files it is rare, so the gate admits all 50, last first; in 51
+        // it is not, so the fallback answers instead, first 50 in library order.
+        List<String> gate = new ArrayList<>();
+        for (int i = 49; i >= 0; i--) {
+            gate.add("f" + i);
+        }
+        List<String> fallback = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            fallback.add("f" + i);
+        }
+
+        assertThat(ids(candidatesFor(new LibraryIndex(bandFiles(50)), "Band", "Other")))
+                .containsExactlyElementsOf(gate);
+        assertThat(ids(candidatesFor(new LibraryIndex(bandFiles(51)), "Band", "Other")))
+                .containsExactlyElementsOf(fallback);
+    }
 }
