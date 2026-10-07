@@ -10,4 +10,8 @@ dependencies {
     api(project(":rekord-usecase"))
     api(project(":rekord-domain"))
     implementation(project(":logging"))
+    testImplementation(libs.wiremock)
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

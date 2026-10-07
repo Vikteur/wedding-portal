@@ -137,6 +137,40 @@ class BuildLayoutTest {
     }
 
     @Test
+    void wiremock_3_is_pinned_in_the_catalog_from_org_wiremock() throws IOException {
+        List<String> lines = catalogSection("libraries")
+                .filter(line -> line.matches("wiremock\\s*=.*"))
+                .toList();
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0)).containsPattern("module\\s*=\\s*\"org\\.wiremock:[\\w.-]+\"");
+
+        Matcher ref = Pattern.compile("version\\.ref\\s*=\\s*\"([^\"]+)\"").matcher(lines.get(0));
+        assertThat(ref.find()).as("a version.ref on the wiremock library").isTrue();
+
+        List<String> versions = catalogSection("versions")
+                .filter(line -> line.matches(Pattern.quote(ref.group(1)) + "\\s*=.*"))
+                .toList();
+        assertThat(versions).hasSize(1);
+        assertThat(versions.get(0)).containsPattern("=\\s*\"3\\.\\d+\\.\\d+\"\\s*$");
+    }
+
+    @Test
+    void no_build_file_names_a_com_github_tomakehurst_artifact() throws IOException {
+        List<Path> files = new java.util.ArrayList<>(gradleKtsFiles());
+        files.add(REPO_ROOT.resolve("gradle/libs.versions.toml"));
+
+        for (Path file : files) {
+            assertThat(read(file)).as("%s", file).doesNotContain("com.github.tomakehurst");
+        }
+    }
+
+    @Test
+    void gateway_module_tests_with_wiremock_from_the_catalog() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("rekord-gateway/build.gradle.kts")))
+                .contains("testImplementation(libs.wiremock)", "junit-platform-launcher");
+    }
+
+    @Test
     void no_python_file_exists() throws IOException {
         try (Stream<Path> files = repoFiles()) {
             List<Path> python = files.filter(file -> file.getFileName().toString().endsWith(".py")).toList();
