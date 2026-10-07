@@ -3,16 +3,21 @@ package app.rekord.application.health;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import app.rekord.application.ResourceTestProfile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@TestProfile(ResourceTestProfile.class)
+@Tag("resource-test")
 class HealthResourceIT {
 
     @Test
