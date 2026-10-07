@@ -111,5 +111,21 @@ echo "FooTest FAILED" > "$d.art/red/step-1.log"
 commit "$d" "feat: Foo with dep" src/main/java/Foo.java build.gradle.kts
 expect ok "code and build file together" "$d"
 
+# 13. A (verify only) step needs no red log.
+d=$(repo); writeplan "$d" "- [x] 1. Add Foo (FooTest)" "- [x] (verify only) 2. Full local check before handing over"
+commit "$d" "test: FooTest" src/test/java/FooTest.java
+echo "FooTest FAILED" > "$d.art/red/step-1.log"
+commit "$d" "feat: Foo" src/main/java/Foo.java
+expect ok "verify-only step without a red log" "$d"
+
+# 14. (verify only) does not excuse a code commit that has no test commit before it.
+d=$(repo); writeplan "$d" "- [x] (verify only) 1. Check the build"
+commit "$d" "feat: Foo" src/main/java/Foo.java
+expect fail "verify-only step with an untested code commit" "$d"
+
+# 15. Without the marker the same step still needs its red log.
+d=$(repo); writeplan "$d" "- [x] 1. Full local check before handing over"
+expect fail "unmarked check step needs a red log" "$d"
+
 echo "tdd-check tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -6,11 +6,19 @@
 # only the ticket's and its parent's Backlog files are committed, and only the pull request's own branch is deleted.
 # Every step runs; a failed one is reported and fails the node at the end, so a later step is never skipped silently.
 # Prints one JSON line {"backlog": "<commit or empty>", "branch": "deleted|kept", "worktree": "removed|kept"}.
+# When archon fails only because the emptied worktree directory is locked (Windows), the branch is deleted here and the
+# empty directory is reported as a warning; empty unregistered directories left by earlier runs are removed first.
 set -euo pipefail
 task=$1 pr=$2 home=$3
 here=$(pwd)
 main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+here_git=$(git -C "$here" rev-parse --show-toplevel)   # git's spelling of the path, as `worktree list` prints it
 failed=""
+left_empty=0
+
+registered() { # <dir>: is it a worktree git still lists?
+  git -C "$main" worktree list --porcelain | sed -n 's/^worktree //p' | grep -qxF "$1"
+}
 
 field() { # <task id> <field>: one field of a Backlog task, read through the CLI
   BACKLOG_CWD=$home backlog task view "$1" --json | node -e '
@@ -63,6 +71,16 @@ fi
 # checks (commits not pushed, commits unique to the branch, uncommitted changes). So this script does its own guard
 # first and only forces when the local branch tip is exactly the merged PR head and the run worktree is clean;
 # otherwise archon is not called and the branch and worktree are kept and reported.
+# First sweep the empty directories earlier runs left in the worktrees parent (rmdir only: a non-empty directory or a
+# registered worktree is never touched).
+# Skipped when this runs from the main checkout: its siblings are not worktrees.
+if [ "$here_git" != "$main" ]; then
+  for leftover in "$(dirname "$here_git")"/*/; do
+    leftover=${leftover%/}
+    [ "$leftover" = "$here_git" ] && continue
+    registered "$leftover" || rmdir "$leftover" 2> /dev/null || true
+  done
+fi
 case "$branch" in
   main|master|"") failed="$failed; refusing to delete branch '$branch'" ;;
   *)
@@ -77,7 +95,22 @@ case "$branch" in
       failed="$failed; worktree $here has uncommitted changes"
     else
       cd "$main"
-      archon complete --force "$branch" >&2 || failed="$failed; archon complete --force $branch failed"
+      if ! archon complete --force "$branch" >&2; then
+        # On Windows the files are gone and git has unregistered the worktree, but the directory stays because this
+        # process still has it as its cwd; archon stops there. Finish what it would have done.
+        if ! registered "$here_git" && { [ ! -e "$here" ] || { [ -d "$here" ] && [ -z "$(ls -A "$here")" ]; }; }; then
+          if git -C "$main" show-ref --verify --quiet "refs/heads/$branch"; then
+            git -C "$main" branch -D "$branch" >&2 || failed="$failed; deleting local branch $branch failed"
+          fi
+          if git -C "$main" ls-remote --exit-code --heads origin "$branch" > /dev/null 2>&1; then
+            git -C "$main" push -q origin --delete "$branch" || failed="$failed; deleting origin/$branch failed"
+          fi
+          echo "warning: git no longer lists $here; the empty directory $here is left behind (a process still holds it): delete it by hand." >&2
+          left_empty=1
+        else
+          failed="$failed; archon complete --force $branch failed"
+        fi
+      fi
     fi
     ;;
 esac
@@ -86,7 +119,7 @@ if git -C "$main" ls-remote --exit-code --heads origin "$branch" > /dev/null 2>&
     || git -C "$main" show-ref --verify --quiet "refs/heads/$branch"; then
   branch_state=kept
 fi
-if [ -d "$here" ]; then
+if [ -d "$here" ] && [ "$left_empty" -eq 0 ]; then
   worktree_state=kept
 fi
 
