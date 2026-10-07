@@ -3,7 +3,7 @@
 ## 2026-10-07 — TASK-1.1 build skeleton
 
 Quarkus platform: 3.39.1
-- PIN-AC-1255 / slice 18 P-1. Settled for Gradle only by the CI run of the TASK-1.1 PR, read by commit SHA. That run is still pending.
+- PIN-AC-1255 / slice 18 P-1. Settled for Gradle by the green CI run 37585096973 of the TASK-1.1 PR, read by commit SHA 44185bf.
 - The local build is green on 3.39.1 with Gradle 9.8.0 and Temurin 25. If CI is red for a framework reason, this line and the catalog move together to the first newer Quarkus line that turns it green.
 
 Gradle: 9.8.0
@@ -26,5 +26,5 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - The gid is explicit (10001, matching the uid), so `USER 10001:10001` names a real group.
 - `QUARKUS_HTTP_HOST=0.0.0.0` is kept in the image environment so the container answers on its published port.
 - The image is built and checked as a running container in CI (job `image`, `.github/scripts/image-check.sh`) and never pushed (UD-13.e): no registry login, no secret.
-- PIN-AC-1008 settles on the green CI run of this PR, read by commit SHA. That run is still pending.
+- PIN-AC-1008 is settled by the green CI run 37596108025 of the TASK-1.3 PR (jobs `build` and `image`), read by commit SHA 9a6bcac.
 - The frontends' nginx images under BR-OPS-26 are deferred (H2).
