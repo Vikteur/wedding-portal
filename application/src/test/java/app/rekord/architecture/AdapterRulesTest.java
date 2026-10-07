@@ -151,6 +151,84 @@ class AdapterRulesTest {
         assertBreaks(AdapterRules.A11, fixtures, "A11", "app.rekord.adapter.web.fixture.PlainResource");
     }
 
+    // ---- A14 ------------------------------------------------------------------------------------------------
+
+    private static String statusFilter(String pkg) {
+        return "package " + pkg + ";\n@jakarta.ws.rs.ext.Provider\npublic class StatusFilter"
+                + " implements jakarta.ws.rs.container.ContainerResponseFilter {\n"
+                + "public void filter(jakarta.ws.rs.container.ContainerRequestContext request,"
+                + " jakarta.ws.rs.container.ContainerResponseContext response) throws java.io.IOException {\n"
+                + "response.setStatus(201);\n}\n}\n";
+    }
+
+    @Test
+    void a_web_class_calling_response_status_breaks_a14() {
+        JavaClasses fixtures = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture",
+                "Creator",
+                "public Object create() { return jakarta.ws.rs.core.Response.status(201).build(); }"));
+
+        assertBreaks(AdapterRules.A14, fixtures, "A14", "app.rekord.adapter.web.fixture.Creator");
+    }
+
+    @Test
+    void a_web_class_building_a_response_with_a_status_breaks_a14() {
+        JavaClasses ok = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture",
+                "OkBuilder",
+                "public Object get() { return jakarta.ws.rs.core.Response.ok().build(); }"));
+        JavaClasses builder = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture",
+                "StatusBuilder",
+                "public Object get(jakarta.ws.rs.core.Response.ResponseBuilder b) { return b.status(202); }"));
+
+        assertBreaks(AdapterRules.A14, ok, "A14", "app.rekord.adapter.web.fixture.OkBuilder");
+        assertBreaks(AdapterRules.A14, builder, "A14", "app.rekord.adapter.web.fixture.StatusBuilder");
+    }
+
+    @Test
+    void a_web_response_filter_setting_the_status_breaks_a14() {
+        JavaClasses fixtures = FixtureCompiler.compile(statusFilter("app.rekord.adapter.web.fixture"));
+
+        assertBreaks(AdapterRules.A14, fixtures, "A14", "app.rekord.adapter.web.fixture.StatusFilter");
+    }
+
+    @Test
+    void a_web_method_annotated_response_status_breaks_a14() {
+        JavaClasses fixtures = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture",
+                "Annotated",
+                "@org.jboss.resteasy.reactive.ResponseStatus(201) public String create() { return \"\"; }"));
+
+        assertBreaks(AdapterRules.A14, fixtures, "A14", "app.rekord.adapter.web.fixture.Annotated");
+    }
+
+    @Test
+    void the_same_status_code_in_adapter_web_shared_passes_a14() {
+        JavaClasses fixtures = FixtureCompiler.compile(statusFilter("app.rekord.adapter.web.shared"));
+
+        assertPasses(AdapterRules.A14, fixtures);
+    }
+
+    @Test
+    void a_web_class_only_reading_the_status_passes_a14() {
+        JavaClasses fixtures = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture",
+                "Reader",
+                "public Object read(jakarta.ws.rs.core.Response response) { return response.getStatusInfo(); }"));
+
+        assertPasses(AdapterRules.A14, fixtures);
+    }
+
+    @Test
+    void the_suite_checks_a14() {
+        assertThat(Arrays.stream(AdapterArchitectureTest.class.getDeclaredFields())
+                        .filter(f -> f.isAnnotationPresent(ArchTest.class))
+                        .map(AdapterRulesTest::rule)
+                        .map(ArchRule::getDescription))
+                .anyMatch(d -> d.contains("A14 ("));
+    }
+
     // ---- suite ----------------------------------------------------------------------------------------------
 
     @Test
