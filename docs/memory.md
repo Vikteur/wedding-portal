@@ -64,3 +64,8 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - Every `rekord-gateway` test is an IT, so that module alone sets `failOnNoDiscoveredTests = false` on its `test` task. The root keeps Gradle's guard on for every other module.
 - `ProbeStatusGateway` is test-only and may go once the first real gateway has its own WireMock test.
 - P-3 / PIN-AC-0655 is settled by the CI run of this PR (run id and SHA are filled in after CI).
+
+## 2026-10-07 — TASK-3.3 agent framework
+
+- Domain events are raised in the domain (the aggregate records past-tense event records) and published by the use case through the `DomainEventPublisher` port after the change is valid. Publishing from the domain would put a bus or a port call inside the aggregate, which FW-C-01 forbids. Sources: 18 C-01, architecture-conventions §5.4, CT-22.
+- The per-repo code-map leaves live in `docs/code-maps` of this repository; the generic skills and rules live in the umbrella `.claude`. A skill says how, a leaf says what.

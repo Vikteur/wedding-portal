@@ -1,0 +1,9 @@
+# Code map: JVM testing
+
+- **Style.** Given-When-Then in the body, one behaviour per test, JUnit 5 and AssertJ (A §13.1, line 876).
+- **Method names.** A behaviour sentence in snake case, e.g. `rejects_a_wedding_without_a_date` (A §13.1, line 885; recommendation that settles 18 C-04, line 531). Not `given_when_then`.
+- **Two sets, one source tree** (A §13.2, line 888): every class under `src/test/java` whose name does not end in `IT` is the fast set, run by `test`. A class ending in `IT` is the slow set, run by `integrationTest`. No `src/integrationTest` source set.
+- **Gradle tasks in this repository** (root `build.gradle.kts`): `test`, `integrationTest`, `startupTest` (tag `quarkus-unit-test`, QuarkusUnitTest in its own JVM), `resourceTest` (tag `resource-test`, datasource-less profile); `check` depends on all of them.
+- **Quarkus-booting tests** live only in `application/src/test` (only `application` applies the Quarkus plugin); gateway tests that do not boot Quarkus are ITs in `rekord-gateway`, which alone sets `failOnNoDiscoveredTests = false` (`docs/memory.md`, TASK-4.4).
+- **Libraries**: JUnit 5, AssertJ 3.27.7 and WireMock 3 (`wiremock-standalone`) are in `gradle/libs.versions.toml`.
+- A unit test that needs Quarkus to pass is in the wrong layer (A §13.2, FW-C-75).
