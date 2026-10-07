@@ -17,7 +17,7 @@ class ContractSpecWiringTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final String SPEC_ARG = "-Pcontract.spec=contract/dist/openapi.yaml";
-    private static final Pattern HELP = Pattern.compile("\bhelp\b");
+    private static final Pattern HELP = Pattern.compile("\\bhelp\\b");
 
     private static JsonNode workflow() throws IOException {
         return new ObjectMapper(new YAMLFactory()).readTree(Files.readString(REPO_ROOT.resolve(".github/workflows/ci.yml")));
@@ -125,7 +125,7 @@ class ContractSpecWiringTest {
             }
         }
         assertThat(Files.readAllLines(REPO_ROOT.resolve("Dockerfile")))
-                .filteredOn(l -> l.stripLeading().matches("(?i)(ARG|ENV)\b.*"))
+                .filteredOn(l -> l.stripLeading().matches("(?i)(ARG|ENV)\\b.*"))
                 .noneMatch(l -> l.toLowerCase().contains("token"));
     }
 }

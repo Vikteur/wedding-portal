@@ -49,7 +49,7 @@ jobs:
 
       - name: Build and test
         id: gradle
-        run: ./gradlew test integrationTest build --stacktrace
+        run: ./gradlew test integrationTest build --stacktrace -Pcontract.spec=contract/dist/openapi.yaml
 
       - name: Required tasks exist
         run: |
@@ -80,6 +80,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Read the pinned contract ref
+        id: contract-pin
+        run: bash .github/scripts/contract-pin.sh gradle.properties
+
+      - name: Check out rekord-contract
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: Vikteur/rekord-contract
+          ref: ${{ steps.contract-pin.outputs.ref }}
+          path: contract
+          token: ${{ secrets.CONTRACT_TOKEN }}
+
+      - name: Contract token is read-only
+        run: bash .github/scripts/contract-read-only-check.sh contract
+
+      - name: Contract is exactly the pinned ref
+        run: bash .github/scripts/contract-ref-check.sh contract "${{ steps.contract-pin.outputs.kind }}" "${{ steps.contract-pin.outputs.pin }}"
+
+      - name: Contract bundle present
+        run: test -f contract/dist/openapi.yaml
 
       - name: Build image
         run: docker build -t wedding-portal:ci .

@@ -7,6 +7,8 @@
 !build.gradle.kts
 !*/build.gradle.kts
 !*/src/main/
+# Only the pinned contract bundle, never the rest of the checkout.
+!contract/dist/openapi.yaml
 
 # Never ship local build output or VCS data, even under an allowed path.
 build/

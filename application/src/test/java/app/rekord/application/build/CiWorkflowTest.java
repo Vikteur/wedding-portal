@@ -220,8 +220,8 @@ class CiWorkflowTest {
             });
         }
 
-        // Then
-        assertThat(occurrences).as("secrets. references across all workflows").isEqualTo(1);
+        // Then: one per job that checks out the contract (build and image), nowhere else
+        assertThat(occurrences).as("secrets. references across all workflows").isEqualTo(2);
     }
 
     @Test
