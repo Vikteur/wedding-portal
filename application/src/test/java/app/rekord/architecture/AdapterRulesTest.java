@@ -193,6 +193,19 @@ class AdapterRulesTest {
         assertBreaks(AdapterRules.A14, fixtures, "A14", "app.rekord.adapter.web.fixture.StatusFilter");
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+        "org.jboss.resteasy.reactive.server.jaxrs.ContainerResponseContextImpl, setStatus(201)",
+        "org.jboss.resteasy.reactive.common.jaxrs.ResponseImpl, setStatus(201)",
+        "io.vertx.core.http.impl.Http1xServerResponse, setStatusCode(201)"
+    })
+    void setting_the_status_through_an_implementation_type_breaks_a14(String type, String call) {
+        JavaClasses fixtures = FixtureCompiler.compile(unit(
+                "app.rekord.adapter.web.fixture", "Sneaky", "public void set(" + type + " target) { target." + call + "; }"));
+
+        assertBreaks(AdapterRules.A14, fixtures, "A14", "app.rekord.adapter.web.fixture.Sneaky");
+    }
+
     @Test
     void a_web_method_annotated_response_status_breaks_a14() {
         JavaClasses fixtures = FixtureCompiler.compile(unit(
