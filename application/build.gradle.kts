@@ -18,10 +18,7 @@ dependencies {
 
 tasks.test {
     systemProperty("wedding.repoRoot", rootDir.absolutePath)
-}
-
-// ClassFileVersionTest reads the class directories of every module, so they must be compiled first.
-tasks.test {
+    // ClassFileVersionTest reads the class directories of every module, so they must be compiled first.
     listOf("rekord-domain", "rekord-usecase", "rekord-adapter", "rekord-gateway", "logging").forEach {
         dependsOn(":$it:classes", ":$it:testClasses")
     }
