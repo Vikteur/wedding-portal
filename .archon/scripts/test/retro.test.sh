@@ -22,9 +22,10 @@ same() { [ "$(echo "$out" | tail -1 | node -e 'let s="";process.stdin.on("data",
 mkdir -p "$root/bin"
 cat > "$root/bin/gh" <<'STUB'
 #!/usr/bin/env bash
+[ -n "${STUB_LOG:-}" ] && echo "$*" >> "$STUB_LOG"
 case "$*" in
+  "pr view"*) [ -n "${STUB_PR_FAIL:-}" ] && exit 1; cat "$STUB_PR_JSON" ;;
   "pr list"*) [ -n "${STUB_PR:-}" ] && echo "$STUB_PR" ;;
-  "pr view"*) cat "$STUB_PR_JSON" ;;
   "run list"*) cat "$STUB_RUNS_JSON" ;;
   *) exit 1 ;;
 esac
@@ -126,6 +127,43 @@ layout e4; other="$root/e4/elsewhere"; mkdir -p "$other/backlog"; echo x > "$oth
 evid "TASK-7.1" BACKLOG_CWD="$other"
 check "E4 BACKLOG_CWD wins" $(same umbrella "$other"; echo $?)
 check "E4 next ADR in that umbrella is 01" $(echo "$out" | grep -qF '"next_adr":"01"'; echo $?)
+
+# E5. After the merge: HEAD is main, the run's branch and worktree are gone, the pull request is the argument.
+evidpr() { # evidpr <request> <pr> [env...]: runs retro-evidence.sh from the product repo's main checkout; sets out rc ev
+  local req=$1 pr=$2; shift 2
+  out=$( (cd "$main" && env PATH="$root/bin:$PATH" STUB_RUN="$run_id" STUB_TRANSCRIPT="$root/transcript.jsonl"     STUB_PR_JSON="$root/pr.json" STUB_RUNS_JSON="$root/runs.json" STUB_LOG="$log" "$@"     bash "$evidence" "$req" "$run_id" "$art" main "$pr") 2>&1 ); rc=$?
+  ev="$art/retro-evidence.md"
+}
+layout e5; main="$root/e5/wp"; log="$root/e5/gh.log"; : > "$log"
+git -C "$main" worktree remove --force "$wt"; git -C "$main" branch -q -D archon/task-build-feature-1
+evidpr "TASK-7.1 add the thing" https://github.com/o/repo/pull/15
+check "E5 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "E5 pull request read by the argument" $(grep -qE '^pr view https://github.com/o/repo/pull/15 ' "$log"; echo $?)
+check "E5 no branch lookup of the pull request" $(! grep -q '^pr list' "$log"; echo $?)
+check "E5 pr.json is the pull request" $(has '"number":15' "$art/retro/pr.json" || has '"number": 15' "$art/retro/pr.json"; echo $?)
+check "E5 CI runs asked by head SHA" $(grep -qF -- '--commit fd40198000000000000000000000000000000000' "$log"; echo $?)
+check "E5 runs.json filled" $([ -s "$art/retro/runs.json" ]; echo $?)
+check "E5 branch is the pull request's head" $(has 'archon/task-build-feature-1' "$art/retro/meta.json"; echo $?)
+check "E5 pull request url in meta" $(has 'https://github.com/o/repo/pull/15' "$art/retro/meta.json"; echo $?)
+check "E5 commits from the pull request" $(has 'def5678 feat: add the thing' "$art/retro/commits.txt"; echo $?)
+check "E5 commits not from HEAD" $(! has 'feat: local work' "$art/retro/commits.txt"; echo $?)
+check "E5 evidence has the commits" $(has 'abc1234 test(step 1): the thing is missing' "$ev"; echo $?)
+check "E5 evidence has the merged state" $(has 'State: MERGED' "$ev"; echo $?)
+check "E5 evidence has the green CI run" $(has '37585096973 success build fd40198' "$ev"; echo $?)
+
+# E6. The pull request cannot be read: recorded as unavailable, not a crash.
+layout e6; main="$root/e6/wp"; log="$root/e6/gh.log"; : > "$log"
+evidpr "TASK-7.1 add the thing" 15 STUB_PR_FAIL=1
+check "E6 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "E6 pr.json empty" $([ -e "$art/retro/pr.json" ] && [ ! -s "$art/retro/pr.json" ]; echo $?)
+check "E6 evidence written" $([ -s "$ev" ]; echo $?)
+check "E6 runs fall back to nothing unavailable" $(grep -qF -- '--branch' "$log" || ! grep -q -- '--commit' "$log"; echo $?)
+
+# E7. The pull request lives in another repo than the umbrella: CI runs are asked of that repo.
+layout e7; main="$root/e7/wp"; log="$root/e7/gh.log"; : > "$log"
+evidpr "TASK-7.1 add the thing" https://github.com/Vikteur/wedding-portal/pull/9
+check "E7 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "E7 run list by SHA asks the pull request's repo" $(grep -E '^run list .*--commit .* -R Vikteur/wedding-portal( |$)|^run list -R Vikteur/wedding-portal .*--commit' "$log" >/dev/null; echo $?)
 
 # ---------- retro-commit.sh ----------
 lessons() { # lessons <file> <run id8> [skip heading] [empty heading]
