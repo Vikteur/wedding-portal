@@ -18,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ErrorStatusTableTest {
 
@@ -247,6 +248,35 @@ class ErrorStatusTableTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasCause(original)
                 .hasCauseInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void a_row_requires_a_code() {
+        assertThatThrownBy(() -> new ErrorStatusTable.Row(null, NotFoundException.class, 404))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("code");
+    }
+
+    @Test
+    void a_row_requires_a_family() {
+        assertThatThrownBy(() -> new ErrorStatusTable.Row(ErrorCode.NO_LIBRARY, null, 404))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("family");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 200, 399, 600})
+    void a_row_requires_an_error_status(int status) {
+        assertThatThrownBy(() -> new ErrorStatusTable.Row(ErrorCode.NO_LIBRARY, NotFoundException.class, status))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(String.valueOf(status));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 599})
+    void a_row_accepts_the_edges_of_the_error_range(int status) {
+        assertThat(new ErrorStatusTable.Row(ErrorCode.NO_LIBRARY, NotFoundException.class, status).status())
+                .isEqualTo(status);
     }
 
     @Test
