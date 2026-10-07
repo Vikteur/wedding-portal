@@ -20,6 +20,10 @@ class UseCaseTransactionBoundaryIT {
     RecordWriteUseCase useCase;
 
     @Inject
+    @Produced
+    RecordWriteUseCase produced;
+
+    @Inject
     RecordingWritePort port;
 
     @Inject
@@ -83,5 +87,22 @@ class UseCaseTransactionBoundaryIT {
         // Then: the control that shows the discard above comes from the rollback
         assertThat(port.completions()).containsExactly(Status.STATUS_COMMITTED);
         assertThat(port.committedWrites()).containsExactly("first");
+    }
+
+    @Test
+    void the_same_use_case_from_a_producer_method_runs_without_a_transaction() {
+        // Given: the same class, produced by an @Produces method (PIN-AC-0448)
+
+        // When
+        produced.save("first");
+
+        // Then: ArC did not bind @Transactional to the producer result
+        assertThat(port.statusesSeen()).containsExactly(Status.STATUS_NO_TRANSACTION);
+        assertThat(port.completions()).isEmpty();
+        assertThat(Arc.container()
+                        .instance(RecordWriteUseCase.class, Produced.Literal.INSTANCE)
+                        .getBean()
+                        .getKind())
+                .isEqualTo(InjectableBean.Kind.PRODUCER_METHOD);
     }
 }
