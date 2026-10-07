@@ -58,13 +58,27 @@ else
   echo "$main is not on main; not pulled." >&2
 fi
 
-# 3. Delete the pull request's own branch and the run's worktree. archon complete refuses a branch with commits that
-# are not in main, so a squash-merged branch is kept and reported rather than forced.
+# 3. Delete the pull request's own branch and the run's worktree. This node runs inside the still-running workflow, so
+# plain `archon complete` always refuses ("running workflow"); `--force` is needed, but it also skips archon's other
+# checks (commits not pushed, commits unique to the branch, uncommitted changes). So this script does its own guard
+# first and only forces when the local branch tip is exactly the merged PR head and the run worktree is clean;
+# otherwise archon is not called and the branch and worktree are kept and reported.
 case "$branch" in
   main|master|"") failed="$failed; refusing to delete branch '$branch'" ;;
   *)
-    cd "$main"
-    archon complete "$branch" >&2 || failed="$failed; archon complete $branch failed"
+    tip=$(git -C "$main" rev-parse --verify -q "refs/heads/$branch" || true)
+    if [ -z "$tip" ]; then
+      tip=$(git -C "$here" rev-parse HEAD)
+    fi
+    dirty=$(git -C "$here" status --porcelain)
+    if [ "$tip" != "$head" ]; then
+      failed="$failed; branch tip $tip is not the merged head $head"
+    elif [ -n "$dirty" ]; then
+      failed="$failed; worktree $here has uncommitted changes"
+    else
+      cd "$main"
+      archon complete --force "$branch" >&2 || failed="$failed; archon complete --force $branch failed"
+    fi
     ;;
 esac
 branch_state=deleted worktree_state=removed
