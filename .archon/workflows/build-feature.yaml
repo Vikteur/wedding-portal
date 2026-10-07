@@ -4,7 +4,9 @@ description: |
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> per step, the test
   agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> push and open a
   DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
-  wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done), commit and push it, and delete the run's branch and worktree.
+  wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done) -> the
+  mandatory retro, after every run whatever its outcome: lessons learned and the ticket's ADRs, committed to the
+  umbrella's docs/retro -> commit and push the Backlog ticket, and delete the run's branch and worktree.
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -252,8 +254,54 @@ nodes:
         close: { type: boolean }
       required: [close]
 
-  - id: close-out
+  # The retro is mandatory (TASK-34): it runs after every run, merged, closed without a merge, or failed, and before
+  # close-out removes the worktree. retro-evidence reads no output of another node, because any of them may have been
+  # skipped; it finds the ticket in the request, the branch in git and the pull request with gh.
+  - id: retro-evidence
     depends_on: [finalize]
+    trigger_rule: all_done
+    bash: |
+      bash .archon/scripts/retro-evidence.sh "$ARGUMENTS" "$WORKFLOW_ID" "$ARTIFACTS_DIR" "$BASE_BRANCH"
+    output_format:
+      type: object
+      properties:
+        umbrella: { type: string }
+        dir: { type: string }
+        evidence: { type: string }
+        next_adr: { type: string }
+        task: { type: string }
+      required: [umbrella, dir, evidence, next_adr, task]
+
+  - id: retro
+    depends_on: [retro-evidence]
+    model: "@analyse"
+    prompt: |
+      You are the retro agent. Follow $retro-evidence.output.umbrella/.claude/agents/retro.md, and its method and file
+      templates in $retro-evidence.output.umbrella/.claude/skills/retro/SKILL.md; the project facts are in
+      $retro-evidence.output.umbrella/docs/retro/README.md.
+      Request: $ARGUMENTS
+      This run's evidence (run id $WORKFLOW_ID) is $ARTIFACTS_DIR/retro-evidence.md; open the artifacts it lists only
+      for a fact you cite.
+      Write the retro for this run into $retro-evidence.output.umbrella/$retro-evidence.output.dir: add this run's
+      section, headed with the first 8 characters of the run id, to lessons-learned.md (create the file when it is
+      missing), and one adr/ADR-NN-<slug>.md per decision taken in this run, numbered from
+      $retro-evidence.output.next_adr and linked from the run's Decisions section.
+      Change nothing outside that folder, and do not commit or push: the retro-commit node checks and commits.
+
+  - id: retro-commit
+    depends_on: [retro]
+    bash: |
+      home=$retro-evidence.output.umbrella
+      dir=$retro-evidence.output.dir
+      bash .archon/scripts/retro-commit.sh "$home" "$dir" "$WORKFLOW_ID"
+    output_format:
+      type: object
+      properties:
+        commit: { type: string }
+      required: [commit]
+
+  - id: close-out
+    depends_on: [finalize, retro-commit]
     when: "$finalize.output.close == 'true'"
     bash: |
       task=$ticket.output.task
