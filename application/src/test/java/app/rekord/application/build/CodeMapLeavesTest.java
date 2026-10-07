@@ -94,6 +94,12 @@ class CodeMapLeavesTest {
         String section = memory.substring(heading.end(), end < 0 ? memory.length() : end);
 
         assertThat(section).contains("PIN-AC-0230", "allowStoreUpdate");
+        assertThat(section)
+                .as("the TASK-3.1 memory entry names the CI run and head SHA that settled PIN-AC-0230")
+                .contains("37652403500", "fd40198");
+        assertThat(section)
+                .as("the TASK-3.1 memory entry no longer carries the unfilled CI placeholder")
+                .doesNotContain("filled in after CI");
     }
 
     @Test
