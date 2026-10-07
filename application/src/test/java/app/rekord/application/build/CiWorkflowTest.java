@@ -120,7 +120,7 @@ class CiWorkflowTest {
         // Then
         assertThat(java.path("with").path("distribution").asText()).isEqualTo("temurin");
         assertThat(java.path("with").path("java-version").asText()).isEqualTo("25");
-        assertThat(gradle.path("run").asText().split("\s+"))
+        assertThat(gradle.path("run").asText().trim().split("\\s+"))
                 .contains("./gradlew", "test", "integrationTest", "build");
     }
 
@@ -209,6 +209,7 @@ class CiWorkflowTest {
         for (Path file : workflows) {
             JsonNode workflow = Workflows.read(file);
             occurrences += Files.readString(file).split("secrets\\.", -1).length - 1;
+            assertThat(workflow.path("env").toString()).as("workflow env of %s", file).doesNotContain("secrets");
             workflow.path("jobs").forEach(job -> {
                 assertThat(job.path("env").toString()).doesNotContain("secrets");
                 job.path("steps").forEach(step -> {
