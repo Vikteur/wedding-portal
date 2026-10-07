@@ -23,11 +23,11 @@ class HealthResourceIT {
         Response response = given().when().get("/api/health");
 
         // Then
+        assertThat(response.statusCode()).isEqualTo(200);
         String contentType = response.getHeader("Content-Type");
         assertThat(contentType).as("Content-Type header").isNotNull();
         String mediaType = contentType.split(";")[0].trim().toLowerCase(Locale.ROOT);
         byte[] body = response.then().extract().asByteArray();
-        assertThat(response.statusCode()).isEqualTo(200);
         assertThat(mediaType).isEqualTo("application/json");
         assertThat(body).isEqualTo("{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
     }
