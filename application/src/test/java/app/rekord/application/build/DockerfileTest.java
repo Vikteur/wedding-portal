@@ -182,7 +182,8 @@ class DockerfileTest {
         StringBuilder pending = new StringBuilder();
         for (String raw : Files.readAllLines(dockerfile)) {
             String line = raw.strip();
-            if (pending.isEmpty() && (line.isEmpty() || line.startsWith("#"))) {
+            // Docker drops comment and empty lines, also inside a continued instruction.
+            if (line.isEmpty() || line.startsWith("#")) {
                 continue;
             }
             if (line.endsWith("\\")) {
