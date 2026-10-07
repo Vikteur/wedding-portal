@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -137,6 +138,67 @@ class BuildLayoutTest {
     }
 
     @Test
+    void wiremock_3_is_pinned_in_the_catalog_from_org_wiremock() throws IOException {
+        List<String> lines = catalogSection("libraries")
+                .filter(line -> line.matches("wiremock\\s*=.*"))
+                .toList();
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0)).containsPattern("module\\s*=\\s*\"org\\.wiremock:[\\w.-]+\"");
+
+        Matcher ref = Pattern.compile("version\\.ref\\s*=\\s*\"([^\"]+)\"").matcher(lines.get(0));
+        assertThat(ref.find()).as("a version.ref on the wiremock library").isTrue();
+
+        List<String> versions = catalogSection("versions")
+                .filter(line -> line.matches(Pattern.quote(ref.group(1)) + "\\s*=.*"))
+                .toList();
+        assertThat(versions).hasSize(1);
+        assertThat(versions.get(0)).containsPattern("=\\s*\"3\\.\\d+\\.\\d+\"\\s*$");
+    }
+
+    @Test
+    void no_build_file_names_a_com_github_tomakehurst_artifact() throws IOException {
+        List<Path> files = new ArrayList<>(gradleKtsFiles());
+        files.add(REPO_ROOT.resolve("gradle/libs.versions.toml"));
+
+        // The root build file names the group only where legacyWireMockCheck bans it: its comment and its comparison.
+        Path rootBuild = REPO_ROOT.resolve("build.gradle.kts");
+        for (Path file : files) {
+            String text = read(file);
+            if (file.equals(rootBuild)) {
+                text = text.replace("// The legacy WireMock group (com.github.tomakehurst)", "")
+                        .replace("id.group == \"com.github.tomakehurst\"", "");
+            }
+            assertThat(text).as("%s", file).doesNotContain("com.github.tomakehurst");
+        }
+    }
+
+    @Test
+    void only_the_all_it_gateway_module_allows_an_empty_fast_test_set() throws IOException {
+        Path gateway = REPO_ROOT.resolve("rekord-gateway/build.gradle.kts");
+        assertThat(read(gateway)).contains("failOnNoDiscoveredTests = false");
+        for (Path file : gradleKtsFiles()) {
+            if (!file.equals(gateway)) {
+                assertThat(read(file)).as("%s", file).doesNotContain("failOnNoDiscoveredTests");
+            }
+        }
+    }
+
+    @Test
+    void legacy_wiremock_check_resolves_every_classpath_under_check() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("build.gradle.kts")))
+                .contains("tasks.register(\"legacyWireMockCheck\")",
+                        "compileClasspath", "runtimeClasspath", "testCompileClasspath", "testRuntimeClasspath",
+                        "\"com.github.tomakehurst\"",
+                        "dependsOn(legacyWireMockCheck)");
+    }
+
+    @Test
+    void gateway_module_tests_with_wiremock_from_the_catalog() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("rekord-gateway/build.gradle.kts")))
+                .contains("testImplementation(libs.wiremock)", "junit-platform-launcher");
+    }
+
+    @Test
     void no_python_file_exists() throws IOException {
         try (Stream<Path> files = repoFiles()) {
             List<Path> python = files.filter(file -> file.getFileName().toString().endsWith(".py")).toList();
@@ -218,6 +280,11 @@ class BuildLayoutTest {
                 .matcher(read(memory));
         assertThat(executor.find()).as("an 'Executor (UD-17):' section").isTrue();
         assertThat(executor.group()).containsIgnoringCase("Archon").doesNotContainIgnoringCase("to be confirmed");
+    }
+
+    @Test
+    void memory_records_the_wiremock_harness() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("docs/memory.md"))).contains("org.wiremock", "legacyWireMockCheck");
     }
 
     @Test

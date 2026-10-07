@@ -10,4 +10,13 @@ dependencies {
     api(project(":rekord-usecase"))
     api(project(":rekord-domain"))
     implementation(project(":logging"))
+    testImplementation(libs.wiremock)
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Every gateway test opens a socket and ends in IT, so the fast set of this module is empty on purpose.
+tasks.named<Test>("test") {
+    failOnNoDiscoveredTests = false
 }
