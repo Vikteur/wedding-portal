@@ -161,7 +161,10 @@ class BuildLayoutTest {
     void nothing_depends_on_or_ships_rekord_api() throws IOException {
         List<Path> files = Stream.concat(
                         Stream.concat(gradleKtsFiles().stream(), workflowFiles().stream()),
-                        Stream.of(REPO_ROOT.resolve("gradle/libs.versions.toml")))
+                        Stream.of(
+                                REPO_ROOT.resolve("gradle/libs.versions.toml"),
+                                REPO_ROOT.resolve("Dockerfile"),
+                                REPO_ROOT.resolve(".dockerignore")))
                 .toList();
 
         for (Path file : files) {
@@ -195,6 +198,14 @@ class BuildLayoutTest {
                 .as("the build runs before the fast-jar check")
                 .isNotNegative()
                 .isLessThan(ci.indexOf("quarkus-run.jar"));
+    }
+
+    @Test
+    void ci_builds_the_image_and_runs_the_image_check() throws IOException {
+        String ci = read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        assertThat(ci).contains("docker build", "image-check.sh", "needs: build");
+        assertThat(ci).doesNotContain("docker push").doesNotContain("docker login");
     }
 
     @Test
