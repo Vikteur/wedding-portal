@@ -159,9 +159,23 @@ class BuildLayoutTest {
         List<Path> files = new java.util.ArrayList<>(gradleKtsFiles());
         files.add(REPO_ROOT.resolve("gradle/libs.versions.toml"));
 
+        // The root build file is the one place that names the group: legacyWireMockCheck bans it.
+        Path rootBuild = REPO_ROOT.resolve("build.gradle.kts");
         for (Path file : files) {
+            if (file.equals(rootBuild)) {
+                continue;
+            }
             assertThat(read(file)).as("%s", file).doesNotContain("com.github.tomakehurst");
         }
+    }
+
+    @Test
+    void legacy_wiremock_check_resolves_every_classpath_under_check() throws IOException {
+        assertThat(read(REPO_ROOT.resolve("build.gradle.kts")))
+                .contains("tasks.register(\"legacyWireMockCheck\")",
+                        "compileClasspath", "runtimeClasspath", "testCompileClasspath", "testRuntimeClasspath",
+                        "\"com.github.tomakehurst\"",
+                        "dependsOn(legacyWireMockCheck)");
     }
 
     @Test

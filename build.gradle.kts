@@ -57,5 +57,34 @@ subprojects {
         tasks.named("check") {
             dependsOn(integrationTest, startupTest, resourceTest)
         }
+
+        // The legacy WireMock group (com.github.tomakehurst) must not resolve on any classpath, even transitively.
+        val legacyWireMockCheck = tasks.register("legacyWireMockCheck") {
+            group = "verification"
+            val classpaths = listOf("compileClasspath", "runtimeClasspath", "testCompileClasspath", "testRuntimeClasspath")
+                .associateWith { name ->
+                    configurations.named(name).flatMap { it.incoming.resolutionResult.rootComponent }
+                }
+            doLast {
+                classpaths.forEach { (name, root) ->
+                    val seen = mutableSetOf<ResolvedComponentResult>()
+                    val queue = ArrayDeque<ResolvedComponentResult>().apply { add(root.get()) }
+                    while (queue.isNotEmpty()) {
+                        val component = queue.removeFirst()
+                        if (!seen.add(component)) continue
+                        val id = component.id
+                        if (id is ModuleComponentIdentifier && id.group == "com.github.tomakehurst") {
+                            throw GradleException("$name resolves the legacy WireMock artifact ${id.displayName}")
+                        }
+                        component.dependencies.filterIsInstance<ResolvedDependencyResult>()
+                            .forEach { queue.add(it.selected) }
+                    }
+                }
+            }
+        }
+
+        tasks.named("check") {
+            dependsOn(legacyWireMockCheck)
+        }
     }
 }
