@@ -12,20 +12,8 @@ set -uo pipefail
 request=$1 run=$2 art=$3 base=${4:-main}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# The retro is committed on the umbrella's main checkout, never in a run worktree (same search as wait-merge.sh).
-main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
-umbrella=${BACKLOG_CWD:-}
-if [ -z "$umbrella" ]; then
-  for dir in "$main" "$main"/../*; do
-    if [ -f "$dir/backlog/config.yml" ]; then umbrella=$(cd "$dir" && pwd); break; fi
-  done
-fi
-if [ -z "$umbrella" ]; then
-  echo "No backlog/ found beside $main; set BACKLOG_CWD to the umbrella repo." >&2
-  exit 1
-fi
-# A POSIX path: the workflow assigns this output unquoted, which would eat the backslashes of C:\...
-umbrella=$(cd "$umbrella" && pwd) || exit 1
+. "$here/retro-umbrella.sh"
+find_umbrella || exit 1
 
 task=$(printf '%s' "$request" | grep -oiE 'task-[0-9]+(\.[0-9]+)*' | head -1 | tr '[:lower:]' '[:upper:]')
 dir="docs/retro/${task:-run-${run:0:8}}"

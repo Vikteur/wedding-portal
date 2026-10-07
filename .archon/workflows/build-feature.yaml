@@ -257,8 +257,16 @@ nodes:
   # The retro is mandatory (TASK-34): it runs after every run, merged, closed without a merge, or failed, and before
   # close-out removes the worktree. retro-evidence reads no output of another node, because any of them may have been
   # skipped; it finds the ticket in the request, the branch in git and the pull request with gh.
-  - id: retro-evidence
+  # retro-sweep first writes down every earlier run archon ended outright (cancelled, abandoned, a rejected gate),
+  # which never reached these nodes, with the reason stop-run.sh kept; it never fails the run.
+  - id: retro-sweep
     depends_on: [finalize]
+    trigger_rule: all_done
+    bash: |
+      bash .archon/scripts/retro-stopped.sh --sweep
+
+  - id: retro-evidence
+    depends_on: [retro-sweep]
     trigger_rule: all_done
     bash: |
       bash .archon/scripts/retro-evidence.sh "$ARGUMENTS" "$WORKFLOW_ID" "$ARTIFACTS_DIR" "$BASE_BRANCH"

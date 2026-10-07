@@ -27,7 +27,11 @@ if git -C "$home" diff --cached --quiet -- "$dir" "$index"; then
 else
   git -C "$home" commit -q -m "retro: ${dir#docs/retro/} lessons learned and ADRs (run $id8)" -- "$dir" "$index"
   if ! git -C "$home" push -q origin main 2>/dev/null; then
-    git -C "$home" pull -q --rebase --autostash origin main
+    if ! git -C "$home" pull -q --rebase --autostash origin main; then
+      git -C "$home" rebase --abort 2>/dev/null || true
+      echo "The retro commit could not be rebased onto origin/main; it is committed locally, not pushed." >&2
+      exit 1
+    fi
     git -C "$home" push -q origin main
   fi
   commit=$(git -C "$home" rev-parse --short HEAD)
