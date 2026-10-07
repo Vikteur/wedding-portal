@@ -15,7 +15,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -82,55 +81,17 @@ class ErrorStatusTableTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "NO_LIBRARY, NotFound, 404",
-            "NO_LIBRARY, Rejected, 409",
-            "NO_LIBRARY_SELECTED, Rejected, 400",
-            "EMPTY_NAME, Rejected, 400",
-            "DUPLICATE_NAME, Rejected, 409",
-            "NO_SOURCE, NotFound, 404",
-            "EMPTY_FILE, Rejected, 400",
-            "FILE_TOO_LARGE, Rejected, 413",
-            "BAD_XML, Rejected, 400",
-            "BAD_PLAYLIST, Rejected, 400",
-            "NOTHING_RESOLVED, Rejected, 400",
-            "NO_PLAYLIST, NotFound, 404",
-            "FOLDER_NOT_FOUND, Rejected, 400",
-            "SCAN_IN_PROGRESS, Rejected, 409",
-            "BAD_URL, Rejected, 400",
-            "SPOTIFY_FETCH_FAILED, NotFound, 404",
-            "SPOTIFY_FETCH_FAILED, UpstreamUnavailable, 502",
-            "SPOTIFY_PARSE_FAILED, UpstreamUnavailable, 502",
-            "NO_TRACKS, Rejected, 400",
-            "UNKNOWN_TRACK, Rejected, 400",
-            "NO_PREFERENCE, NotFound, 404",
-            "SEARCH_UNAVAILABLE, UpstreamUnavailable, 503",
-            "RATE_LIMITED, Rejected, 429",
-            "NOTHING_SKIPPED, Rejected, 400",
-            "LIST_FULL, Rejected, 409",
-            "UID_CONFLICT, Rejected, 409",
-            "UNKNOWN_ENTRY, NotFound, 404",
-            "EMPTY_TITLE, Rejected, 400",
-            "BAD_LINK, NotPermitted, 401",
-            "LINK_REVOKED, Rejected, 410",
-            "LINK_EXPIRED, Rejected, 410",
-            "CODE_LOCKED, Rejected, 429",
-            "NOT_SIGNED_IN, NotPermitted, 401",
-            "FORBIDDEN, NotPermitted, 403",
-            "BAD_CREDENTIALS, NotPermitted, 401",
-            "ACCOUNT_DISABLED, NotPermitted, 403",
-            "DUPLICATE_USERNAME, Rejected, 409",
-            "NO_USER, NotFound, 404",
-            "LAST_ADMIN, Rejected, 400",
-            "INVITE_INVALID, NotFound, 404",
-            "INVITE_EXPIRED, Rejected, 410",
-            "NO_WEDDING, NotFound, 404",
-            "NO_VENDOR, NotFound, 404",
-            "NO_TASK, NotFound, 404",
-            "VALIDATION_FAILED, Rejected, 422"
-    })
-    void every_row_answers_rekord_apis_status(ErrorCode code, String family, int status) {
-        assertThat(ErrorStatusTable.statusOf(code, family(family))).isEqualTo(status);
+    @MethodSource("expectedRows")
+    void every_row_answers_rekord_apis_status(String expectedRow) {
+        // The expectation comes from the hand-written ROWS oracle; the answer comes from the table's lookup.
+        String[] parts = expectedRow.split(", ");
+        ErrorCode code = ErrorCode.valueOf(parts[0]);
+        int status = Integer.parseInt(parts[2]);
+        assertThat(ErrorStatusTable.statusOf(code, family(parts[1]))).isEqualTo(status);
+    }
+
+    static Set<String> expectedRows() {
+        return ROWS;
     }
 
     @Test
