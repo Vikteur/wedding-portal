@@ -4,7 +4,9 @@ import app.rekord.domain.matching.LibraryIndex.IndexedTrack;
 import app.rekord.domain.matching.LibraryIndex.Track;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +44,66 @@ class LibraryIndexTest {
         assertThat(index.items()).extracting(i -> i.track().id()).containsExactly("c", "a", "b");
         assertThat(index.size()).isEqualTo(3);
         assertThat(index.byId("a").track().title()).isEqualTo("Two");
+    }
+
+    private static List<String> ids(List<IndexedTrack> items) {
+        return items.stream().map(i -> i.track().id()).toList();
+    }
+
+    private static List<Track> bandLibraryWithSolo() {
+        List<Track> tracks = new ArrayList<>();
+        for (int i = 0; i <= 50; i++) {
+            tracks.add(new Track("b" + i, "Band", "Love", null));
+        }
+        tracks.add(new Track("z", "Solo", "Love", null));
+        return tracks;
+    }
+
+    private static List<IndexedTrack> candidatesFor(LibraryIndex index, String artist, String title) {
+        QueryText q = QueryText.of(artist, title);
+        return index.candidates(q.tokens(), q.allNorm());
+    }
+
+    @Test
+    void a_rare_token_alone_admits_a_file() {
+        LibraryIndex index = new LibraryIndex(bandLibraryWithSolo());
+
+        assertThat(ids(candidatesFor(index, "Solo", "Love"))).containsExactly("z");
+    }
+
+    @Test
+    void two_shared_tokens_admit_a_file_but_one_common_token_does_not() {
+        LibraryIndex index = new LibraryIndex(bandLibraryWithSolo());
+
+        List<String> expected = new ArrayList<>();
+        for (int i = 50; i >= 0; i--) {
+            expected.add("b" + i);
+        }
+        assertThat(ids(candidatesFor(index, "Band", "Love"))).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    void candidates_are_capped_at_300_last_in_library_order_first() {
+        List<Track> tracks = new ArrayList<>();
+        for (int i = 0; i < 400; i++) {
+            tracks.add(new Track("f" + i, "Band", "Love", null));
+        }
+        LibraryIndex index = new LibraryIndex(tracks);
+
+        List<String> expected = new ArrayList<>();
+        for (int i = 399; i >= 100; i--) {
+            expected.add("f" + i);
+        }
+        assertThat(ids(index.candidates(Set.of("band", "love"), "band love"))).containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    void more_hits_rank_before_fewer() {
+        LibraryIndex index = new LibraryIndex(List.of(
+                new Track("three", "Band", "Love Song", null),
+                new Track("two-a", "Band", "Love", null),
+                new Track("two-b", "Band", "Song", null)));
+
+        assertThat(ids(candidatesFor(index, "Band", "Love Song"))).containsExactly("three", "two-b", "two-a");
     }
 }
