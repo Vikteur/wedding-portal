@@ -284,6 +284,96 @@ class CiWorkflowTest {
         assertThat(script).contains("git rev-parse HEAD", "gh run list", "--commit \"$sha\"");
     }
 
+    @Test
+    void no_step_runs_after_a_failed_contract_checkout() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        var running = Workflows.stepsRunningAfterFailureOf(ci, "build", "Check out rekord-contract");
+        int checkout = indexOfStep(steps, step -> "Check out rekord-contract".equals(step.path("name").asText()));
+
+        // Then
+        assertThat(running).isEmpty();
+        assertThat(checkout).as("the contract checkout step").isNotNegative();
+        assertThat(steps.get(checkout).has("continue-on-error")).isFalse();
+        assertThat(ci.path("jobs").path("build").has("continue-on-error")).isFalse();
+    }
+
+    @Test
+    void every_other_job_needs_the_build_job() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        // When / Then
+        ci.path("jobs").fields().forEachRemaining(job -> {
+            if (!"build".equals(job.getKey())) {
+                assertThat(texts(job.getValue().path("needs")))
+                        .as("needs of job %s", job.getKey())
+                        .contains("build");
+            }
+        });
+    }
+
+    @Test
+    void a_later_step_with_always_or_bare_failure_would_run_after_the_checkout_fails() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Check out rekord-contract
+                        uses: actions/checkout@v4
+                      - name: Plain
+                        run: echo plain
+                      - name: Always
+                        if: always()
+                        run: echo always
+                      - name: Failure
+                        if: failure()
+                        run: echo failure
+                      - name: Not cancelled
+                        if: ${{ !cancelled() }}
+                        run: echo not-cancelled
+                      - name: Build
+                        id: gradle
+                        run: ./gradlew build
+                      - name: Upload
+                        if: failure() && steps.gradle.outcome == 'failure'
+                        run: echo upload
+                """);
+
+        // When
+        var running = Workflows.stepsRunningAfterFailureOf(workflow, "build", "Check out rekord-contract");
+
+        // Then
+        assertThat(running.stream().map(step -> step.path("name").asText()))
+                .containsExactly("Always", "Failure", "Not cancelled");
+    }
+
+    @Test
+    void continue_on_error_on_the_checkout_would_hide_its_failure() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Check out rekord-contract
+                        continue-on-error: true
+                        uses: actions/checkout@v4
+                      - name: Build
+                        run: ./gradlew build
+                """);
+
+        // When
+        var running = Workflows.stepsRunningAfterFailureOf(workflow, "build", "Check out rekord-contract");
+
+        // Then
+        assertThat(running.stream().map(step -> step.path("name").asText()))
+                .containsExactly("Check out rekord-contract");
+    }
+
     private static List<String> texts(JsonNode node) {
         List<String> texts = new ArrayList<>();
         if (node.isArray()) {
