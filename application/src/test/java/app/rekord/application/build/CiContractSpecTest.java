@@ -104,6 +104,10 @@ class CiContractSpecTest {
             + " that starts the application checks out rekord-contract to a path of its own at the ref the pin step"
             + " outputs";
 
+    /** What DOCKERFILE reports when its spec argument is taken out. */
+    private static final String DOCKERFILE_WITHOUT_SPEC = "ci.yml job build: Dockerfile"
+            + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec";
+
     private static final String ON_PUSH = "github.event_name == 'push'";
 
     @Test
@@ -387,6 +391,13 @@ class CiContractSpecTest {
                 "docker run --rm x",
                 "docker push x",
                 "docker tag a b",
+                "docker --version",
+                "docker -v",
+                "docker --context ci push x",
+                "docker --config /tmp/docker login ghcr.io",
+                "docker compose -f ci.yml down",
+                "docker compose --profile ci pull",
+                "docker buildx --builder ci ls",
                 "chmod +x gradlew",
                 "test -f gradlew",
                 "echo ./gradlew test",
@@ -442,8 +453,7 @@ class CiContractSpecTest {
 
         // When / Then
         assertThat(violations("ci.yml", workflow, dockerfile))
-                .containsExactly("ci.yml job build: Dockerfile"
-                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+                .containsExactly(DOCKERFILE_WITHOUT_SPEC);
         assertThat(violations("ci.yml", workflow, DOCKERFILE)).isEmpty();
     }
 
@@ -466,8 +476,7 @@ class CiContractSpecTest {
 
         // When / Then
         assertThat(violations("ci.yml", workflow, withoutSpec))
-                .containsExactly("ci.yml job build: Dockerfile"
-                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+                .containsExactly(DOCKERFILE_WITHOUT_SPEC);
         assertThat(violations("ci.yml", workflow, withSpec)).isEmpty();
         assertThat(violations("ci.yml", workflow, withMount))
                 .containsExactly("ci.yml job build: Dockerfile `./gradlew build` does not pass -Pcontract.spec");
@@ -558,8 +567,7 @@ class CiContractSpecTest {
 
         // When / Then
         assertThat(violations("ci.yml", workflow, dockerfile))
-                .containsExactly("ci.yml job build: Dockerfile"
-                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+                .containsExactly(DOCKERFILE_WITHOUT_SPEC);
     }
 
     @Test
@@ -599,6 +607,85 @@ class CiContractSpecTest {
         }
         for (String command : rootContexts) {
             assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command).isEmpty();
+        }
+    }
+
+    @Test
+    void a_docker_global_option_before_the_subcommand_does_not_hide_an_image_build() throws IOException {
+        // Given: image builds that name a docker option the test reads (and its value) in front of the subcommand
+        var commands = List.of(
+                "docker --context ci build -t x .",
+                "docker -H tcp://h:2375 build -t x .",
+                "docker --host=tcp://h:2375 build -t x .",
+                "docker -D build -t x .",
+                "docker --config /tmp/docker buildx build -t x .",
+                "docker buildx --builder ci build -t x .",
+                "docker image build -t x .");
+        String withoutSpec = DOCKERFILE.replace(" " + SPEC, "");
+
+        // When / Then
+        for (String command : commands) {
+            JsonNode workflow = build(PIN, CHECKOUT, run(command));
+            assertThat(jobsStartingTheApplication("ci.yml", workflow)).as(command).containsExactly("ci.yml: build");
+            assertThat(violations("ci.yml", workflow, withoutSpec)).as(command)
+                    .containsExactly(DOCKERFILE_WITHOUT_SPEC);
+            assertThat(violations("ci.yml", workflow, DOCKERFILE)).as(command).isEmpty();
+        }
+    }
+
+    @Test
+    void a_docker_option_the_test_does_not_know_before_the_subcommand_is_refused() throws IOException {
+        // Given: in a job that starts nothing else, so the refusal does not depend on a starting step
+        var commands = List.of(
+                "docker --frobnicate build -t x .",
+                "docker -x build -t x .",
+                "docker -Htcp://h:2375 build -t x .",
+                "docker compose --frobnicate up");
+
+        // When / Then
+        for (String command : commands) {
+            assertThat(violations(build(run(command)))).as(command)
+                    .containsExactly("ci.yml job build: `" + command + "` passes an option this test cannot read before"
+                            + " the docker subcommand; " + EXTEND);
+        }
+    }
+
+    @Test
+    void an_image_build_from_another_dockerfile_or_context_is_refused_behind_a_docker_option_too()
+            throws IOException {
+        // Given
+        var commands = List.of(
+                "docker --context ci build -t x application",
+                "docker buildx --builder ci build --tag x ./application",
+                "docker --context ci build -f other.Dockerfile .",
+                "docker build -fother.Dockerfile -t x .",
+                "docker build -t x -fother.Dockerfile .");
+
+        // When / Then
+        for (String command : commands) {
+            assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command)
+                    .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not"
+                            + " read; " + EXTEND);
+        }
+    }
+
+    @Test
+    void docker_compose_up_and_run_are_refused_like_compose_build_because_the_compose_file_is_not_read()
+            throws IOException {
+        // Given
+        var commands = List.of(
+                "docker compose up",
+                "docker compose up --build",
+                "docker compose run app",
+                "docker compose -f ci.yml up --build",
+                "docker compose --profile ci up",
+                "docker compose build");
+
+        // When / Then
+        for (String command : commands) {
+            assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command)
+                    .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not"
+                            + " read; " + EXTEND);
         }
     }
 
