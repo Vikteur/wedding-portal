@@ -20,7 +20,10 @@ abstract class MigrationSchemaCheck {
 
     private static final String PRODUCTION_LOCATION = "classpath:db/migration";
 
-    /** The version of the migration this class tests, as in the V file name (dots for underscores). */
+    /**
+     * The version of the migration this class tests, written with dots: {@code "1.1"} for {@code V1_1__x.sql} or
+     * {@code V1.1__x.sql} (Flyway treats underscores and dots in a version alike).
+     */
     protected abstract String version();
 
     /** The schema shape {@link SchemaSnapshot} reads, after the migration. */

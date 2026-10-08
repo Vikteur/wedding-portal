@@ -80,7 +80,8 @@ class RowRollbackIT {
         // When the use case saves a row
         useCase.save("kept");
 
-        // Then the row is there, so the zero above comes from the rollback
+        // Then the row is there, so the zero in a_failing_second_port_call_rolls_back_the_row_the_first_call_inserted
+        // comes from the rollback
         assertThat(adapter.insertedRows()).isEqualTo(1);
         assertThat(count("kept")).isEqualTo(1);
     }

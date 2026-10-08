@@ -9,7 +9,9 @@ import javax.sql.DataSource;
 
 /**
  * Test-only persistence adapter of the probe port: proves PIN-AC-0452, that a failing second call takes back the row
- * the first one wrote. May go with the first real repository test.
+ * the first one wrote. It may go only when a real repository test proves both things it proves here: a row-level
+ * rollback across a use case and an adapter of two modules, and the discovery of both beans through the Jandex index of
+ * their module's tests jar. {@code RowRollbackIT} goes with it.
  */
 @ApplicationScoped
 public class JdbcProbeRowAdapter implements ProbeRowPort {
