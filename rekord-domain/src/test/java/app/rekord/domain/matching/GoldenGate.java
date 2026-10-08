@@ -17,8 +17,8 @@ import java.util.TreeSet;
 
 /**
  * The golden-set gate's engine (TASK-24.4): loads rekord-api's golden fixtures from the classpath once, runs the
- * matcher over the 212 cases with the recorded preferences and membership rows, and lists every difference from
- * the recorded answers, one line per difference, naming the case.
+ * matcher over the 212 cases with the recorded preferences and membership rows, and lists the differences from
+ * the recorded answers, one line per difference, naming the case (see {@link #differences} for its two limits).
  */
 final class GoldenGate {
 
@@ -85,7 +85,13 @@ final class GoldenGate {
         return answers;
     }
 
-    /** Every difference between the matcher's answers and the recorded cases of {@code set}. */
+    /**
+     * The differences between the recorded {@code expected} blocks of {@code set} and the matcher's answers for the
+     * checked-in set's queries ({@link #answers()}, run once): the matcher never runs on the queries of {@code set}.
+     * A case whose query is not the checked-in one yields one line saying so, and its expected block is not
+     * compared. Two limits: a different case count yields only the count line, and a case whose candidate ids
+     * differ yields that one line, without the per-candidate fields.
+     */
     static List<String> differences(JsonNode set) {
         List<String> lines = new ArrayList<>();
         List<MatchResult> actual = answers();
@@ -94,9 +100,15 @@ final class GoldenGate {
             lines.add("cases: expected " + cases.size() + " actual " + actual.size());
             return lines;
         }
+        JsonNode checkedIn = SET.get("cases");
         for (int i = 0; i < cases.size(); i++) {
             JsonNode c = cases.get(i);
             JsonNode query = c.get("query");
+            if (!query.equals(checkedIn.get(i).get("query"))) {
+                lines.add("case " + i + " (" + c.path("family").asText() + "): query differs from the checked-in set,"
+                        + " differences() compares only the expected blocks");
+                continue;
+            }
             String head = "case " + i + " (" + c.get("family").asText() + ") " + text(query.get("artist")) + " / "
                     + query.get("title").asText() + ": ";
             compareCase(head, c.get("expected"), actual.get(i), lines);
@@ -114,9 +126,10 @@ final class GoldenGate {
         }
     }
 
-    private static String family(String line) {
+    /** The family named in a case line, or empty for a line that names no case (it sorts first). */
+    static String family(String line) {
         int open = line.indexOf('(');
-        return line.substring(open + 1, line.indexOf(')', open));
+        return open < 0 ? "" : line.substring(open + 1, line.indexOf(')', open));
     }
 
     private static void compareCase(String head, JsonNode expected, MatchResult actual, List<String> out) {

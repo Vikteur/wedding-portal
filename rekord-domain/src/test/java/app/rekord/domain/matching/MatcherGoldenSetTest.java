@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.rekord.domain.matching.TrackMatcher.MatchResult;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Map;
@@ -174,5 +175,40 @@ class MatcherGoldenSetTest {
         assertThat(GoldenGate.differences(copy))
                 .anyMatch(line -> line.startsWith("case 85 ") && line.contains("score expected NaN"))
                 .anyMatch(line -> line.startsWith("case 85 ") && line.contains("facet title expected NaN"));
+    }
+
+    @Test
+    void a_copy_with_a_query_changed_says_the_query_differs_instead_of_comparing_stale_answers() {
+        // Given a copy whose case 85 asks for another song than the checked-in set ran
+        JsonNode copy = GoldenGate.set();
+        ((ObjectNode) copy.at("/cases/85/query")).put("title", "Another Song");
+
+        // When the copy is compared
+        List<String> lines = GoldenGate.differences(copy);
+
+        // Then the one difference says the query differs, and the expected block is not compared to old answers
+        assertThat(lines).singleElement().asString()
+                .startsWith("case 85 (")
+                .contains("query differs from the checked-in set")
+                .contains("compares only the expected blocks");
+    }
+
+    @Test
+    void a_copy_with_a_case_removed_fails_on_the_case_count() {
+        // Given a copy with its first case removed
+        JsonNode copy = GoldenGate.set();
+        ((ArrayNode) copy.get("cases")).remove(0);
+
+        // When the copy is compared, then only the count line is reported
+        assertThat(GoldenGate.differences(copy)).containsExactly("cases: expected 211 actual 212");
+    }
+
+    @Test
+    void a_difference_line_without_a_case_family_sorts_first_instead_of_crashing() {
+        // Given the count line, which names no case family
+        // When its family is read, then it is empty (and sorts before any family)
+        assertThat(GoldenGate.family("cases: expected 211 actual 212")).isEmpty();
+        assertThat(GoldenGate.family("case 85 (typo) a / b: bucket expected auto actual ambiguous"))
+                .isEqualTo("typo");
     }
 }
