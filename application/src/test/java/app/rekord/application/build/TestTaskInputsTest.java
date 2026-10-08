@@ -93,6 +93,42 @@ class TestTaskInputsTest {
                 .isTrue();
     }
 
+    @Test
+    void the_contract_inputs_come_from_the_contract_spec_property() throws IOException {
+        // Given the tasks.test block of the application build script
+        String block = testTaskBlock();
+
+        // Then the contract files are derived from the same provider as the -Dcontract.spec argument
+        assertThat(block)
+                .contains("inputs.files(contractSpec")
+                .contains("smoke/pom.xml")
+                .contains("withPropertyName(\"contractFiles\")");
+
+        // And no literal checkout path or tag, so raising the contract pin cannot touch them
+        assertThat(contractInputsDeclaration(block))
+                .doesNotContain("contract/dist")
+                .doesNotContain("rekord-contract")
+                .doesNotContain("rekordContractTag")
+                .doesNotContainPattern("v\\d+\\.");
+    }
+
+    @Test
+    void the_contract_inputs_are_optional_so_help_configures_without_the_property() throws IOException {
+        // Given the contractFiles declaration
+        String declaration = contractInputsDeclaration(testTaskBlock());
+
+        // Then it is optional and its provider falls back to an empty list
+        assertThat(declaration).contains("orElse(listOf())").contains(".optional()");
+        assertThat(declaration.indexOf(".optional()")).isGreaterThan(declaration.indexOf("contractFiles"));
+    }
+
+    private static String contractInputsDeclaration(String block) {
+        int start = block.indexOf("inputs.files(contractSpec");
+        assertThat(start).as("a contractSpec input declaration").isNotNegative();
+        int end = block.indexOf(".optional()", start);
+        return block.substring(start, end < 0 ? block.length() : end + ".optional()".length());
+    }
+
     private static List<String> trackedFiles() throws Exception {
         Process process = new ProcessBuilder("git", "ls-files", "-z")
                 .directory(REPO_ROOT.toFile())
