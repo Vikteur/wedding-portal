@@ -357,6 +357,74 @@ class CiWorkflowTest {
     }
 
     @Test
+    void a_job_with_always_failure_or_cancelled_in_its_if_or_a_continue_on_error_need_runs_after_a_failed_need()
+            throws IOException {
+        // Given jobs that need a job, with and without a status function in their if
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  build:
+                    runs-on: ubuntu-latest
+                  flaky:
+                    runs-on: ubuntu-latest
+                    continue-on-error: true
+                  always:
+                    needs: build
+                    if: always()
+                  failure:
+                    needs: build
+                    if: ${{ failure() }}
+                  not_cancelled:
+                    needs: build
+                    if: ${{ !cancelled() }}
+                  after_flaky:
+                    needs: flaky
+                  on_main:
+                    needs: build
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                  on_success:
+                    needs: build
+                    if: success() && github.event_name == 'push'
+                """);
+
+        // When / Then
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "always")).isTrue();
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "failure")).isTrue();
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "not_cancelled")).isTrue();
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "after_flaky")).isTrue();
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "on_main")).isFalse();
+        assertThat(Workflows.runsAfterAFailedNeed(workflow, "on_success")).isFalse();
+    }
+
+    @Test
+    void the_image_job_needs_the_build_job_and_does_not_run_when_it_fails() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        // When / Then
+        assertThat(texts(ci.path("jobs").path("image").path("needs"))).contains("build");
+        assertThat(Workflows.runsAfterAFailedNeed(ci, "image")).isFalse();
+    }
+
+    @Test
+    void the_build_job_checks_out_the_pushed_commit() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        // When
+        List<JsonNode> steps = Workflows.steps(ci, "build");
+
+        // Then the first step checks out this repository without a ref, so it builds github.sha
+        assertThat(steps).isNotEmpty();
+        assertThat(steps.get(0).path("uses").asText()).startsWith("actions/checkout@");
+        assertThat(steps.get(0).path("with").has("ref")).isFalse();
+        assertThat(steps.get(0).path("with").has("repository")).isFalse();
+
+        // And the gradle step runs test and integrationTest
+        JsonNode gradle = steps.stream().filter(step -> "gradle".equals(step.path("id").asText())).findFirst().orElseThrow();
+        assertThat(gradle.path("run").asText()).contains(" test ").contains(" integrationTest ");
+    }
+
+    @Test
     void a_later_step_with_always_or_bare_failure_would_run_after_the_checkout_fails() throws IOException {
         // Given
         JsonNode workflow = Workflows.parse("""
