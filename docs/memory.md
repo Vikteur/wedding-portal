@@ -126,3 +126,10 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 ## 2026-10-08 — TASK-35 image job on main only
 
 - The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
+
+## 2026-10-08 — TASK-24.3 scoring and buckets
+
+- Playlist membership enters `TrackMatcher.matchOne` as a track-id → playlist-names map (a third argument; the two-argument form passes `Map.of()`), not as a field of `LibraryIndex.Track`. A missing id or a null map means no playlist.
+- The nudge (0.02 per playlist, at most 3) only orders candidates; the bucket reads the raw scores, and its margin guard also passes when the leader is in a playlist and the runner-up is in none.
+- UD-19.c: auto also needs the leader to be the requested song, through `Signature.songOf` (normalised artist and core title, no version). A null or empty-normalised artist gives null, so such a query or a filename-only file is never auto.
+- Of rekord-api's `Matcher.matchOne` only remembered choices (P3-E05-T02) remain unported.

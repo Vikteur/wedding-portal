@@ -13,9 +13,11 @@ import java.util.Map;
  *
  * <p>Named {@code TrackMatcher} because {@link Versions} already imports {@code java.util.regex.Matcher}.
  *
- * <p>This is the part of rekord-api's {@code Matcher.matchOne} that candidate retrieval reaches: facets, the
- * weighted mean, the 0.45 floor, the cap of 8 and the three-guard bucket. The playlist nudge, the duration delta
- * and the UD-19.c auto rule come with TASK-24.3, remembered choices with P3-E05-T02.
+ * <p>This is rekord-api's {@code Matcher.matchOne} without remembered choices (P3-E05-T02): facets, the weighted
+ * mean, the 0.45 floor, the duration delta, the playlist nudge (it orders candidates, the bucket reads raw
+ * scores) and the cap of 8. The result is auto only when the leader clears the score, margin (or sole playlist
+ * member), version and duration guards and is the requested song: same normalised artist and core title
+ * (UD-19.c, {@link Signature#songOf}), so a query without an artist is never auto.
  */
 public final class TrackMatcher {
 
@@ -68,7 +70,7 @@ public final class TrackMatcher {
             scored = new ArrayList<>(scored.subList(0, Score.MAX_CANDIDATES));
         }
 
-        Bucketed bucketed = bucket(scored);
+        Bucketed bucketed = bucket(query, scored);
         return new MatchResult(query, text.parts(), bucketed.bucket(), scored, bucketed.autoSelectedId());
     }
 
@@ -96,7 +98,7 @@ public final class TrackMatcher {
     private record Bucketed(Bucket bucket, String autoSelectedId) {
     }
 
-    private static Bucketed bucket(List<ScoredCandidate> scored) {
+    private static Bucketed bucket(MatchQuery query, List<ScoredCandidate> scored) {
         if (scored.isEmpty()) {
             return new Bucketed(Bucket.UNMATCHED, null);
         }
@@ -115,7 +117,11 @@ public final class TrackMatcher {
                     ? durationPart >= Score.AUTO_MIN_DURATION
                     : version == 1.0;
 
-            if (marginOk && version >= Score.AUTO_MIN_VERSION && durationOk) {
+            String querySong = Signature.songOf(query.artist(), query.title());
+            boolean sameSong = querySong != null
+                    && querySong.equals(Signature.songOf(best.track().artist(), best.track().title()));
+
+            if (marginOk && version >= Score.AUTO_MIN_VERSION && durationOk && sameSong) {
                 return new Bucketed(Bucket.AUTO, best.track().id());
             }
         }

@@ -36,6 +36,19 @@ public final class Signature {
                 Normalize.normalize(parts.remixer() == null ? "" : parts.remixer()));
     }
 
+    /**
+     * The song without its version: normalised artist and normalised core title, joined by "|". Null when the
+     * artist normalises to empty, since then nothing says whose song it is (UD-19.c). Featured artists are left
+     * out as in {@link #signatureOf}.
+     */
+    public static String songOf(String artist, String title) {
+        String normArtist = Normalize.normalize(artist == null ? "" : artist);
+        if (normArtist.isEmpty()) {
+            return null;
+        }
+        return normArtist + "|" + Normalize.normalize(Versions.extract(title).coreTitle());
+    }
+
     /** First 16 hex of the SHA-1. Preferences are addressed by this. */
     public static String signatureId(String artist, String title) {
         try {

@@ -15,7 +15,7 @@ import java.util.Set;
  * close.
  *
  * <p>Buckets: {@code auto} needs a high, well-separated, version-compatible
- * best candidate; anything merely plausible becomes {@code ambiguous} and the
+ * best candidate that is also the requested song (same normalised artist and core title, UD-19.c); anything merely plausible becomes {@code ambiguous} and the
  * DJ picks; the rest is {@code unmatched}. A small playlist nudge ({@link #ranked})
  * orders candidates but never changes a score: the bucket reads the raw scores.
  */
