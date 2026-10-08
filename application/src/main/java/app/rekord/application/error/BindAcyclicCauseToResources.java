@@ -21,8 +21,22 @@ public class BindAcyclicCauseToResources implements BuildCompatibleExtension {
     @Enhancement(types = Object.class, withSubtypes = true)
     public void bind(ClassConfig candidate) {
         ClassInfo type = candidate.info();
-        if (type.isPlainClass() && !type.isAbstract() && !type.hasAnnotation(AcyclicCause.class) && carriesPath(type)) {
+        if (type.isPlainClass() && !type.isAbstract() && !type.hasAnnotation(AcyclicCause.class) && isResource(type)) {
             candidate.addAnnotation(AcyclicCause.class);
+        }
+    }
+
+    /**
+     * ArC hands over a super type that is missing from the build classpath as a model that cannot be read, so reading
+     * it throws a bare {@code NullPointerException}. The build still has to fail, because skipping the class could
+     * leave a resource unguarded, but the failure now names the class.
+     */
+    private static boolean isResource(ClassInfo type) {
+        try {
+            return carriesPath(type);
+        } catch (RuntimeException unreadable) {
+            throw new IllegalStateException("Cannot read the super types of " + type.name()
+                    + " to bind the cause-cycle guard (TASK-5.7): one of them is not on the build classpath", unreadable);
         }
     }
 

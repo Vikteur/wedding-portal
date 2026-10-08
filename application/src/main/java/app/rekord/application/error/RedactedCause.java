@@ -37,7 +37,10 @@ final class RedactedCause extends RuntimeException {
      * path) is cut, so no renderer can loop.
      */
     private static RedactedCause copy(Throwable original, Map<Throwable, RedactedCause> done) {
-        RedactedCause copy = new RedactedCause(original.getClass().getName());
+        String name = original instanceof RedactedCause alreadyRedacted
+                ? alreadyRedacted.className
+                : original.getClass().getName();
+        RedactedCause copy = new RedactedCause(name);
         done.put(original, copy);
         copy.setStackTrace(original.getStackTrace());
         Throwable cause = original.getCause();
