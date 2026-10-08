@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
-import org.postgresql.util.PSQLException;
 
 /**
  * The base of every repository test (architecture-conventions section 8.5): an injected {@code EntityManager}, a new
@@ -59,23 +58,12 @@ public abstract class AbstractRepositoryTest {
 
     /** Runs the action in a new transaction, expects it to throw, and returns what it threw. */
     protected Throwable refusedWith(Runnable action) {
-        try {
-            QuarkusTransaction.requiringNew().run(action);
-        } catch (Throwable t) {
-            return t;
-        }
-        throw new AssertionError("the action was expected to be refused, and was accepted");
+        return Refusals.refusedBy(() -> QuarkusTransaction.requiringNew().run(action));
     }
 
     /** Like {@link #refusedWith}, reading SQLState and constraint name from the PSQLException in the cause chain. */
     protected Refusal refusal(Runnable action) {
         Throwable thrown = refusedWith(action);
-        for (Throwable t = thrown; t != null; t = t.getCause()) {
-            if (t instanceof PSQLException psql) {
-                var detail = psql.getServerErrorMessage();
-                return new Refusal(psql.getSQLState(), detail == null ? null : detail.getConstraint());
-            }
-        }
-        throw new AssertionError("no PSQLException in the cause chain", thrown);
+        return new Refusal(Refusals.psqlOf(thrown).getSQLState(), Refusals.constraintOf(thrown));
     }
 }

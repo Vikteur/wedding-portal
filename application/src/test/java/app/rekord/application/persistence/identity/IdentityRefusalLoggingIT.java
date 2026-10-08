@@ -7,8 +7,8 @@ import app.rekord.adapter.persistence.identity.SessionEntity;
 import app.rekord.adapter.persistence.identity.UserEntity;
 import app.rekord.application.error.LogCapture;
 import app.rekord.application.persistence.AbstractRepositoryTest;
+import app.rekord.application.persistence.Refusals;
 import io.quarkus.test.junit.QuarkusTest;
-import java.sql.SQLException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.logging.LogRecord;
@@ -99,14 +99,7 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
             for (LogRecord record : records) {
                 assertThat(LogCapture.text(record)).as("log record %s", record.getLoggerName()).doesNotContain(value);
             }
-            for (Throwable t = refused; t != null; t = t.getCause()) {
-                assertThat(String.valueOf(t.getMessage())).doesNotContain(value);
-                if (t instanceof SQLException sql) {
-                    for (SQLException next = sql.getNextException(); next != null; next = next.getNextException()) {
-                        assertThat(String.valueOf(next.getMessage())).doesNotContain(value);
-                    }
-                }
-            }
+            Refusals.assertNoValueIn(refused, value);
         }
     }
 }

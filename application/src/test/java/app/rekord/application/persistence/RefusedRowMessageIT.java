@@ -1,5 +1,9 @@
 package app.rekord.application.persistence;
 
+import static app.rekord.application.persistence.Refusals.assertNoValueIn;
+import static app.rekord.application.persistence.Refusals.constraintOf;
+import static app.rekord.application.persistence.Refusals.psqlOf;
+import static app.rekord.application.persistence.Refusals.refusedBy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -11,7 +15,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.postgresql.util.PSQLException;
 
 /**
  * stop-crypto-logging, BR-ID-09: PostgreSQL puts the refused values into the error detail ({@code Key
@@ -40,12 +43,11 @@ class RefusedRowMessageIT {
                 insert(c, "refused_user", ADDRESS);
 
                 // When the same address in other case is inserted
-                Throwable refusal = catchThrowable(() -> insert(c, "refused_user", OTHER_CASE));
+                Throwable refusal = refusedBy(() -> insert(c, "refused_user", OTHER_CASE));
 
                 // Then it is refused on its constraint, and no message of the chain shows the address
-                PSQLException psql = psqlOf(refusal);
-                assertThat(psql.getSQLState()).isEqualTo("23505");
-                assertThat(psql.getServerErrorMessage().getConstraint()).isEqualTo("ux_refused_user_email");
+                assertThat(psqlOf(refusal).getSQLState()).isEqualTo("23505");
+                assertThat(constraintOf(refusal)).isEqualTo("ux_refused_user_email");
                 assertNoValueIn(refusal, "example.com");
             } finally {
                 c.rollback();
@@ -68,7 +70,7 @@ class RefusedRowMessageIT {
                         ) on commit drop""");
 
                 // When a row with a bad status is inserted
-                Throwable refusal = catchThrowable(() -> {
+                Throwable refusal = refusedBy(() -> {
                     try (PreparedStatement p = c.prepareStatement(
                             "insert into refused_account (email, password_hash, status) values (?, ?, ?)")) {
                         p.setString(1, ADDRESS);
@@ -79,9 +81,8 @@ class RefusedRowMessageIT {
                 });
 
                 // Then the check is named, and neither the hash nor the address is in any message
-                PSQLException psql = psqlOf(refusal);
-                assertThat(psql.getSQLState()).isEqualTo("23514");
-                assertThat(psql.getServerErrorMessage().getConstraint()).isEqualTo("refused_account_status_check");
+                assertThat(psqlOf(refusal).getSQLState()).isEqualTo("23514");
+                assertThat(constraintOf(refusal)).isEqualTo("refused_account_status_check");
                 assertNoValueIn(refusal, PASSWORD_HASH);
                 assertNoValueIn(refusal, "example.com");
             } finally {
@@ -100,7 +101,7 @@ class RefusedRowMessageIT {
                 s.execute("create unique index ux_refused_batch_email on refused_batch (lower(email))");
 
                 // When the duplicate goes through addBatch / executeBatch
-                Throwable refusal = catchThrowable(() -> {
+                Throwable refusal = refusedBy(() -> {
                     try (PreparedStatement p = c.prepareStatement("insert into refused_batch (email) values (?)")) {
                         p.setString(1, ADDRESS);
                         p.addBatch();
@@ -124,40 +125,6 @@ class RefusedRowMessageIT {
         try (PreparedStatement p = c.prepareStatement("insert into " + table + " (email) values (?)")) {
             p.setString(1, email);
             p.executeUpdate();
-        }
-    }
-
-    private interface Action {
-        void run() throws Exception;
-    }
-
-    private static Throwable catchThrowable(Action action) {
-        try {
-            action.run();
-        } catch (Throwable t) {
-            return t;
-        }
-        throw new AssertionError("the action was expected to be refused");
-    }
-
-    private static PSQLException psqlOf(Throwable refusal) {
-        for (Throwable t = refusal; t != null; t = t.getCause()) {
-            if (t instanceof PSQLException p) {
-                return p;
-            }
-        }
-        throw new AssertionError("no PSQLException in the chain", refusal);
-    }
-
-    private static void assertNoValueIn(Throwable refusal, String value) {
-        for (Throwable t = refusal; t != null; t = t.getCause()) {
-            assertThat(String.valueOf(t.getMessage())).doesNotContain(value);
-            assertThat(t.toString()).doesNotContain(value);
-            if (t instanceof SQLException sql) {
-                for (SQLException next = sql.getNextException(); next != null; next = next.getNextException()) {
-                    assertThat(String.valueOf(next.getMessage())).doesNotContain(value);
-                }
-            }
         }
     }
 }
