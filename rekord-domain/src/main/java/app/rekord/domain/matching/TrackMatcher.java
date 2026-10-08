@@ -13,12 +13,14 @@ import java.util.Map;
  *
  * <p>Named {@code TrackMatcher} because {@link Versions} already imports {@code java.util.regex.Matcher}.
  *
- * <p>This is rekord-api's {@code Matcher.matchOne} without remembered choices (P3-E05-T02): facets, the weighted
+ * <p>This is rekord-api's {@code Matcher.matchOne}: facets, the weighted
  * mean, the 0.45 floor, the duration delta, the playlist nudge (it orders candidates, the bucket reads raw
  * scores) and the cap of 8. The result is auto only when the leader clears the score, margin (or a playlist
  * leader over a runner-up in no playlist), version and duration guards and is the requested song: same
  * normalised artist and core title (UD-19.c, {@link Signature#songOf}), so a query without an artist is never
- * auto.
+ * auto. Last, a remembered choice (BR-MX-18) is looked up by the query's signature id: its file goes first
+ * (scored and inserted when scoring did not list it, the list re-capped at 8) and is picked with
+ * {@code fromPreference}, without touching the bucket. Storing and reading choices is P3-E05-T02.
  */
 public final class TrackMatcher {
 
@@ -43,8 +45,13 @@ public final class TrackMatcher {
                                   Double durationDeltaSec, List<String> playlists) {
     }
 
+    /**
+     * @param fromPreference true when {@code autoSelectedId} is the file remembered for the query's signature id
+     *                       (BR-MX-18); the bucket is left as scoring set it, so a remembered choice never turns
+     *                       ambiguous or unmatched into auto
+     */
     public record MatchResult(MatchQuery input, Versions.TitleParts inputVersion, Bucket bucket,
-                              List<ScoredCandidate> candidates, String autoSelectedId) {
+                              List<ScoredCandidate> candidates, String autoSelectedId, boolean fromPreference) {
     }
 
     private TrackMatcher() {
@@ -61,6 +68,15 @@ public final class TrackMatcher {
      */
     public static MatchResult matchOne(MatchQuery query, LibraryIndex index,
                                        Map<String, List<String>> playlistsByTrackId) {
+        return matchOne(query, index, playlistsByTrackId, Map.of());
+    }
+
+    /**
+     * @param preferredBySignatureId the remembered file id per {@link Signature#signatureId}; null means none
+     */
+    public static MatchResult matchOne(MatchQuery query, LibraryIndex index,
+                                       Map<String, List<String>> playlistsByTrackId,
+                                       Map<String, String> preferredBySignatureId) {
         QueryText text = QueryText.of(query.artist(), query.title());
 
         List<ScoredCandidate> scored = new ArrayList<>();
@@ -81,7 +97,37 @@ public final class TrackMatcher {
         }
 
         Bucketed bucketed = bucket(query, scored);
-        return new MatchResult(query, text.parts(), bucketed.bucket(), scored, bucketed.autoSelectedId());
+        String autoSelectedId = bucketed.autoSelectedId();
+        boolean fromPreference = false;
+        String preferredId = preferredBySignatureId == null ? null
+                : preferredBySignatureId.get(Signature.signatureId(query.artist(), query.title()));
+        LibraryIndex.IndexedTrack preferred = preferredId == null ? null : index.byId(preferredId);
+        if (preferred != null) {
+            ScoredCandidate chosen = null;
+            for (ScoredCandidate c : scored) {
+                if (c.track().id().equals(preferredId)) {
+                    chosen = c;
+                    break;
+                }
+            }
+            if (chosen == null) {
+                chosen = score(text, query.durationSec(), preferred,
+                        playlistsByTrackId == null ? List.of()
+                                : playlistsByTrackId.getOrDefault(preferredId, List.of()));
+            }
+            List<ScoredCandidate> reordered = new ArrayList<>();
+            reordered.add(chosen);
+            for (ScoredCandidate c : scored) {
+                if (c != chosen) {
+                    reordered.add(c);
+                }
+            }
+            scored = reordered.size() > Score.MAX_CANDIDATES
+                    ? new ArrayList<>(reordered.subList(0, Score.MAX_CANDIDATES)) : reordered;
+            autoSelectedId = preferredId;
+            fromPreference = true;
+        }
+        return new MatchResult(query, text.parts(), bucketed.bucket(), scored, autoSelectedId, fromPreference);
     }
 
     private static ScoredCandidate score(QueryText query, Double queryDuration,

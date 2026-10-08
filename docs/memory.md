@@ -142,3 +142,9 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - UD-19.c: auto also needs the leader to be the requested song, through `Signature.songOf` (normalised artist and core title, no version). A null or empty-normalised artist gives null, so such a query or a filename-only file is never auto.
 - Of rekord-api's `Matcher.matchOne` only remembered choices (P3-E05-T02) remain unported.
 - UD-19.c compares the whole normalised artist field, so "A, B", "A & B" or "A feat. B" written into the artist field is a different song from "A" and stays ambiguous even at score 1.0 (pinned by `an_extra_artist_on_either_side_is_never_auto_even_at_1`), while a featured artist written into a title is dropped by the core-title split and still allows auto. Widening this (for example a token-set artist identity, as the scored artist facet already uses) is an open owner decision, not part of TASK-24.3.
+
+## 2026-10-08 — TASK-24.4 remembered-choice step in TrackMatcher
+
+- **Supersedes** the TASK-24.3 bullet that left remembered choices unported. The step (BR-MX-18, `Matcher.java:92-124` in rekord-api) now lives in `TrackMatcher.matchOne` as a fourth argument, a map from `Signature.signatureId(artist, title)` to a file id; the two- and three-argument forms and a null map mean no choice. The golden gate proved the gap: the 9 `preference` cases could not pass without it. The owner approved building it here (option A).
+- A choice whose file is in the index goes first (scored and inserted when scoring did not list it, the list re-capped at 8), becomes `autoSelectedId` and sets `MatchResult.fromPreference`. The bucket is left as scoring set it, so UD-19.c is evaluated on scoring's leader before the choice is applied.
+- TASK-25.2 keeps the storage, the `rememberPreference` endpoint, reading choices per match and the wiring.
