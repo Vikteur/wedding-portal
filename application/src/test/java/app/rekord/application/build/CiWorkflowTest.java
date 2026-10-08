@@ -187,18 +187,9 @@ class CiWorkflowTest {
 
         // When / Then
         for (Path file : workflows) {
-            JsonNode workflow = Workflows.read(file);
-            workflow.path("jobs").fields().forEachRemaining(job -> {
-                boolean isImageJobOfCi = file.getFileName().toString().equals("ci.yml") && "image".equals(job.getKey());
-                job.getValue().path("steps").forEach(step -> {
-                    String run = step.path("run").asText();
-                    if (run.contains("docker push") || run.contains("docker login")) {
-                        assertThat(isImageJobOfCi)
-                                .as("push or sign-in step '%s' in job %s of %s", step.path("name").asText(), job.getKey(), file)
-                                .isTrue();
-                    }
-                });
-            });
+            assertThat(registryStepsOutsideTheImageJob(file.getFileName().toString(), Workflows.read(file)))
+                    .as("push or sign-in steps outside the image job in %s", file)
+                    .isEmpty();
         }
         JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
         assertThat(ci.path("jobs").path("image").path("if").asText())
@@ -206,6 +197,60 @@ class CiWorkflowTest {
         assertThat(pushGateViolations(ci)).isEmpty();
         assertThat(Workflows.steps(ci, "image").stream().filter(step -> step.path("run").asText().contains("docker push")))
                 .hasSize(1);
+    }
+
+    @Test
+    void a_push_by_action_or_by_another_docker_command_outside_the_image_job_is_found() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  release:
+                    steps:
+                      - name: Plain push
+                        run: docker push x
+                      - name: Image push
+                        run: docker image push x
+                      - name: Buildx push
+                        run: docker buildx build --push -t x .
+                      - name: Login action
+                        uses: docker/login-action@0123456789abcdef0123456789abcdef01234567
+                      - name: Build-push action
+                        uses: docker/build-push-action@0123456789abcdef0123456789abcdef01234567
+                      - name: Build only
+                        run: docker build -t x .
+                  image:
+                    steps:
+                      - name: Push image
+                        run: docker push x
+                """);
+
+        // When
+        var found = registryStepsOutsideTheImageJob("ci.yml", workflow);
+
+        // Then
+        assertThat(found)
+                .containsExactly(
+                        "release: Plain push",
+                        "release: Image push",
+                        "release: Buildx push",
+                        "release: Login action",
+                        "release: Build-push action");
+        assertThat(registryStepsOutsideTheImageJob("other.yml", workflow)).contains("image: Push image");
+    }
+
+    /** Every step, as {@code job: step}, that signs in to a registry or pushes an image, outside {@code ci.yml}'s image job. */
+    private static List<String> registryStepsOutsideTheImageJob(String fileName, JsonNode workflow) {
+        List<String> found = new ArrayList<>();
+        workflow.path("jobs").fields().forEachRemaining(job -> {
+            boolean isImageJobOfCi = "ci.yml".equals(fileName) && "image".equals(job.getKey());
+            job.getValue().path("steps").forEach(step -> {
+                String run = step.path("run").asText();
+                if (!isImageJobOfCi && (run.contains("docker push") || run.contains("docker login"))) {
+                    found.add(job.getKey() + ": " + step.path("name").asText());
+                }
+            });
+        });
+        return found;
     }
 
     @Test
