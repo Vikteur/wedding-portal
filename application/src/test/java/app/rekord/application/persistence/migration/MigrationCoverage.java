@@ -23,6 +23,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +52,7 @@ final class MigrationCoverage {
                 .map(MIGRATION_FILE::matcher)
                 .filter(Matcher::matches)
                 .map(m -> m.group(1).replace('_', '.'))
-                .sorted(Comparator.comparing(MigrationCoverage::numericParts, MigrationCoverage::compareParts))
+                .sorted(Comparator.comparing(MigrationVersion::fromVersion))
                 .toList();
     }
 
@@ -222,13 +223,5 @@ final class MigrationCoverage {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-    }
-
-    private static int[] numericParts(String version) {
-        return Arrays.stream(version.split("[.]")).mapToInt(Integer::parseInt).toArray();
-    }
-
-    private static int compareParts(int[] a, int[] b) {
-        return Arrays.compare(a, b);
     }
 }

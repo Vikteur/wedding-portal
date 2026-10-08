@@ -161,6 +161,19 @@ class MigrationCoverageTest {
     }
 
     @Test
+    void versions_are_sorted_in_flyways_order_including_dotted_and_timestamp_versions(@TempDir Path dir)
+            throws IOException {
+        // Given plain, dotted, underscored and timestamp versions, written out of order
+        for (String file : List.of(
+                "V10__ten.sql", "V20261008120000__timestamp.sql", "V2__two.sql", "V1.5__dotted.sql", "V1_10__underscored.sql")) {
+            Files.writeString(dir.resolve(file), "select 1;\n");
+        }
+
+        // When / Then the order is Flyway's, and a version beyond int range does not break the gate
+        assertThat(MigrationCoverage.versions(dir)).containsExactly("1.5", "1.10", "2", "10", "20261008120000");
+    }
+
+    @Test
     void test_resources_hold_no_db_migration_folder() {
         // Given the test resources, which share the classpath with the production migrations
         // When / Then a db/migration folder there would merge into classpath:db/migration
