@@ -333,26 +333,9 @@ class ContractPinTest {
     }
 
     private Result bash(Map<String, String> env, String... args) throws Exception {
-        var command = new ArrayList<String>();
-        command.add(bashExecutable());
-        command.addAll(List.of(args));
-        var builder = new ProcessBuilder(command).directory(REPO_ROOT.toFile());
-        builder.environment().keySet().removeIf(key -> key.startsWith("GITHUB_"));
-        builder.environment().putAll(env);
-        Path err = Files.createTempFile(tmp, "stderr", ".txt");
-        builder.redirectError(err.toFile()).redirectOutput(ProcessBuilder.Redirect.DISCARD);
-        int exit = builder.start().waitFor();
-        return new Result(exit, Files.readString(err), "");
-    }
-
-    private static String bashExecutable() {
-        Path gitBash = Path.of("C:\\Program Files\\Git\\bin\\bash.exe");
-        if (Files.exists(gitBash)) {
-            return gitBash.toString();
-        }
-        Assumptions.assumeFalse(
-                System.getProperty("os.name").toLowerCase().contains("win"), "no Git Bash available on Windows");
-        return "bash";
+        String[] scriptArgs = List.of(args).subList(1, args.length).toArray(String[]::new);
+        var result = ScriptRunner.in(REPO_ROOT).with(env).run(args[0], scriptArgs);
+        return new Result(result.exit(), result.stderr(), "");
     }
 
     private static int indexOfStep(List<JsonNode> steps, Predicate<JsonNode> match) {
