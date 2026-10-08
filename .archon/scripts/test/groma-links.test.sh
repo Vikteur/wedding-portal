@@ -30,6 +30,8 @@ if [ ! -e "$2" ]; then
     comp-z) element comp-z component Z other-cont ;;
     inner) element inner component Inner outer ;;
     outer) element outer component Outer cont-x ;;
+    cyc-a) element cyc-a component CycA cyc-b ;;
+    cyc-b) element cyc-b container CycB cyc-a ;;
     api) element api container API sys ;;
     cont-x) element cont-x container X sys ;;
     other-cont) element other-cont container Other sys ;;
@@ -44,14 +46,21 @@ case "$2" in
   src/n/*) printf 'Owner\n-----\ninner  component  Inner\nparent: outer\n' ;;
   src/c/*) printf 'Owner\n-----\napi  container  API\nparent: sys\n' ;;
   src/z/*) printf 'Owner\n-----\ncomp-z  component  Z\nparent: other-cont\n' ;;
+  src/o/*) printf 'Owner\n-----\ncomp-o  component  O\nparent: gone\n' ;;
+  src/y/*) printf 'Owner\n-----\ncyc-a  component  CycA\nparent: cyc-b\n' ;;
+  src/q/*) printf 'Owner\n-----\ncomp-q  component  Q\n\nChildren\n--------\nkid  component  Kid\nparent: cont-x\n' ;;
   *) echo "no owner: $2; no enabled scanner reads it"; exit 1 ;;
 esac
 STUB
-# The backlog stub answers `task view <id> --json` from $BACKLOG_STATE and logs every call with its BACKLOG_CWD.
+# The backlog stub answers `task view <id> --json` from $BACKLOG_STATE and logs every call with its BACKLOG_CWD;
+# it exits 1 on `task view` when BACKLOG_VIEW_FAIL is set.
 cat > "$root/bin/backlog" <<'STUB'
 #!/usr/bin/env bash
 echo "cwd=${BACKLOG_CWD:-} backlog $*" >> "$BACKLOG_LOG"
-[ "$1 $2" = "task view" ] && cat "$BACKLOG_STATE"
+if [ "$1 $2" = "task view" ]; then
+  [ -z "${BACKLOG_VIEW_FAIL:-}" ] || { echo "backlog: task not found" >&2; exit 1; }
+  cat "$BACKLOG_STATE"
+fi
 exit 0
 STUB
 chmod +x "$root/bin/groma" "$root/bin/backlog"
@@ -269,6 +278,56 @@ run TASK-9
 check "L19 edits for the removal alone" [ "$(edits)" = 1 ]
 check "L19 container removed" [ "$(removed)" = "--remove-ref api " ]
 check "L19 nothing added" [ -z "$(edit_line | grep -o -- '--add-ref [^ ]*')" ]
+
+# L20: an owner whose parent groma cannot view is still linked; the walk stops, nothing is dropped, and one line on
+# stderr says which element could not be resolved (the container drop is switched off for it, not silently).
+repo l20 map
+change src/o/O.java
+state_refs api
+run TASK-9
+check "L20 exit 0" [ "$rc" = 0 ]
+check "L20 owner linked" [ "$(edit_line | grep -o -- '--add-ref [^ ]*' | tr '\n' ' ')" = "--add-ref comp-o " ]
+check "L20 nothing removed" [ -z "$(removed)" ]
+check "L20 output" [ "$out" = '{"files": 1, "refs": "comp-o", "dropped": ""}' ]
+check "L20 stderr names the unresolved element" [ "$err" = "groma-links: cannot resolve map element gone; container references above it are kept" ]
+
+# L21: a parent line in a later block of the output is not the element's parent (block() stops at the blank line).
+repo l21 map
+change src/q/Q.java
+state_refs cont-x
+run TASK-9
+check "L21 exit 0" [ "$rc" = 0 ]
+check "L21 nothing removed" [ -z "$(removed)" ]
+check "L21 output" [ "$out" = '{"files": 1, "refs": "comp-q", "dropped": ""}' ]
+
+# L22: a cycle in the parent chain ends at the depth cap; each element is looked up once, the container is dropped once.
+repo l22 map
+change src/y/Y.java
+state_refs cyc-b
+run TASK-9
+check "L22 exit 0" [ "$rc" = 0 ]
+check "L22 container removed once" [ "$(removed)" = "--remove-ref cyc-b " ]
+check "L22 output" [ "$out" = '{"files": 1, "refs": "cyc-a", "dropped": "cyc-b"}' ]
+check "L22 each element looked up once" [ "$(grep -c 'groma view cyc-b --plain' "$log")" = 1 ]
+
+# L23: a failing `backlog task view` stops the script with an error and edits nothing (it used to read as an empty
+# ticket, and the edit then replaced the ticket's file list).
+repo l23 map
+change src/a/A.java
+echo '{"task": {"id": "TASK-9", "modifiedFiles": ["planned/X.java"], "references": []}}' > "$state"
+run TASK-9 BACKLOG_VIEW_FAIL=1
+check "L23 exit 1" [ "$rc" = 1 ]
+check "L23 no edit" [ "$(edits)" = 0 ]
+check "L23 says which ticket" grep -q "cannot read TASK-9 from the backlog" "$root/err"
+check "L23 no JSON on stdout" [ -z "$out" ]
+
+# L24: a ticket with no files and no references still gets this branch's files and owners (an empty view is no element).
+repo l24 map
+change src/a/A.java
+run TASK-9
+check "L24 exit 0" [ "$rc" = 0 ]
+check "L24 one edit" [ "$(edits)" = 1 ]
+check "L24 file and owner added" [ "$out" = '{"files": 1, "refs": "comp-a", "dropped": ""}' ]
 
 echo "groma-links tests: $pass passed, $fail failed"
 [ "$fail" = 0 ]
