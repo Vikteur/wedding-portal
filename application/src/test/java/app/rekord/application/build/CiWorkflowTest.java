@@ -347,9 +347,21 @@ class CiWorkflowTest {
         assertThat(pushGateViolations(lenientBuildJob)).containsExactly("build job continue-on-error");
     }
 
-    /** What would let the image job push after a red build: a loose job if, continue-on-error, or a conditional push step. */
+    /**
+     * What would let the image job push after a red build or a failed image check: a loose job if, continue-on-error
+     * on either job or on a build step, or an if or continue-on-error on any image step up to the last push.
+     */
     private static List<String> pushGateViolations(JsonNode workflow) {
         List<String> violations = new ArrayList<>();
+        JsonNode build = workflow.path("jobs").path("build");
+        if (build.has("continue-on-error")) {
+            violations.add("build job continue-on-error");
+        }
+        build.path("steps").forEach(step -> {
+            if (step.has("continue-on-error")) {
+                violations.add("build: " + step.path("name").asText());
+            }
+        });
         JsonNode image = workflow.path("jobs").path("image");
         String condition = image.path("if").asText().trim();
         if (condition.contains("always()") || condition.contains("failure()") || condition.contains("cancelled()")) {
@@ -358,14 +370,18 @@ class CiWorkflowTest {
         if (image.has("continue-on-error")) {
             violations.add("job continue-on-error");
         }
-        image.path("steps").forEach(step -> {
-            boolean gated = "image-tags".equals(step.path("id").asText())
-                    || step.path("run").asText().contains("docker login")
-                    || step.path("run").asText().contains("docker push");
-            if (gated && (step.has("if") || step.has("continue-on-error"))) {
+        var steps = Workflows.steps(workflow, "image");
+        int lastPush = -1;
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i).path("run").asText().contains("docker push")) {
+                lastPush = i;
+            }
+        }
+        for (JsonNode step : steps.subList(0, lastPush + 1)) {
+            if (step.has("if") || step.has("continue-on-error")) {
                 violations.add(step.path("name").asText());
             }
-        });
+        }
         return violations;
     }
 
