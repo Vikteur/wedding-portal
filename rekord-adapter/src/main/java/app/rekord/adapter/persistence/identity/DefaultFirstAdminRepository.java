@@ -5,6 +5,7 @@ import app.rekord.domain.shared.error.RejectedException;
 import app.rekord.usecase.identity.port.FirstAdminRepository;
 import app.rekord.usecase.identity.port.NewFirstAdmin;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
@@ -19,15 +20,16 @@ public class DefaultFirstAdminRepository implements FirstAdminRepository {
     private static final String ADDRESS_INDEX = "ux_users_email";
     private static final String SLUG_INDEX = "ux_organizations_slug";
 
-    private final EntityManager em;
+    // An Instance, so that a start without a datasource (the resource tests) does not resolve the inactive session.
+    private final Instance<EntityManager> entityManager;
 
-    public DefaultFirstAdminRepository(EntityManager em) {
-        this.em = em;
+    public DefaultFirstAdminRepository(Instance<EntityManager> entityManager) {
+        this.entityManager = entityManager;
     }
 
     @Override
     public boolean hasActiveAdmin() {
-        Long count = em.createQuery("""
+        Long count = entityManager.get().createQuery("""
                 select count(m) from MembershipEntity m, UserEntity u
                 where m.userId = u.id and m.role = 'ADMIN' and m.status = 'ACTIVE'
                   and u.status = 'ACTIVE' and u.deletedAt is null""", Long.class).getSingleResult();
@@ -64,10 +66,10 @@ public class DefaultFirstAdminRepository implements FirstAdminRepository {
         membership.setUpdatedAt(admin.now());
 
         try {
-            em.persist(organization);
-            em.persist(user);
-            em.persist(membership);
-            em.flush();
+            entityManager.get().persist(organization);
+            entityManager.get().persist(user);
+            entityManager.get().persist(membership);
+            entityManager.get().flush();
         } catch (PersistenceException e) {
             throw refusalOf(e);
         }

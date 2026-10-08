@@ -32,8 +32,16 @@ class FirstAdminBootstrapIT {
             .overrideConfigKey("app.bootstrap.password", PASSWORD)
             .assertLogRecords(FirstAdminBootstrapIT::theLogHoldsNoPersonalData);
 
+    /**
+     * Read before the container stops and kept in a system property: the log records are checked after the tests,
+     * by the first copy of this class, which Quarkus does not share static fields with.
+     */
+    private static final String IDS = "first-admin-bootstrap-it.ids";
+
     @AfterAll
     static void stopDatabase() {
+        System.setProperty(IDS, String.join(",",
+                DB.column("select id::text from organizations union all select id::text from users")));
         DB.close();
     }
 
@@ -42,7 +50,7 @@ class FirstAdminBootstrapIT {
         assertThat(bootstrap).hasSize(1);
         assertThat(bootstrap.get(0).getLevel()).isEqualTo(Level.INFO);
         String line = LogCapture.text(bootstrap.get(0));
-        List<String> ids = DB.column("select id::text from organizations union all select id::text from users");
+        List<String> ids = List.of(System.getProperty(IDS, "").split(","));
         assertThat(ids).hasSize(2);
         assertThat(line).contains(ids.get(0)).contains(ids.get(1));
         for (LogRecord record : records) {

@@ -13,7 +13,7 @@ final class BootstrapApplication {
                 .overrideConfigKey("quarkus.datasource.jdbc.url", database.jdbcUrl())
                 .overrideConfigKey("quarkus.datasource.username", database.username())
                 .overrideConfigKey("quarkus.datasource.password", database.password())
-                .withApplicationRoot(jar -> jar.addPackages(true, "app.rekord.adapter")
+                .withApplicationRoot(jar -> jar.addPackages(true, "app.rekord.adapter", "app.rekord.usecase")
                         .addPackages(true, "app.rekord.application.config", "app.rekord.application.security")
                         .addAsResource("application.properties")
                         .addAsResource("db/migration/V1__baseline.sql")
