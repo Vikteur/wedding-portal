@@ -201,7 +201,7 @@ class CodeMapLeavesTest {
                 "any depth",
                 "untracked files under the root",
                 "a new tracked file the defaults drop",
-                "TestTaskInputsTest fails",
+                "or `TestTaskInputsTest` fails",
                 "git ls-files",
                 ".git/info/attributes",
                 "git config",
