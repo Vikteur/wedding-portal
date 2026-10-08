@@ -3,6 +3,7 @@ package app.rekord.application.build;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,7 @@ class CiContractSpecTest {
     private static final String SPEC_PROPERTY = "-Pcontract.spec=";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
     private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
+    private static final Pattern EXEC_RUN = Pattern.compile("(RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])");
     private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
     private static final Pattern GRADLE = Pattern.compile("(.*[/\\\\])?gradlew(\\.bat)?|gradle");
     /** What may stand in front of the wrapper without making it a mere argument. */
@@ -617,15 +620,30 @@ class CiContractSpecTest {
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
         for (String part : SEPARATOR.split(COMMENT.matcher(script).replaceAll("$1").replaceAll("\\\\\\R", " "))) {
-            List<String> words = Arrays.stream(part.trim().split("\\s+"))
+            List<String> words = execForm(part.trim()).orElseGet(() -> Arrays.stream(part.trim().split("\\s+"))
                     .map(word -> word.replace("\"", "").replace("'", ""))
                     .filter(word -> !word.isEmpty())
-                    .toList();
+                    .toList());
             if (!words.isEmpty()) {
                 commands.add(words);
             }
         }
         return commands;
+    }
+
+    /** A Dockerfile {@code RUN [--option ...] ["program", "argument", ...]}: RUN, its options, then the JSON words. */
+    private static Optional<List<String>> execForm(String command) {
+        Matcher run = EXEC_RUN.matcher(command);
+        if (!run.matches()) {
+            return Optional.empty();
+        }
+        try {
+            List<String> words = new ArrayList<>(Arrays.asList(run.group(1).trim().split("\\s+")));
+            new ObjectMapper().readTree(run.group(2)).forEach(word -> words.add(word.asText()));
+            return Optional.of(words);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
     }
 
     /**
