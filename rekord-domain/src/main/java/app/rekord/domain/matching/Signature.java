@@ -14,8 +14,9 @@ import java.util.HexFormat;
  * <p>Built from the normalised artist, the core title and the version
  * descriptors — so "Strobe" and "Strobe (Radio Edit)" are deliberately
  * different songs with independent choices, while "Peaches (feat. Daniel
- * Caesar)" and "Peaches" are the same one. Featured artists are excluded on
- * purpose: playlists list them inconsistently, and a preference that only
+ * Caesar)" and "Peaches" are the same one. Featured artists in the title are
+ * excluded on purpose (one written into the artist field stays part of the
+ * artist): playlists list them inconsistently, and a preference that only
  * applies half the time is worse than none.
  *
  * <p>{@link #songOf} is a second, looser identity: artist and core title

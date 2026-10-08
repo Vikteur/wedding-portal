@@ -393,6 +393,12 @@ class TrackMatcherTest {
         assertThat(extraInQuery.bucket()).isEqualTo(Bucket.AMBIGUOUS);
         assertThat(extraInFile.candidates().get(0).score()).isEqualTo(1.0);
         assertThat(extraInFile.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+
+        // "feat." written into the artist field stays part of the artist; only a title's featured artist is dropped
+        MatchResult featInFileArtist = match(320.0,
+                new Track("f", "Daft Punk feat. Romanthony", "One More Time", 320.0));
+        assertThat(featInFileArtist.candidates().get(0).score()).isEqualTo(1.0);
+        assertThat(featInFileArtist.bucket()).isEqualTo(Bucket.AMBIGUOUS);
     }
 
     @Test

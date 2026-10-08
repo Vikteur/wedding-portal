@@ -22,7 +22,7 @@ groma:
 description: Matches one requested playlist song to the DJ's library files and decides how sure the match is.
 ---
 
-Entry point of the matching domain (`matchOne`): it normalises the query's artist and title, takes candidates from the library index, scores each one (rounded half-even to 4 decimals), keeps at most eight above the 0.45 floor, orders them (a small playlist nudge orders, scores stay raw) and buckets the result as auto, ambiguous (the DJ picks) or unmatched. The result is auto only when the leader clears the score, margin (or a playlist leader over a runner-up in no playlist), version and duration guards and is the requested song: the same normalised artist and core title (UD-19.c). Playlist membership comes in as a track-id map. Remembered choices (P3-E05-T02) are the only part of `rekord-api`'s `matchOne` not ported. No use case calls it yet.
+Entry point of the matching domain (`matchOne`): it normalises the query's artist and title, takes candidates from the library index, scores each one (rounded half-even to 4 decimals), drops those under the 0.45 floor, orders the rest (a small playlist nudge orders, scores stay raw), keeps the first eight and buckets the result as auto, ambiguous (the DJ picks) or unmatched. The result is auto only when the leader clears the score, margin (or a playlist leader over a runner-up in no playlist), version and duration guards and is the requested song: the same normalised artist and core title (UD-19.c). Playlist membership comes in as a track-id map. Remembered choices (P3-E05-T02) are the only part of `rekord-api`'s `matchOne` not ported. No use case calls it yet.
 
 ## Relationships
 

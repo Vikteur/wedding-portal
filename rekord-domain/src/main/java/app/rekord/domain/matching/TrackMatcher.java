@@ -33,9 +33,10 @@ public final class TrackMatcher {
      * One file, scored against a query, with the reasoning left visible.
      *
      * @param durationDeltaSec file duration minus query duration in seconds, rounded half-even to one decimal
-     *                         (so a shorter file is negative); null when either duration is unknown
-     * @param playlists        the names of the imported playlists holding this file, in the order given; empty
-     *                         when it is in none, never null; a copy, so the caller's list is not shared
+     *                         (signed: negative means the file is shorter); null when either duration is unknown
+     * @param playlists        the names of the imported playlists holding this file, in the order given; as
+     *                         matchOne builds it, empty when the file is in none, never null, and unmodifiable
+     *                         (List.copyOf), so later changes to the caller's list do not show here
      */
     public record ScoredCandidate(LibraryIndex.Track track, double score,
                                   Map<String, Double> parts, Versions.TitleParts version,

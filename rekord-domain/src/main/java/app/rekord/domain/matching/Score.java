@@ -20,7 +20,8 @@ import java.util.Set;
  * anything merely plausible becomes {@code ambiguous} and the DJ picks; the
  * rest is {@code unmatched}. A small playlist nudge ({@link #ranked}) orders
  * candidates but never changes a score: every guard compares raw scores; the
- * nudge only decides who leads.
+ * nudge only sets the order, which decides the leader, the runner-up the
+ * margin guard compares and which eight candidates are kept.
  */
 public final class Score {
 
