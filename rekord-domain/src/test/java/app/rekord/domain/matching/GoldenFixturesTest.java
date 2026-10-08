@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /** The golden fixtures copied from rekord-api, with the ticket's two changes (TASK-24.4, AC #1, #8). */
 class GoldenFixturesTest {
@@ -159,6 +162,121 @@ class GoldenFixturesTest {
             assertThat(text).contains("ec65ae35c182e6e25f571c76d45b15a78f183c10")
                     .contains("src/test/resources/golden-set.json")
                     .contains("src/test/resources/golden-library.json");
+        }
+    }
+
+    @Test
+    void every_case_and_candidate_carries_every_recorded_key() {
+        // Given the checked-in set, which GoldenGate reads with null-safe helpers that would hide a lost key
+        // When each case, query, expected block, version and candidate is checked for the keys the gate compares
+        List<String> problems = schemaProblems(set());
+
+        // Then none is missing (a message names a position and a key, never a value)
+        assertThat(problems.stream().limit(20).toList()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "/cases/0, family", "/cases/0, query", "/cases/0, expected",
+            "/cases/0/query, artist", "/cases/0/query, title", "/cases/0/query, duration_sec",
+            "/cases/85/expected, bucket", "/cases/85/expected, auto_selected_id",
+            "/cases/85/expected, from_preference", "/cases/85/expected, candidate_count",
+            "/cases/85/expected, input_version", "/cases/85/expected, candidates",
+            "/cases/85/expected/input_version, descriptors", "/cases/85/expected/input_version, remixer",
+            "/cases/85/expected/candidates/0, track_id", "/cases/85/expected/candidates/0, score",
+            "/cases/85/expected/candidates/0, artist", "/cases/85/expected/candidates/0, title",
+            "/cases/85/expected/candidates/0, parts", "/cases/85/expected/candidates/0, duration_delta_sec",
+            "/cases/85/expected/candidates/0, version", "/cases/85/expected/candidates/0, playlists",
+            "/cases/85/expected/candidates/0/version, descriptors",
+            "/cases/85/expected/candidates/0/version, remixer"})
+    void a_copy_that_loses_one_recorded_key_is_reported_by_position_and_key(String parent, String key) {
+        // Given a copy of the set that loses one key
+        JsonNode copy = set();
+        ((ObjectNode) copy.at(parent)).remove(key);
+
+        // When it is checked
+        // Then exactly one problem names that key at that position
+        assertThat(schemaProblems(copy)).containsExactly(parent + " lacks " + key);
+    }
+
+    @Test
+    void every_library_track_carries_every_key_the_gate_reads() {
+        // Given the checked-in library, which GoldenGate reads with null-safe helpers for artist and duration
+        // When each track is checked for id, artist, title and duration_sec
+        List<String> problems = libraryProblems(library());
+
+        // Then none is missing (a message names a position and a key, never a value)
+        assertThat(problems.stream().limit(20).toList()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"/tracks/0, id", "/tracks/0, artist", "/tracks/0, title", "/tracks/0, duration_sec",
+            "/tracks/20868, duration_sec"})
+    void a_library_copy_that_loses_one_track_key_is_reported_by_position_and_key(String parent, String key) {
+        JsonNode copy = library();
+        ((ObjectNode) copy.at(parent)).remove(key);
+
+        assertThat(libraryProblems(copy)).containsExactly(parent + " lacks " + key);
+    }
+
+    private static final List<String> TRACK_KEYS = List.of("id", "artist", "title", "duration_sec");
+
+    /** Like {@link #schemaProblems}: a position and a key, never a value (the titles stay out of any output). */
+    private static List<String> libraryProblems(JsonNode library) {
+        List<String> problems = new ArrayList<>();
+        JsonNode tracks = library.get("tracks");
+        for (int i = 0; i < tracks.size(); i++) {
+            lacking(problems, "/tracks/" + i, tracks.get(i), TRACK_KEYS);
+        }
+        return problems;
+    }
+
+    /** The keys GoldenGate reads from a case, by level; it reads most of them null-safe, so a lost key hides. */
+    private static final List<String> CASE_KEYS = List.of("family", "query", "expected");
+    private static final List<String> QUERY_KEYS = List.of("artist", "title", "duration_sec");
+    private static final List<String> EXPECTED_KEYS = List.of("bucket", "auto_selected_id", "from_preference",
+            "candidate_count", "input_version", "candidates");
+    private static final List<String> VERSION_KEYS = List.of("descriptors", "remixer");
+    private static final List<String> CANDIDATE_KEYS = List.of("track_id", "score", "artist", "title", "parts",
+            "duration_delta_sec", "version", "playlists");
+
+    /** One line per missing key, as "JSON-pointer lacks key": a position and a key, never a value (titles stay out). */
+    private static List<String> schemaProblems(JsonNode set) {
+        List<String> problems = new ArrayList<>();
+        JsonNode cases = set.get("cases");
+        for (int i = 0; i < cases.size(); i++) {
+            String at = "/cases/" + i;
+            JsonNode c = cases.get(i);
+            lacking(problems, at, c, CASE_KEYS);
+            if (c.has("query")) {
+                lacking(problems, at + "/query", c.get("query"), QUERY_KEYS);
+            }
+            if (!c.has("expected")) {
+                continue;
+            }
+            JsonNode expected = c.get("expected");
+            String inExpected = at + "/expected";
+            lacking(problems, inExpected, expected, EXPECTED_KEYS);
+            if (expected.has("input_version")) {
+                lacking(problems, inExpected + "/input_version", expected.get("input_version"), VERSION_KEYS);
+            }
+            JsonNode candidates = expected.path("candidates");
+            for (int k = 0; k < candidates.size(); k++) {
+                String inCandidate = inExpected + "/candidates/" + k;
+                lacking(problems, inCandidate, candidates.get(k), CANDIDATE_KEYS);
+                if (candidates.get(k).has("version")) {
+                    lacking(problems, inCandidate + "/version", candidates.get(k).get("version"), VERSION_KEYS);
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static void lacking(List<String> problems, String at, JsonNode node, List<String> keys) {
+        for (String key : keys) {
+            if (!node.has(key)) {
+                problems.add(at + " lacks " + key);
+            }
         }
     }
 
