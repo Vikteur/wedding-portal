@@ -28,10 +28,14 @@ public class StoppablePostgres implements QuarkusTestResourceLifecycleManager {
     public void stop() {
         if (container != null) {
             container.stop();
+            container = null;
         }
     }
 
     static void stopDatabase() {
+        if (container == null) {
+            throw new IllegalStateException("The database was not started: run the test with ReadinessTestProfile");
+        }
         container.stop();
     }
 }

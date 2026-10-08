@@ -4,7 +4,11 @@ import io.quarkus.test.junit.QuarkusTestProfile;
 import java.util.List;
 import java.util.Map;
 
-/** A real datasource on a PostgreSQL that the test owns, with Dev Services off. */
+/**
+ * A real datasource on a PostgreSQL that the test owns, with Dev Services off. Only for {@code ReadinessIT}: it stops
+ * the database part-way through the class, so a second test class under this profile would run against a stopped
+ * database.
+ */
 public class ReadinessTestProfile implements QuarkusTestProfile {
 
     @Override
