@@ -89,4 +89,46 @@ class RedactedCauseTest {
     void a_cause_cycle_terminates() {
         assertThat(RedactedCause.of(ErrorEnvelopeProbeResource.chain())).isNotNull();
     }
+
+    @Test
+    void redacting_a_redacted_cause_answers_that_same_instance() {
+        // Given: the cause-cycle guard (TASK-5.7) throws a redacted copy, and the catch-all mapper redacts what it logs
+        RedactedCause once = RedactedCause.of(ErrorEnvelopeProbeResource.chain());
+
+        // When
+        RedactedCause twice = RedactedCause.of(once);
+
+        // Then: no second copy, so the chain, the frames and the suppressed exceptions stay those of the first
+        assertThat(twice).isSameAs(once);
+    }
+
+    @Test
+    void a_redacted_cause_nested_in_a_chain_keeps_the_class_name_it_stands_for() {
+        // Given: a copy the cause-cycle guard threw (TASK-5.7), wrapped by code that calls the guarded resource method,
+        // both as a cause and as a suppressed exception
+        RedactedCause thrown = RedactedCause.of(ErrorEnvelopeProbeResource.chain());
+        IllegalStateException wrapper = new IllegalStateException("wrapped member@example.com", thrown);
+        wrapper.addSuppressed(RedactedCause.of(new IllegalArgumentException("suppressed tok-example-123")));
+
+        // When
+        Throwable redacted = RedactedCause.of(wrapper);
+
+        // Then: the log shows the class of the exception that was copied, not this class
+        assertThat(redacted.getCause().toString()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(redacted.getCause().getCause().toString()).isEqualTo("java.sql.SQLException");
+        assertThat(redacted.getCause().getMessage()).isNull();
+        assertThat(redacted.getSuppressed()).hasSize(1);
+        assertThat(redacted.getSuppressed()[0].toString()).isEqualTo("java.lang.IllegalArgumentException");
+        for (String rendered : new String[] {printed(redacted), formatted(redacted)}) {
+            assertThat(rendered)
+                    .contains("Caused by: java.lang.IllegalStateException")
+                    .contains("Caused by: java.sql.SQLException")
+                    .contains("java.lang.IllegalArgumentException")
+                    .doesNotContain("Caused by: app.rekord.application.error.RedactedCause")
+                    .doesNotContain("Suppressed: app.rekord.application.error.RedactedCause");
+            for (String sentinel : ErrorEnvelopeProbeResource.SENTINELS) {
+                assertThat(rendered).doesNotContain(sentinel);
+            }
+        }
+    }
 }
