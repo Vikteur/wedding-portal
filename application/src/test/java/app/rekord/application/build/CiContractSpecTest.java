@@ -162,6 +162,31 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_hash_inside_quotes_does_not_hide_the_gradle_run_after_it() throws IOException {
+        // Given: a # starts a comment only at the start of a word outside quotes, so CI still runs the Gradle part
+        var scripts = List.of(
+                List.of("echo \"Build #1\" && ./gradlew build", "./gradlew build"),
+                List.of("echo 'step #2'; ./gradlew build -x test", "./gradlew build -x test"),
+                List.of("echo \"say \\\"hi\\\" #3\" && ./gradlew check", "./gradlew check"));
+
+        // When / Then
+        for (var script : scripts) {
+            assertThat(violations(build(PIN, CHECKOUT, run(script.get(0))))).as(script.get(0))
+                    .containsExactly("ci.yml job build: `" + script.get(1) + "` does not pass -Pcontract.spec");
+        }
+    }
+
+    @Test
+    void a_comment_after_quoted_text_is_still_dropped() throws IOException {
+        // Given
+        JsonNode workflow = build(run("echo \"a #b\" # ./gradlew build"));
+
+        // When / Then
+        assertThat(jobsStartingTheApplication("ci.yml", workflow)).isEmpty();
+        assertThat(violations(workflow)).isEmpty();
+    }
+
+    @Test
     void a_gradle_run_behind_a_wrapper_a_shell_keyword_or_the_windows_wrapper_is_checked() throws IOException {
         // Given: each shape with the Gradle part of it as written
         var shapes = List.of(
@@ -490,6 +515,28 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_hash_inside_quotes_in_the_dockerfile_does_not_hide_the_gradle_run_after_it() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = "FROM x\nRUN echo \"step #1\" && ./gradlew build\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `./gradlew build` does not pass -Pcontract.spec");
+    }
+
+    @Test
+    void a_spec_after_a_hash_inside_an_exec_form_shell_command_is_not_passed() throws IOException {
+        // Given: sh -c reads the # in its command string as the start of a comment
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = "FROM x\nRUN [\"sh\", \"-c\", \"./gradlew build # " + SPEC + "\"]\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `./gradlew build` does not pass -Pcontract.spec");
+    }
+
+    @Test
     void an_image_build_whose_dockerfile_takes_the_spec_from_a_sibling_path_is_found() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
@@ -673,7 +720,7 @@ class CiContractSpecTest {
     }
 
     private static String run(String script) {
-        return "{run: '" + script + "'}";
+        return "{run: '" + script.replace("'", "''") + "'}";
     }
 
     private static String when(String condition, String step) {
