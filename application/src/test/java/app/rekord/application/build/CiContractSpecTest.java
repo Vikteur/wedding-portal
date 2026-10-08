@@ -24,10 +24,15 @@ import org.junit.jupiter.api.Test;
  * "Starts the application" is every Gradle run that is not a diagnostic (test, integrationTest, build, check,
  * quarkusBuild, ...) and every image build, whose Dockerfile is read for the Gradle lines it runs.
  *
- * <p>Fails closed, as {@code HubProbeParityTest} does: a shape the test can read is checked, and any other shape that
- * could start the application (a command that names the wrapper in a form it cannot classify, an image build from
- * another context, a {@code uses:} action or reusable workflow it does not know, a pin or checkout step whose
- * {@code if:} the build steps do not share) is reported with a request to extend the test. It never passes silently.
+ * <p>Fails closed on what it reads, as {@code HubProbeParityTest} does: a shape in a {@code run:} line or in the root
+ * Dockerfile that the test can read is checked, and any other shape that could start the application (a command that
+ * names the wrapper or {@code gradle} in a form it cannot classify, a docker option it cannot read in front of the
+ * subcommand, an image build from another context or with bake or compose, a {@code uses:} action or reusable
+ * workflow it does not know) is refused with a request to extend the test. A pin or checkout step that may be
+ * skipped (an {@code if:} the steps that start the application do not share) or whose failure goes unnoticed
+ * ({@code continue-on-error}) is reported. It does not read what a step calls into (a script such as
+ * {@code bash .github/scripts/x.sh}, make, npm) or the build section of a compose file, so a Gradle run there is
+ * not seen.
  *
  * <p>Complements {@code ContractSpecWiringTest}, which pins the exact lines of {@code ci.yml}; this reads every
  * workflow by job, derives the expected spec path from the checkout step instead of repeating it, and proves on
@@ -74,7 +79,11 @@ class CiContractSpecTest {
     /** Commands that take the wrapper as an argument without running it. */
     private static final Set<String> MENTIONS =
             Set.of("echo", "printf", "chmod", "test", "[", "ls", "cat", "git", "COPY", "ADD");
-    /** Wrappers that run the command after them, with the options of theirs that take a value as the next word. */
+    /**
+     * Wrappers that run the command after them, with the options of theirs that take a value as the next word. Not
+     * exhaustive: an option missing here leaves its value standing in front of the wrapper, so the command is
+     * refused.
+     */
     private static final Map<String, Set<String>> WRAPPERS = Map.of(
             "timeout", Set.of("-s", "--signal", "-k", "--kill-after"),
             "nice", Set.of("-n"),
@@ -1038,9 +1047,11 @@ class CiContractSpecTest {
      * output is still empty, so the default branch is checked out) to a path of its own at the ref that step outputs,
      * a checkout path outside the workspace, a Gradle run (or the Dockerfile of an image build) whose
      * last {@code -Pcontract.spec} is missing or is not {@code <checkout path>/dist/openapi.yaml}, a pin or checkout
-     * step whose {@code if:} the steps that start the application do not share. Fails closed, in every job: a command
-     * (or Dockerfile line) that names the wrapper in a shape it cannot classify, an image build from a Dockerfile it
-     * does not read, a {@code uses:} action it does not know, and a reusable workflow are reported too.
+     * step whose {@code if:} the steps that start the application do not share or that sets
+     * {@code continue-on-error}. Fails closed, in every job, on what it reads: a command (or Dockerfile line) that
+     * names the wrapper or gradle in a shape it cannot classify, a docker option it cannot read, an image build from a
+     * Dockerfile it does not read, a {@code uses:} action it does not know, and a reusable workflow are refused too,
+     * each with a request to extend the test.
      */
     static List<String> violations(String file, JsonNode workflow, String dockerfile) {
         List<String> violations = new ArrayList<>();
@@ -1149,8 +1160,10 @@ class CiContractSpecTest {
     }
 
     /**
-     * A command with a word that is the Gradle wrapper, neither run as one (see {@link #gradleArguments}) nor a known
-     * mention of it (chmod +x gradlew): the test cannot tell whether it starts the application.
+     * A command with a word that is the Gradle wrapper or gradle, or has it glued to punctuation ({@code $(gradle}),
+     * neither run as one (see {@link #gradleArguments}) nor a known mention of it (chmod +x gradlew): the test cannot
+     * tell whether it starts the application. A bare {@code gradle} that is no command (apt-get install gradle) is
+     * refused too; the safe direction, until the test learns to tell.
      */
     private static boolean namesTheWrapperUnreadably(List<String> words) {
         return words.stream().anyMatch(word -> GRADLE.matcher(word).matches() || GRADLE_IN_WORD.matcher(word).find())
@@ -1185,8 +1198,9 @@ class CiContractSpecTest {
     }
 
     /**
-     * A pin or checkout step with an {@code if:} still counts as present, but it must be reported unless every step
-     * from the first one that starts the application on has the same condition: a build could run without it.
+     * A pin or checkout step with an {@code if:} still counts as present, but it is reported unless every step that
+     * starts the application, from the first one on, has the same trimmed condition: a build could run without it.
+     * Steps that start nothing (a diagnostic, an echo) need not share it.
      */
     private static void conditionNotShared(String what, JsonNode step, List<JsonNode> fromTheFirstBuild, String where,
             List<String> violations) {
@@ -1243,7 +1257,9 @@ class CiContractSpecTest {
 
     /**
      * The commands of a script, one list of words each: the text after a {@code #} that starts a word dropped,
-     * continued lines joined, a Dockerfile RUN in exec form read as its shell form, split at {@code && || ; |}.
+     * continued lines joined, a Dockerfile RUN in exec form read as its shell form, split at {@code && || ; |}, a
+     * single {@code &} and each line end, split into words at white space with the quotes dropped from them (so a
+     * quoted argument that contains a space is several words).
      */
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
@@ -1310,9 +1326,12 @@ class CiContractSpecTest {
     }
 
     /**
-     * What follows the Gradle wrapper (or gradle) when the command runs it: it comes first, behind at most a Dockerfile
-     * RUN, a shell or an env prefix, their options and variable assignments. Empty for a command that only names the
-     * wrapper (COPY gradlew, chmod +x gradlew, test -f gradlew, echo ./gradlew).
+     * What follows the Gradle wrapper (or gradle) when the command runs it: it comes first, behind at most the
+     * {@link #PREFIXES} (a Dockerfile RUN, a shell, env, sudo, time, ...), the shell {@link #KEYWORDS}, the
+     * {@link #WRAPPERS} with their value options and a timeout duration, options and variable assignments. Empty for a
+     * command that only names the wrapper (COPY gradlew, chmod +x gradlew, echo ./gradlew) and for one that runs it in
+     * a shape the test cannot read (stdbuf -oL ./gradlew build); {@link #namesTheWrapperUnreadably} tells the two
+     * apart.
      */
     private static Optional<List<String>> gradleArguments(List<String> words) {
         return argumentsOf(words, word -> GRADLE.matcher(word).matches());
@@ -1323,6 +1342,10 @@ class CiContractSpecTest {
         return words.get(words.size() - arguments.size() - 1);
     }
 
+    /**
+     * What follows the first word that is the program, when only prefixes, keywords, wrappers (with their options),
+     * options and assignments stand in front of it; empty when any other word comes first, or when no word is it.
+     */
     private static Optional<List<String>> argumentsOf(List<String> words, Predicate<String> program) {
         Set<String> valueOptions = Set.of();
         boolean duration = false;
