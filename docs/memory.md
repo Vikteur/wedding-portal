@@ -126,3 +126,12 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 ## 2026-10-08 — TASK-35 image job on main only
 
 - The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
+
+## 2026-10-08 — TASK-4.2 migration tests and row rollback
+
+- Fresh container per run: `FreshDatabase.assertStartedAfterThisJvm` compares the server uptime (`clock_timestamp() - pg_postmaster_start_time()`, read on the server) with the JVM uptime, two durations on their own clocks, so Docker VM clock skew cannot fake it. `MigrationDatabaseIT` and `FreshDatabaseIT` (Dev Services) use it.
+- `SchemaSnapshot` reads schema `public` from `information_schema` only, sorted. PostgreSQL 17 lists every NOT NULL as a CHECK named `<oid>_<oid>_<n>_not_null`; those rows are filtered out, nullability lives on the column. `flyway_schema_history` is never part of a snapshot.
+- The gate: `MigrationCoverageTest` (fast set, so `build` fails) requires a `V<version>MigrationIT` extending `MigrationSchemaCheck` for every V file. TASK-7.2 must add `V2MigrationIT` with V2, plus its own edit of `BaselineMigrationTest.db_migration_holds_only_v1_baseline` and `SchemaMigrationIT`.
+- PIN-AC-0452 is settled at row level: `RowRollbackIT` creates `probe_row` in its setup and drops it afterwards (no migration); a failing second port call of the test-only `ProbeRowUseCase` leaves no row, and a successful call keeps its row.
+- The adapter and use case live in test sources of `rekord-adapter` and `rekord-usecase` and reach the Quarkus test through the `testArtifacts` configuration: a `testJar` with classifier `tests` (the Quarkus Gradle model keys a project artifact with a classifier by its own file, which keeps it apart from the main jar) holding a `META-INF/jandex.idx` written by a `testJandex` task. The Jandex task's `classpath` property is the plugin's tool configuration `jandex`, not a compile classpath. The Quarkus class loader has no code source, so tests read the origin of a class from `java.class.path`.
+- The one-line touch of `docs/rewrite/architecture-conventions.md` in weddingapp (§6.2) is left to the coordinator.
