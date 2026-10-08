@@ -245,6 +245,163 @@ class RouteGuardTest {
     }
 
     @Test
+    void only_methods_with_an_http_method_annotation_are_routes() {
+        // Given an api interface with every JAX-RS verb, a custom verb and a plain method, and an unannotated implementation
+        String propfind = """
+                package app.rekord.fixture;
+
+                import jakarta.ws.rs.HttpMethod;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+
+                @HttpMethod("PROPFIND")
+                @Retention(RetentionPolicy.RUNTIME)
+                public @interface Propfind {}
+                """;
+        String verbsApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.*;
+
+                public interface VerbsApi {
+                    @GET void get();
+                    @POST void post();
+                    @PUT void put();
+                    @DELETE void delete();
+                    @PATCH void patch();
+                    @HEAD void head();
+                    @OPTIONS void options();
+                    @app.rekord.fixture.Propfind void propfind();
+                    void plain();
+                }
+                """;
+        String verbsResource = """
+                package app.rekord.fixture;
+
+                public class VerbsResource implements app.rekord.api.VerbsApi {
+                    public void get() {}
+                    public void post() {}
+                    public void put() {}
+                    public void delete() {}
+                    public void patch() {}
+                    public void head() {}
+                    public void options() {}
+                    public void propfind() {}
+                    public void plain() {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(propfind, verbsApi, verbsResource);
+        Set<String> verbs = Set.of("get", "post", "put", "delete", "patch", "head", "options", "propfind");
+
+        // When the routes are listed and the implementation is checked
+        Set<String> routes = RouteGuard.routes(fixtures);
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then every verb is a route and the plain method is neither listed nor reported
+        assertThat(routes)
+                .containsExactlyInAnyOrderElementsOf(
+                        verbs.stream().map(verb -> "VerbsApi#" + verb).toList());
+        assertThat(unguarded)
+                .containsExactlyInAnyOrderElementsOf(
+                        verbs.stream().map(verb -> "VerbsApi#" + verb + "  (VerbsResource)").toList());
+    }
+
+    @Test
+    void a_route_implemented_in_a_superclass_is_checked_on_that_method() {
+        // Given an abstract base that implements FixtureApi with only open guarded, and a concrete subclass
+        String base = """
+                package app.rekord.fixture;
+
+                public abstract class BaseResource implements app.rekord.api.FixtureApi {
+                    @io.quarkus.security.Authenticated @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String subclass = """
+                package app.rekord.fixture;
+
+                public class InheritingResource extends BaseResource {}
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, base, subclass);
+
+        // When the implementations are checked
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then the subclass is scanned and only the route its superclass leaves unguarded is named
+        assertThat(RouteGuard.implementations(fixtures)).containsExactly("app.rekord.fixture.InheritingResource");
+        assertThat(unguarded).containsExactly("FixtureApi#closed  (InheritingResource)");
+    }
+
+    @Test
+    void a_route_is_matched_to_the_implementing_method_with_the_same_parameter_types() {
+        // Given a route find(String) and two implementations, each with a find(Integer) overload
+        String paramApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.PathParam;
+
+                public interface ParamApi {
+                    @GET @Path("/{id}") void find(@PathParam("id") String id);
+                }
+                """;
+        String overloadGuarded = """
+                package app.rekord.fixture;
+
+                public class OverloadGuardedResource implements app.rekord.api.ParamApi {
+                    @io.quarkus.security.Authenticated public void find(Integer id) {}
+                    @Override public void find(String id) {}
+                }
+                """;
+        String routeGuarded = """
+                package app.rekord.fixture;
+
+                public class RouteGuardedResource implements app.rekord.api.ParamApi {
+                    public void find(Integer id) {}
+                    @io.quarkus.security.Authenticated @Override public void find(String id) {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(paramApi, overloadGuarded, routeGuarded);
+
+        // When the implementations are checked
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then only the class whose find(String) lacks an annotation is named
+        assertThat(unguarded).containsExactly("ParamApi#find  (OverloadGuardedResource)");
+    }
+
+    @Test
+    void a_route_without_an_implementing_method_is_unguarded() {
+        // Given a route served by a default method of the interface, and an implementation that guards only the other
+        String defaultApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                public interface DefaultApi {
+                    @GET @Path("/open") default void open() {}
+                    @GET @Path("/closed") void closed();
+                }
+                """;
+        String defaultResource = """
+                package app.rekord.fixture;
+
+                public class DefaultResource implements app.rekord.api.DefaultApi {
+                    @io.quarkus.security.Authenticated @Override public void closed() {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(defaultApi, defaultResource);
+
+        // When the implementation is checked
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then the route with no implementing method is named
+        assertThat(unguarded).containsExactly("DefaultApi#open  (DefaultResource)");
+    }
+
+    @Test
     void every_production_implementation_of_a_generated_interface_is_guarded_or_public() {
         JavaClasses production = ProductionClasses.importAll();
 
