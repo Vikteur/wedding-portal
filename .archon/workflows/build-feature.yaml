@@ -172,6 +172,7 @@ nodes:
       properties:
         files: { type: number }
         refs: { type: string }
+        dropped: { type: string }
       required: [files, refs]
 
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
