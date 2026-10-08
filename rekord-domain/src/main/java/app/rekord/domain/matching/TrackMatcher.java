@@ -15,9 +15,10 @@ import java.util.Map;
  *
  * <p>This is rekord-api's {@code Matcher.matchOne} without remembered choices (P3-E05-T02): facets, the weighted
  * mean, the 0.45 floor, the duration delta, the playlist nudge (it orders candidates, the bucket reads raw
- * scores) and the cap of 8. The result is auto only when the leader clears the score, margin (or sole playlist
- * member), version and duration guards and is the requested song: same normalised artist and core title
- * (UD-19.c, {@link Signature#songOf}), so a query without an artist is never auto.
+ * scores) and the cap of 8. The result is auto only when the leader clears the score, margin (or a playlist
+ * leader over a runner-up in no playlist), version and duration guards and is the requested song: same
+ * normalised artist and core title (UD-19.c, {@link Signature#songOf}), so a query without an artist is never
+ * auto.
  */
 public final class TrackMatcher {
 
@@ -28,7 +29,14 @@ public final class TrackMatcher {
             "version", Score.WEIGHT_VERSION,
             "duration", Score.WEIGHT_DURATION);
 
-    /** One file, scored against a query, with the reasoning left visible. */
+    /**
+     * One file, scored against a query, with the reasoning left visible.
+     *
+     * @param durationDeltaSec file duration minus query duration in seconds, rounded half-even to one decimal
+     *                         (so a shorter file is negative); null when either duration is unknown
+     * @param playlists        the names of the imported playlists holding this file, in the order given; empty
+     *                         when it is in none, never null; a copy, so the caller's list is not shared
+     */
     public record ScoredCandidate(LibraryIndex.Track track, double score,
                                   Map<String, Double> parts, Versions.TitleParts version,
                                   Double durationDeltaSec, List<String> playlists) {
@@ -47,7 +55,8 @@ public final class TrackMatcher {
 
     /**
      * @param playlistsByTrackId a track id to the names of the imported playlists holding that file, in order;
-     *                           a missing id, or a null map, means no playlist
+     *                           a missing id, or a null map, means no playlist; values and names must not be
+     *                           null
      */
     public static MatchResult matchOne(MatchQuery query, LibraryIndex index,
                                        Map<String, List<String>> playlistsByTrackId) {
@@ -104,9 +113,11 @@ public final class TrackMatcher {
         }
         ScoredCandidate best = scored.getFirst();
         if (best.score() >= Score.AUTO_SCORE) {
+            // A close call is still decided when the leader is in a playlist and the
+            // runner-up is in none: one of the two is a track the DJ actually plays.
+            // The size() == 1 case must short-circuit first, or get(1) reads past the end.
             boolean marginOk = scored.size() == 1
                     || best.score() - scored.get(1).score() >= Score.AUTO_MARGIN
-                    // a lone playlist member leading a field of files in no playlist
                     || (!best.playlists().isEmpty() && scored.get(1).playlists().isEmpty());
 
             Double versionPart = best.parts().get("version");

@@ -14,12 +14,13 @@ import java.util.Set;
  * which is why {@link Fuzz} reimplements it rather than substituting something
  * close.
  *
- * <p>Buckets: {@code auto} needs a high, well-separated, version-compatible
- * best candidate that is also the requested song (same normalised artist and
- * core title, UD-19.c); anything merely plausible becomes {@code ambiguous}
- * and the DJ picks; the rest is {@code unmatched}. A small playlist nudge
- * ({@link #ranked}) orders candidates but never changes a score: the bucket
- * reads the raw scores.
+ * <p>Buckets: {@code auto} needs a high, well-separated (or a playlist leader
+ * over a runner-up in no playlist), version-compatible best candidate that is
+ * also the requested song (same normalised artist and core title, UD-19.c);
+ * anything merely plausible becomes {@code ambiguous} and the DJ picks; the
+ * rest is {@code unmatched}. A small playlist nudge ({@link #ranked}) orders
+ * candidates but never changes a score: every guard compares raw scores; the
+ * nudge only decides who leads.
  */
 public final class Score {
 
@@ -28,7 +29,7 @@ public final class Score {
     /** "Could plausibly be it" — enough to make the whole result ambiguous. */
     public static final double STRONG_THRESHOLD = 0.60;
     public static final double AUTO_SCORE = 0.82;
-    /** Best minus second best. A close pair is a question, not an answer. */
+    /** Leader minus runner-up. A close pair is a question, not an answer, unless only the leader is in a playlist. */
     public static final double AUTO_MARGIN = 0.10;
     /** Never auto-pick a different version of the song. */
     public static final double AUTO_MIN_VERSION = 0.90;
