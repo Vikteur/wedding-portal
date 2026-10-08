@@ -8,8 +8,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The shape of schema {@code public}, read from {@code information_schema} only and sorted deterministically, so a
- * migration test can compare it with the schema the migration declares. {@code flyway_schema_history} is never part of it.
+ * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
+ * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
+ * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, plus the names of the other non-system schemas.
+ * {@code flyway_schema_history} is never part of it.
+ * <p>
+ * Not covered: indexes that are not constraints (including partial unique indexes), column defaults, identity and
+ * sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign key
+ * on-update, match and deferrability, and the content of other schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints) {
 
