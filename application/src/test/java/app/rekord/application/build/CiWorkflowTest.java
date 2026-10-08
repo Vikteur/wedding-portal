@@ -164,6 +164,27 @@ class CiWorkflowTest {
     }
 
     @Test
+    void build_job_checks_the_groma_architecture_map_with_a_pinned_cli() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        int node = indexOfStep(steps, step -> step.path("uses").asText().startsWith("actions/setup-node@"));
+        int install = indexOfStep(
+                steps, step -> step.path("run").asText().trim().matches("npm install -g groma\\.md@\\d+\\.\\d+\\.\\d+"));
+        int check = indexOfStep(
+                steps, step -> step.path("run").asText().trim().equals("bash .github/scripts/groma-check.sh"));
+
+        // Then
+        assertThat(node).as("the Node setup step").isNotNegative().isLessThan(install);
+        assertThat(install).as("the pinned groma install step").isLessThan(check);
+        assertThat(check).as("the groma check step").isNotNegative();
+        assertThat(steps.get(check).has("if")).isFalse();
+        assertThat(steps.get(check).has("continue-on-error")).isFalse();
+    }
+
+    @Test
     void build_job_checks_out_rekord_contract_with_the_contract_token_secret() throws IOException {
         // Given
         JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
