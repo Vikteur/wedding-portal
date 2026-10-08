@@ -19,6 +19,7 @@ dependencies {
     implementation("io.quarkus:quarkus-narayana-jta")
     implementation("io.quarkus.security:quarkus-security")
     implementation("io.quarkus:quarkus-hibernate-validator")
+    implementation(libs.bouncycastle.bcprov)
 
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-junit-internal")
