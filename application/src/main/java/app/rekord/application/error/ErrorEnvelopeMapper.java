@@ -8,6 +8,7 @@ import io.quarkus.security.UnauthorizedException;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import java.util.stream.Collectors;
 import org.jboss.resteasy.reactive.RestResponse;
@@ -54,6 +55,15 @@ public class ErrorEnvelopeMapper {
                 .distinct()
                 .collect(Collectors.joining("; "));
         return envelope(422, "VALIDATION_FAILED", message);
+    }
+
+    /** The catch-all: a refusal the framework already put a status below 500 on keeps it, anything else is a 500. */
+    @ServerExceptionMapper
+    public RestResponse<Error> onThrowable(Throwable e) {
+        if (e instanceof WebApplicationException w && w.getResponse() != null && w.getResponse().getStatus() < 500) {
+            return envelope(w.getResponse().getStatus(), "UNKNOWN", "That request could not be handled.");
+        }
+        return envelope(500, "UNKNOWN", "Something went wrong at our end.");
     }
 
     private static RestResponse<Error> envelope(int status, String code, String message) {
