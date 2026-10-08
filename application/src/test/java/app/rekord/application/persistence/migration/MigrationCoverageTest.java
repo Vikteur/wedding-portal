@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 /** The gate: a V file without its {@code V<version>MigrationIT} fails the build (this class runs in {@code test}). */
@@ -61,6 +62,22 @@ class MigrationCoverageTest {
 
         // Then only the good one counts as tested
         assertThat(untested).containsExactly("2", "3", "4");
+    }
+
+    @Test
+    void a_test_that_overrides_the_inherited_check_or_runs_only_under_a_condition_is_reported(@TempDir Path dir)
+            throws IOException {
+        // Given two versions whose test classes replace the inherited check or skip it under a JUnit condition
+        for (String v : List.of("5", "6")) {
+            Files.writeString(dir.resolve("V" + v + "__x.sql"), "select 1;\n");
+        }
+        Map<String, Class<?>> tests = Map.of("5", OverridingCheck.class, "6", ConditionalCheck.class);
+
+        // When
+        List<String> untested = MigrationCoverage.untested(dir, v -> Optional.ofNullable(tests.get(v)));
+
+        // Then neither counts as tested
+        assertThat(untested).containsExactly("5", "6");
     }
 
     @Test
@@ -152,6 +169,35 @@ class MigrationCoverageTest {
         @Override
         protected String version() {
             return "4";
+        }
+
+        @Override
+        protected SchemaSnapshot expected() {
+            return SchemaSnapshot.empty();
+        }
+    }
+
+    private static final class OverridingCheck extends MigrationSchemaCheck {
+        @Override
+        protected String version() {
+            return "5";
+        }
+
+        @Override
+        protected SchemaSnapshot expected() {
+            return SchemaSnapshot.empty();
+        }
+
+        // Without @Test: JUnit runs nothing in its place.
+        @Override
+        void applies_the_history_up_to_and_including_its_migration_on_an_empty_container_and_finds_the_declared_schema() {}
+    }
+
+    @EnabledIfSystemProperty(named = "wedding.never.set", matches = "yes")
+    private static final class ConditionalCheck extends MigrationSchemaCheck {
+        @Override
+        protected String version() {
+            return "6";
         }
 
         @Override
