@@ -33,7 +33,7 @@ class PasswordsTest {
 
     @Test
     void a_hash_has_the_scrypt_format_of_rekord_api() {
-        assertThat(passwords.hash(PASSWORD)).matches("^scrypt\$16384\$8\$1\$[0-9a-f]{32}\$[0-9a-f]{64}$");
+        assertThat(passwords.hash(PASSWORD)).matches("^scrypt[$]16384[$]8[$]1[$][0-9a-f]{32}[$][0-9a-f]{64}$");
     }
 
     @Test
@@ -41,7 +41,7 @@ class PasswordsTest {
         String hash = passwords.hash(PASSWORD);
 
         assertThat(tokens.asked).containsExactly(16);
-        assertThat(hash.split("\$")[4]).isEqualTo(HexFormat.of().formatHex(SALT));
+        assertThat(hash.split("[$]")[4]).isEqualTo(HexFormat.of().formatHex(SALT));
     }
 
     @Test
@@ -68,7 +68,7 @@ class PasswordsTest {
     void verify_answers_false_on_null_or_malformed_values() {
         String good = passwords.hash(PASSWORD);
         String saltHex = HexFormat.of().formatHex(SALT);
-        String keyHex = good.split("\$")[5];
+        String keyHex = good.split("[$]")[5];
 
         assertThat(passwords.verify(null, good)).isFalse();
         assertThat(passwords.verify(PASSWORD, null)).isFalse();
@@ -88,7 +88,7 @@ class PasswordsTest {
         String second = new Passwords(new RecordingTokenGenerator(other)).hash(PASSWORD);
 
         assertThat(first).isNotEqualTo(second);
-        assertThat(first.split("\$")[5]).isNotEqualTo(second.split("\$")[5]);
+        assertThat(first.split("[$]")[5]).isNotEqualTo(second.split("[$]")[5]);
     }
 
     @Test
