@@ -126,3 +126,11 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 ## 2026-10-08 — TASK-35 image job on main only
 
 - The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
+
+## 2026-10-08 — TASK-31.1 release image
+
+- **Supersedes** the TASK-1.3 bullet "never pushed (UD-13.e): no registry login, no secret". On a push to main, after `build` is green and `image-check.sh` passes, the `image` job pushes `ghcr.io/<owner/name lowercased>:<full commit sha>` and `:latest`.
+- The job signs in with `github.token` (job permission `packages: write`, no stored secret) and signs out with `if: always()`. Only plain `docker login`/`tag`/`push` are used, no new action.
+- The tag logic is `.github/scripts/image-tags.sh` (tested by `ImageTagsTest`); the workflow structure is pinned by `CiWorkflowTest`.
+- Package visibility and the repository's Actions access to the package are GitHub settings owned by the user, not changed by this ticket.
+- The first real push is proven by the first main run after the merge (run id and SHA to be filled in after it).
