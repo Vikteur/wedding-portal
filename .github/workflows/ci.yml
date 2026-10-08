@@ -65,6 +65,16 @@ jobs:
           && test -d application/build/quarkus-app/app
           && test -d application/build/quarkus-app/quarkus
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Install the Groma CLI
+        run: npm install -g groma.md@0.6.6
+
+      - name: Groma architecture map is curated and in sync
+        run: bash .github/scripts/groma-check.sh
+
       - name: Upload test reports
         if: failure() && steps.gradle.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
