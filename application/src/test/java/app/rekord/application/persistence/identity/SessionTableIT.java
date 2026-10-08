@@ -11,8 +11,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Instant;
+import java.util.Map;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,9 @@ class SessionTableIT extends AbstractRepositoryTest {
 
     private static final UUID PORTAL = IdentityRows.id(900);
     private static final UUID WEDDING = IdentityRows.id(901);
+    private static final String AUCKLAND = "Pacific/Auckland";
+    /** 22:00 in Pacific/Auckland on that day (UTC+12). */
+    private static final Instant CREATED_AT = IdentityRows.T0;
 
     private OrganizationEntity org;
     private UserEntity user;
@@ -83,46 +89,126 @@ class SessionTableIT extends AbstractRepositoryTest {
     }
 
     @Test
-    void an_instant_stored_while_the_jvm_zone_is_pacific_auckland_reads_back_unchanged() throws SQLException {
-        // Given a JVM zone that is not UTC
-        TimeZone before = TimeZone.getDefault();
-        TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Auckland"));
-        SessionEntity session = IdentityRows.userSession(1, org, user);
-        Instant createdAt = Instant.parse("2027-06-12T10:00:00Z");
-        session.setCreatedAt(createdAt);
-        try {
-            // When the session is stored, flushed and read back through a cleared persistence context
+    void an_instant_stored_in_pacific_auckland_reads_back_unchanged_through_hibernate() throws SQLException {
+        whileTheJvmZoneIsAuckland(() -> {
+            // Given a session stored on a connection whose zone is Pacific/Auckland (UTC+12 in June)
+            UUID id = storedInAuckland();
+
+            // When it is read on another such connection, through a fresh persistence context
             Instant readBack = inNewTransactionReturning(() -> {
-                em.persist(session);
-                em.flush();
-                em.clear();
-                return em.find(SessionEntity.class, session.getId()).getCreatedAt();
+                sessionZoneIsAuckland();
+                return em.find(SessionEntity.class, id).getCreatedAt();
             });
 
-            // Then the instant is the same (BR-DM-03)
-            assertThat(readBack).isEqualTo(createdAt);
+            // Then the instant is the same (BR-DM-03). With jdbc.timezone=UTC Hibernate also returns it unchanged
+            // for a plain timestamp column, so this alone does not pin the column type: the tests below do
+            assertThat(readBack).isEqualTo(CREATED_AT);
+        });
+    }
+
+    @Test
+    void an_instant_stored_in_pacific_auckland_reads_back_unchanged_over_jdbc_in_that_zone() throws SQLException {
+        whileTheJvmZoneIsAuckland(() -> {
+            // Given a session stored on a connection whose zone is Pacific/Auckland
+            UUID id = storedInAuckland();
+
+            // When plain JDBC reads the column on another such connection, with the JVM zone Auckland too
+            Instant asTimestamp = jdbcInAuckland("select created_at from sessions where id = ?", id,
+                    rs -> rs.getTimestamp(1).toInstant());
+            long epoch = jdbcInAuckland("select extract(epoch from created_at)::bigint from sessions where id = ?", id,
+                    rs -> rs.getLong(1));
+
+            // Then it is the stored instant: a plain timestamp column holds 10:00 wall time and reads 12 hours off
+            assertThat(asTimestamp).isEqualTo(CREATED_AT);
+            assertThat(epoch).isEqualTo(CREATED_AT.getEpochSecond());
+        });
+    }
+
+    @Test
+    void a_connection_in_pacific_auckland_renders_the_stored_instant_with_its_offset() throws SQLException {
+        whileTheJvmZoneIsAuckland(() -> {
+            // Given a session stored on a connection whose zone is Pacific/Auckland
+            UUID id = storedInAuckland();
+
+            // When a connection in that zone renders it as text
+            String rendered = jdbcInAuckland("select created_at::text from sessions where id = ?", id,
+                    rs -> rs.getString(1));
+
+            // Then 10:00 UTC shows as 22:00 with the +12 offset (a plain timestamp has no offset)
+            assertThat(rendered).isEqualTo("2027-06-12 22:00:00+12");
+        });
+    }
+
+    @Test
+    void every_instant_column_of_sessions_is_timestamptz() throws SQLException {
+        // Then the five instant columns are timestamptz, so the zone of a connection never moves a stored instant
+        try (Connection c = dataSource.getConnection();
+                PreparedStatement s = c.prepareStatement("select column_name, data_type from information_schema.columns"
+                        + " where table_name = 'sessions' and column_name in ('created_at', 'last_seen_at',"
+                        + " 'idle_expires_at', 'absolute_expires_at', 'revoked_at') order by column_name");
+                ResultSet rs = s.executeQuery()) {
+            Map<String, String> types = new TreeMap<>();
+            while (rs.next()) {
+                types.put(rs.getString(1), rs.getString(2));
+            }
+            assertThat(types).containsOnlyKeys("absolute_expires_at", "created_at", "idle_expires_at", "last_seen_at",
+                    "revoked_at");
+            assertThat(types.values()).containsOnly("timestamp with time zone");
+        }
+    }
+
+    /** Stores a user session whose created_at is {@link #CREATED_AT}, on a connection whose zone is Auckland. */
+    private UUID storedInAuckland() {
+        SessionEntity session = IdentityRows.userSession(1, org, user);
+        session.setCreatedAt(CREATED_AT);
+        inNewTransaction(() -> {
+            sessionZoneIsAuckland();
+            em.persist(session);
+        });
+        return session.getId();
+    }
+
+    /** Sets the zone of this transaction's connection; it ends with the transaction, so the pooled one stays clean. */
+    private void sessionZoneIsAuckland() {
+        em.createNativeQuery("set local time zone '" + AUCKLAND + "'").executeUpdate();
+    }
+
+    /** Reads one row of the sessions table over plain JDBC on a connection whose zone is Auckland. */
+    private <T> T jdbcInAuckland(String select, UUID id, RowReader<T> reader) throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try (Statement zone = c.createStatement();
+                    PreparedStatement s = c.prepareStatement(select)) {
+                zone.execute("set local time zone '" + AUCKLAND + "'");
+                s.setObject(1, id);
+                try (ResultSet rs = s.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    return reader.read(rs);
+                }
+            } finally {
+                c.rollback();
+                c.setAutoCommit(true);
+            }
+        }
+    }
+
+    private static void whileTheJvmZoneIsAuckland(SqlAction action) throws SQLException {
+        TimeZone before = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone(AUCKLAND));
+        try {
+            action.run();
         } finally {
             TimeZone.setDefault(before);
         }
+    }
 
-        // And the column holds that instant, so a value stored shifted fails even when the read shifts it back
-        try (Connection c = dataSource.getConnection();
-                PreparedStatement s = c.prepareStatement(
-                        "select extract(epoch from created_at) from sessions where id = ?")) {
-            s.setObject(1, session.getId());
-            try (ResultSet rs = s.executeQuery()) {
-                assertThat(rs.next()).isTrue();
-                assertThat(rs.getLong(1)).isEqualTo(createdAt.getEpochSecond());
-            }
-        }
+    @FunctionalInterface
+    private interface RowReader<T> {
+        T read(ResultSet rs) throws SQLException;
+    }
 
-        // And the column is timestamptz: with the JVM and JDBC zone both UTC a plain timestamp would round-trip too
-        try (Connection c = dataSource.getConnection();
-                PreparedStatement s = c.prepareStatement("select data_type from information_schema.columns"
-                        + " where table_name = 'sessions' and column_name = 'created_at'");
-                ResultSet rs = s.executeQuery()) {
-            assertThat(rs.next()).isTrue();
-            assertThat(rs.getString(1)).isEqualTo("timestamp with time zone");
-        }
+    @FunctionalInterface
+    private interface SqlAction {
+        void run() throws SQLException;
     }
 }
