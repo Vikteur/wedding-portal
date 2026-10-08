@@ -41,7 +41,9 @@ class CiContractSpecTest {
     private static final String SPEC_PROPERTY = "-Pcontract.spec=";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
     private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
-    private static final Pattern EXEC_RUN = Pattern.compile("(RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])");
+    private static final Pattern EXEC_RUN =
+            Pattern.compile("^(\\s*RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])\\s*$", Pattern.MULTILINE);
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
     private static final Pattern GRADLE = Pattern.compile("(.*[/\\\\])?gradlew(\\.bat)?|gradle");
     /** What may stand in front of the wrapper without making it a mere argument. */
@@ -702,10 +704,7 @@ class CiContractSpecTest {
                             + " test does not read; extend CiContractSpecTest to read it");
                 }
                 for (List<String> words : commands(step.path("run").asText(""))) {
-                    if (namesTheWrapperUnreadably(words)) {
-                        violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper in a shape"
-                                + " this test cannot classify; extend CiContractSpecTest to read it");
-                    }
+                    refuseUnreadable(where, words, violations);
                 }
             }
             int first = firstStartingStep(steps);
@@ -749,6 +748,7 @@ class CiContractSpecTest {
                             var arguments = gradleArguments(line).filter(a -> !startedTasks(a).isEmpty());
                             arguments.ifPresent(
                                     a -> checkSpec(where + "Dockerfile ", wrapperWord(line, a), a, path, violations));
+                            refuseUnreadable(where + "Dockerfile ", line, violations);
                         }
                     }
                 }
@@ -780,6 +780,13 @@ class CiContractSpecTest {
         name = name.substring(0, name.contains("@") ? name.indexOf('@') : name.length());
         boolean runsGradle = name.startsWith("gradle/") && step.path("with").has("arguments");
         return SETUP_ACTIONS.contains(name) && !runsGradle;
+    }
+
+    private static void refuseUnreadable(String where, List<String> words, List<String> violations) {
+        if (namesTheWrapperUnreadably(words)) {
+            violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper in a shape this test"
+                    + " cannot classify; extend CiContractSpecTest to read it");
+        }
     }
 
     /**
@@ -859,15 +866,16 @@ class CiContractSpecTest {
 
     /**
      * The commands of a script, one list of words each: the text after a {@code #} that starts a word dropped, continued
-     * lines joined, split at {@code && || ; |}.
+     * lines joined, a Dockerfile RUN in exec form read as its shell form, split at {@code && || ; |}.
      */
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
-        for (String part : SEPARATOR.split(COMMENT.matcher(script).replaceAll("$1").replaceAll("\\\\\\R", " "))) {
-            List<String> words = execForm(part.trim()).orElseGet(() -> Arrays.stream(part.trim().split("\\s+"))
+        String text = shellForm(COMMENT.matcher(script).replaceAll("$1").replaceAll("\\\\\\R", " "));
+        for (String part : SEPARATOR.split(text)) {
+            List<String> words = Arrays.stream(part.trim().split("\\s+"))
                     .map(word -> word.replace("\"", "").replace("'", ""))
                     .filter(word -> !word.isEmpty())
-                    .toList());
+                    .toList();
             if (!words.isEmpty()) {
                 commands.add(words);
             }
@@ -875,19 +883,21 @@ class CiContractSpecTest {
         return commands;
     }
 
-    /** A Dockerfile {@code RUN [--option ...] ["program", "argument", ...]}: RUN, its options, then the JSON words. */
-    private static Optional<List<String>> execForm(String command) {
-        Matcher run = EXEC_RUN.matcher(command);
-        if (!run.matches()) {
-            return Optional.empty();
-        }
-        try {
-            List<String> words = new ArrayList<>(Arrays.asList(run.group(1).trim().split("\\s+")));
-            new ObjectMapper().readTree(run.group(2)).forEach(word -> words.add(word.asText()));
-            return Optional.of(words);
-        } catch (IOException e) {
-            return Optional.empty();
-        }
+    /**
+     * Every Dockerfile {@code RUN [--option ...] ["program", "argument", ...]} as RUN, its options and the JSON words
+     * joined by spaces, so {@code ["sh", "-c", "./gradlew build"]} reads as the shell form {@code sh -c ./gradlew build}.
+     * A line whose brackets are not a JSON array stays as written.
+     */
+    private static String shellForm(String script) {
+        return EXEC_RUN.matcher(script).replaceAll(run -> {
+            List<String> words = new ArrayList<>();
+            try {
+                JSON.readTree(run.group(2)).forEach(word -> words.add(word.asText()));
+            } catch (IOException e) {
+                return Matcher.quoteReplacement(run.group());
+            }
+            return Matcher.quoteReplacement(run.group(1) + " " + String.join(" ", words));
+        });
     }
 
     /**
