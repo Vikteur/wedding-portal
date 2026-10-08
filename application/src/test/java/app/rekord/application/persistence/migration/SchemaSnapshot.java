@@ -10,14 +10,18 @@ import java.util.List;
 /**
  * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
  * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
- * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, the column defaults and identity settings, plus the names of the
- * other non-system schemas, and the indexes that back no constraint of their own table (partial and expression
- * indexes included) as {@code pg_index} shows them. {@code flyway_schema_history} is never part of it.
+ * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, the column defaults and identity settings (generation, start,
+ * increment, minimum, maximum and cycle), plus the names of the other non-system schemas, and the indexes that back no
+ * constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them.
+ * {@code flyway_schema_history} is never part of it.
  * <p>
  * Defaults and identity are read from {@code information_schema.columns}: {@code column_default} as PostgreSQL renders
- * it, and {@code identity_generation}. Not covered: generated columns (PostgreSQL leaves their {@code column_default}
- * empty), sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign
- * key on-update, match and deferrability, and the content of other schemas.
+ * it, and {@code identity_generation} with {@code identity_start}, {@code identity_increment},
+ * {@code identity_minimum}, {@code identity_maximum} and {@code identity_cycle}. Not covered: the position of an
+ * identity sequence ({@code restart}, a {@code nextval}), which is data and no schema shape; generated columns
+ * (PostgreSQL leaves their {@code column_default} empty), sequences, views, functions, triggers and extensions, enum
+ * labels, collation, exclusion constraints, foreign key on-update, match and deferrability, and the content of other
+ * schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
         List<Index> indexes, List<Default> defaults) {
@@ -40,7 +44,9 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     /**
      * A column of {@code public} that has a default or is an identity column. {@code expression} is
      * {@code column_default} as PostgreSQL renders it, null for an identity column; {@code identity} is
-     * {@code identity_generation} ({@code ALWAYS} or {@code BY DEFAULT}), null when the column is no identity column.
+     * {@code identity_generation} ({@code ALWAYS} or {@code BY DEFAULT}) followed by the options of the identity
+     * sequence, for example {@code BY DEFAULT start 1 increment 1 min 1 max 2147483647 no cycle}, and null when the
+     * column is no identity column.
      */
     public record Default(String table, String column, String expression, String identity) {}
 
@@ -197,7 +203,8 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     private static List<Default> defaults(Connection c) throws SQLException {
         List<Default> result = new ArrayList<>();
         try (PreparedStatement s = c.prepareStatement("""
-                select c.table_name, c.column_name, c.column_default, c.identity_generation
+                select c.table_name, c.column_name, c.column_default, c.identity_generation, c.identity_start,
+                       c.identity_increment, c.identity_minimum, c.identity_maximum, c.identity_cycle
                 from information_schema.columns c
                 join information_schema.tables t
                   on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
@@ -207,10 +214,21 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
                 ResultSet r = s.executeQuery()) {
             while (r.next()) {
                 result.add(new Default(r.getString("table_name"), r.getString("column_name"),
-                        r.getString("column_default"), r.getString("identity_generation")));
+                        r.getString("column_default"), identity(r)));
             }
         }
         return result;
+    }
+
+    /** The generation and the sequence options of an identity column, null when the column is no identity column. */
+    private static String identity(ResultSet r) throws SQLException {
+        String generation = r.getString("identity_generation");
+        if (generation == null) {
+            return null;
+        }
+        return "%s start %s increment %s min %s max %s %s".formatted(generation, r.getString("identity_start"),
+                r.getString("identity_increment"), r.getString("identity_minimum"), r.getString("identity_maximum"),
+                "YES".equals(r.getString("identity_cycle")) ? "cycle" : "no cycle");
     }
 
     private static List<String> strings(Connection c, String sql) throws SQLException {
