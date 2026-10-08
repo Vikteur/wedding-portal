@@ -185,6 +185,24 @@ class CiWorkflowTest {
     }
 
     @Test
+    void build_job_runs_the_pre_push_hook_test_after_the_groma_check() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "build");
+
+        // When
+        int check = indexOfStep(
+                steps, step -> step.path("run").asText().trim().equals("bash .github/scripts/groma-check.sh"));
+        int hookTest = indexOfStep(
+                steps, step -> step.path("run").asText().trim().equals("bash scripts/test/pre-push.test.sh"));
+
+        // Then
+        assertThat(hookTest).as("the pre-push hook test step").isNotNegative().isGreaterThan(check);
+        assertThat(steps.get(hookTest).has("if")).isFalse();
+        assertThat(steps.get(hookTest).has("continue-on-error")).isFalse();
+    }
+
+    @Test
     void build_job_checks_out_rekord_contract_with_the_contract_token_secret() throws IOException {
         // Given
         JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
