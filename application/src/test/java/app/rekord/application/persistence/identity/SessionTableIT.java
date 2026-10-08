@@ -115,5 +115,14 @@ class SessionTableIT extends AbstractRepositoryTest {
                 assertThat(rs.getLong(1)).isEqualTo(createdAt.getEpochSecond());
             }
         }
+
+        // And the column is timestamptz: with the JVM and JDBC zone both UTC a plain timestamp would round-trip too
+        try (Connection c = dataSource.getConnection();
+                PreparedStatement s = c.prepareStatement("select data_type from information_schema.columns"
+                        + " where table_name = 'sessions' and column_name = 'created_at'");
+                ResultSet rs = s.executeQuery()) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString(1)).isEqualTo("timestamp with time zone");
+        }
     }
 }
