@@ -3,6 +3,7 @@ package app.rekord.application.persistence.migration;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 /**
  * Matches the versioned migrations of a folder with their {@code V<version>MigrationIT} classes. Dots and underscores in a
@@ -91,7 +93,9 @@ final class MigrationCoverage {
         Class<?> type = candidate.get();
         if (!MigrationSchemaCheck.class.isAssignableFrom(type)
                 || Modifier.isAbstract(type.getModifiers())
-                || type.isAnnotationPresent(Disabled.class)) {
+                || type.isAnnotationPresent(Disabled.class)
+                || hasExecutionCondition(type)
+                || overridesTheCheck(type)) {
             return false;
         }
         try {
@@ -101,6 +105,26 @@ final class MigrationCoverage {
         } catch (ReflectiveOperationException e) {
             return false;
         }
+    }
+
+    /** A JUnit condition such as {@code @EnabledIfSystemProperty} could skip the check. */
+    private static boolean hasExecutionCondition(Class<?> type) {
+        return Arrays.stream(type.getAnnotations())
+                .anyMatch(a -> a.annotationType().getPackageName().equals(Disabled.class.getPackageName() + ".condition"));
+    }
+
+    /** A subclass that redeclares the inherited test replaces it, with or without {@code @Test}. */
+    private static boolean overridesTheCheck(Class<?> type) {
+        List<String> checks = Arrays.stream(MigrationSchemaCheck.class.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Test.class))
+                .map(Method::getName)
+                .toList();
+        for (Class<?> c = type; c != MigrationSchemaCheck.class; c = c.getSuperclass()) {
+            if (Arrays.stream(c.getDeclaredMethods()).anyMatch(m -> m.getParameterCount() == 0 && checks.contains(m.getName()))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> files(Path folder) {
