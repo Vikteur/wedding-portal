@@ -43,6 +43,13 @@ class CiContractSpecTest {
     private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
     /** Shell keywords that may stand in front of a command, as in {@code if ./gradlew build; then}. */
     private static final Set<String> KEYWORDS = Set.of("if", "then", "elif", "else", "do", "while", "until", "!");
+    /**
+     * Actions known not to start the application. Fail closed: any other {@code uses:} is refused until the test names
+     * it here or learns to read it. Local ({@code ./...}) and {@code docker://} actions are never known.
+     */
+    private static final Set<String> SETUP_ACTIONS = Set.of(
+            "actions/checkout", "actions/setup-java", "actions/setup-node", "actions/upload-artifact",
+            "gradle/actions/setup-gradle", "gradle/gradle-build-action");
     /** Commands that take the wrapper as an argument without running it. */
     private static final Set<String> MENTIONS =
             Set.of("echo", "printf", "chmod", "test", "[", "ls", "cat", "git", "COPY", "ADD");
@@ -578,7 +585,15 @@ class CiContractSpecTest {
         for (var job : workflow.path("jobs").properties()) {
             List<JsonNode> steps = Workflows.steps(workflow, job.getKey());
             String where = file + " job " + job.getKey() + ": ";
+            if (job.getValue().has("uses")) {
+                violations.add(where + "`uses: " + job.getValue().path("uses").asText() + "` builds through a reusable"
+                        + " workflow this test does not read");
+            }
             for (JsonNode step : steps) {
+                if (step.has("uses") && !isKnownSetupAction(step)) {
+                    violations.add(where + "`uses: " + step.path("uses").asText() + "` builds through an action this"
+                            + " test does not read; extend CiContractSpecTest to read it");
+                }
                 for (List<String> words : commands(step.path("run").asText(""))) {
                     if (namesTheWrapperUnreadably(words)) {
                         violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper in a shape"
@@ -641,6 +656,14 @@ class CiContractSpecTest {
             violations.add(where + "`" + command + "` passes " + spec + ", not " + path + "/" + SPEC_FILE
                     + ", the spec in the contract checkout");
         }
+    }
+
+    /** A step that uses one of the {@link #SETUP_ACTIONS}; the Gradle ones only when they get no arguments to run. */
+    private static boolean isKnownSetupAction(JsonNode step) {
+        String name = step.path("uses").asText();
+        name = name.substring(0, name.contains("@") ? name.indexOf('@') : name.length());
+        boolean runsGradle = name.startsWith("gradle/") && step.path("with").has("arguments");
+        return SETUP_ACTIONS.contains(name) && !runsGradle;
     }
 
     /**
