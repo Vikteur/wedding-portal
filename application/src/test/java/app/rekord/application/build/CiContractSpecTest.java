@@ -161,6 +161,23 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_command_that_names_the_wrapper_in_a_shape_the_test_cannot_read_is_refused() throws IOException {
+        // Given: the command as the test reads it, the words joined by one space, the quotes dropped
+        var scripts = List.of(
+                List.of("sudo -u ci ./gradlew build", "sudo -u ci ./gradlew build"),
+                List.of("stdbuf -oL ./gradlew build", "stdbuf -oL ./gradlew build"),
+                List.of("parallel ./gradlew ::: build", "parallel ./gradlew ::: build"),
+                List.of("xvfb-run -s \"-screen 0 1x1x24\" ./gradlew test", "xvfb-run -s -screen 0 1x1x24 ./gradlew test"));
+
+        // When / Then: in a job that starts nothing else, so the refusal does not depend on a starting step
+        for (var script : scripts) {
+            assertThat(violations(build(run(script.get(0))))).as(script.get(0))
+                    .containsExactly("ci.yml job build: `" + script.get(1) + "` names the Gradle wrapper in a shape"
+                            + " this test cannot classify; extend CiContractSpecTest to read it");
+        }
+    }
+
+    @Test
     void a_spec_in_a_sibling_directory_instead_of_the_checkout_is_found() throws IOException {
         // Given
         String sibling = "-Pcontract.spec=../rekord-contract/dist/openapi.yaml";
@@ -312,7 +329,10 @@ class CiContractSpecTest {
                 "chmod +x gradlew",
                 "test -f gradlew",
                 "echo ./gradlew test",
-                "# ./gradlew build");
+                "# ./gradlew build",
+                "sudo chmod +x gradlew",
+                "ls -l gradlew",
+                "git update-index --chmod=+x gradlew");
 
         // When / Then
         for (String script : scripts) {
