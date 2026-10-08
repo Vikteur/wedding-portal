@@ -46,8 +46,8 @@ public final class Signature {
     /**
      * The song without its version: normalised artist and normalised core title, joined by "|". Null when the
      * artist normalises to empty, since then nothing says whose song it is (UD-19.c). As in {@link #signatureOf},
-     * a featured artist in the title is left out; one written into the artist field ("A feat. B", "A & B")
-     * stays part of the artist, so such a file is not the same song as a query for "A".
+     * a featured artist in the title is left out; one written into the artist field ({@code "A feat. B"},
+     * {@code "A & B"}) stays part of the artist, so such a file is not the same song as a query for "A".
      */
     public static String songOf(String artist, String title) {
         String normArtist = Normalize.normalize(artist == null ? "" : artist);
