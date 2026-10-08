@@ -255,10 +255,15 @@ class TestTaskInputsTest {
         String block = testTaskBlock();
 
         // Then the contract files are derived from the same provider as the -Dcontract.spec argument
-        assertThat(block)
-                .contains("inputs.files(contractSpec")
-                .contains("smoke/pom.xml")
-                .contains("withPropertyName(\"contractFiles\")");
+        assertThat(block).contains("inputs.files(contractSpec").contains("withPropertyName(\"contractFiles\")");
+
+        // And the hub's smoke job is resolved two levels above the spec: <checkout>/dist/openapi.yaml names
+        // <checkout>/smoke/pom.xml, where HubProbeParityTest.hubPom() reads it (the other half of this pair).
+        // A hop lost here would name dist/smoke/pom.xml, which Gradle fingerprints as missing without an error
+        // (the input is optional), so the exact resolution is pinned; ?. leaves a spec at a filesystem root out
+        assertThat(contractInputsDeclaration(block))
+                .contains(
+                        "listOfNotNull(File(it), File(it).parentFile?.parentFile?.resolve(\"smoke/pom.xml\"))");
 
         // And no literal checkout path or tag, so raising the contract pin cannot touch them
         assertThat(contractInputsDeclaration(block))
