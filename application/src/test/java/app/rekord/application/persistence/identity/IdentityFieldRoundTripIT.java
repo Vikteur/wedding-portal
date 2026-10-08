@@ -111,7 +111,7 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
         user.setEmail("Round.Trip@example.com");
         user.setPasswordHash("$argon2id$made-up-hash-for-the-round-trip");
         user.setDisplayName("Rae Roundtrip");
-        user.setPhone("+31 20 555 0100");
+        user.setPhone("+12025550100");
         user.setStatus("DISABLED");
         user.setLastLoginAt(FIRST);
         user.setPasswordChangedAt(SECOND);
