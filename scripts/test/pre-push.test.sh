@@ -43,9 +43,11 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$stub_bin/groma"
 chmod +x "$stub_bin/groma"
 export STUB_RC_FILE="$tmp/rc"
 export STUB_RAN_FILE="$tmp/ran"
+export STUB_GROMA_FILE="$tmp/groma-seen"
 stub_check='#!/usr/bin/env bash
 echo "stub groma-check ran" >&2
 echo ran > "$STUB_RAN_FILE"
+echo "${GROMA:-unset}" > "$STUB_GROMA_FILE"
 exit "$(cat "$STUB_RC_FILE")"
 '
 
@@ -111,6 +113,7 @@ check "a passing check lets the push succeed" test "$pass_rc" -eq 0
 check "the check ran on the passing push" test -f "$STUB_RAN_FILE"
 check "the remote moved to the pushed commit" \
   test "$(remote_ref "$r" main)" = "$(git -C "$r/work" rev-parse HEAD)"
+check "the hook hands GROMA on to the check script" grep -q "/bin/groma$" "$STUB_GROMA_FILE"
 
 # --- (c) a failing check stops the push and says what to do
 r="$(new_repo fail)"
@@ -123,6 +126,9 @@ check "the remote ref is unchanged after a rejected push" test "$(remote_ref "$r
 check "the rejection names groma scan" grep -q 'groma scan' "$tmp/fail.err"
 check "the rejection names committing groma/" grep -q 'commit groma/' "$tmp/fail.err"
 check "the output of the check itself stays visible" grep -q 'stub groma-check ran' "$tmp/fail.err"
+check "the rejection says to read the FAIL lines above" grep -q 'Read the FAIL lines above' "$tmp/fail.err"
+check "the rejection names git push --no-verify for an emergency" grep -qF 'git push --no-verify' "$tmp/fail.err"
+check "the rejection says CI still checks" grep -q 'CI still' "$tmp/fail.err"
 
 # --- (d) a missing groma CLI stops the push with the install hint, without running the check
 r="$(new_repo missing)"
@@ -211,6 +217,56 @@ echo "scratch" > "$r/work/Scratch.java"
 push_from "$r/work" main 1 "$stub_bin/groma" "$tmp/dirty-src.err"
 check "a rejection with uncommitted source says to commit or stash it first" \
   grep -q 'uncommitted changes: commit or stash them first' "$tmp/dirty-src.err"
+
+# --- (i) the real groma-check.sh in a throwaway repo, with GROMA naming a stub CLI. The stub logs every call; `scan`
+# writes into groma/ (a new file and a change to a tracked one) and exits with $STUB_SCAN_RC.
+new_map_repo() {
+  local dir="$tmp/$1"
+  mkdir -p "$dir/.github/scripts" "$dir/scripts" "$dir/groma"
+  cp "$repo_root/.github/scripts/groma-check.sh" "$dir/.github/scripts/groma-check.sh"
+  cp "$repo_root/scripts/groma-web.sh" "$dir/scripts/groma-web.sh"
+  chmod +x "$dir/scripts/groma-web.sh"
+  echo '{"scanners": [{"id": "java"}]}' > "$dir/groma/scanners.json"
+  echo '@AGENTS.md' > "$dir/CLAUDE.md"
+  printf 'Run groma agent-instructions. Tickets live in weddingapp. Open the map with scripts/groma-web.sh.\n' > "$dir/AGENTS.md"
+  git init -q -b main "$dir"
+  git -C "$dir" config user.name "Test"
+  git -C "$dir" config user.email "test@example.com"
+  git -C "$dir" config core.autocrlf false
+  git -C "$dir" add -A
+  git -C "$dir" commit -q -m "initial"
+  echo "$dir"
+}
+printf '%s\n' '#!/usr/bin/env bash' \
+  'echo "$*" >> "$STUB_GROMA_LOG"' \
+  'case "$1" in' \
+  '  agent-instructions) echo "Groma agent instructions" ;;' \
+  '  scan) echo "scanned" > groma/scanned.md; echo "changed" >> groma/scanners.json; exit "${STUB_SCAN_RC:-0}" ;;' \
+  'esac' > "$tmp/map-groma"
+chmod +x "$tmp/map-groma"
+export STUB_GROMA_LOG="$tmp/groma-calls"
+
+# GROMA is the CLI groma-check.sh runs, for agent-instructions and for scan (not a plain `groma` from the PATH).
+r="$(new_map_repo mapuse)"
+: > "$STUB_GROMA_LOG"
+(cd "$r" && GROMA="$tmp/map-groma" STUB_SCAN_RC=0 bash .github/scripts/groma-check.sh > "$tmp/mapuse.out" 2> "$tmp/mapuse.err")
+last_err="$tmp/mapuse.err"
+check "groma-check.sh asks the GROMA cli for the agent instructions" grep -qx 'agent-instructions' "$STUB_GROMA_LOG"
+check "groma-check.sh scans with the GROMA cli" grep -qx 'scan' "$STUB_GROMA_LOG"
+# A scan that changes groma/ is reported, and groma/ is put back.
+check "a scan that changes groma/ fails the check" grep -q 'a fresh groma scan changed groma/' "$tmp/mapuse.err"
+check "groma/ is restored after a scan that changed it" test -z "$(git -C "$r" status --porcelain)"
+
+# A scan that fails part way, after writing into groma/: the check fails with a clear message and groma/ is restored.
+r="$(new_map_repo mapfail)"
+: > "$STUB_GROMA_LOG"
+(cd "$r" && GROMA="$tmp/map-groma" STUB_SCAN_RC=3 bash .github/scripts/groma-check.sh > "$tmp/mapfail.out" 2> "$tmp/mapfail.err")
+mapfail_rc=$?
+last_err="$tmp/mapfail.err"
+check "a failing scan fails the check" test "$mapfail_rc" -eq 1
+check "a failing scan is reported as such" grep -q 'FAIL: groma scan failed' "$tmp/mapfail.err"
+check "the checks after a failing scan still run" grep -q 'groma-check: [0-9]* failed' "$tmp/mapfail.err"
+check "groma/ is restored after a failing scan" test -z "$(git -C "$r" status --porcelain)"
 
 echo "pre-push tests: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]
