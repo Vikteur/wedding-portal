@@ -32,6 +32,6 @@ class HttpLimitsSettingsTest {
     @Test
     void no_profile_overrides_the_request_body_limit() throws IOException {
         assertThat(settings().stringPropertyNames())
-                .noneMatch(name -> name.matches("%[\\w-]+\\." + Pattern.quote(KEY)));
+                .noneMatch(name -> name.matches("%[\\w,-]+\\." + Pattern.quote(KEY)));
     }
 }
