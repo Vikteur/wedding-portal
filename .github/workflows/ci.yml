@@ -125,10 +125,21 @@ jobs:
       - name: Check image
         run: bash .github/scripts/image-check.sh wedding-portal:ci
 
+      - name: Image tags
+        id: image-tags
+        run: bash .github/scripts/image-tags.sh "${{ github.repository }}" "${{ github.sha }}"
+
       - name: Sign in to ghcr.io with the workflow's own token
         env:
           REGISTRY_TOKEN: ${{ github.token }}
         run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Push image
+        run: |
+          docker tag wedding-portal:ci "${{ steps.image-tags.outputs.sha }}"
+          docker tag wedding-portal:ci "${{ steps.image-tags.outputs.latest }}"
+          docker push "${{ steps.image-tags.outputs.sha }}"
+          docker push "${{ steps.image-tags.outputs.latest }}"
 
       - name: Sign out of ghcr.io
         if: always()
