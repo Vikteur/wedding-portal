@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Checks the Groma architecture map under groma/ (TASK-36): set up for the Java scanner, curated rather than a first
-# scan, every element described, in sync with the source (a fresh scan changes nothing), and loaded into agent sessions.
+# scan, every element described, in sync with the source (a fresh scan changes nothing), loaded into agent sessions, and
+# opened with the weddingapp backlog attached by scripts/groma-web.sh.
 # Needs the groma CLI (npm install -g groma.md) and a clean groma/ in the work tree, because it rescans.
 # Usage: groma-check.sh
 set -euo pipefail
@@ -55,6 +56,23 @@ if ! grep -q 'groma agent-instructions' AGENTS.md 2>/dev/null; then
 fi
 if ! grep -q 'weddingapp' AGENTS.md 2>/dev/null; then
   fail "AGENTS.md does not say the tickets live in the weddingapp backlog"
+fi
+
+echo "Check: one command opens the map with the weddingapp backlog attached"
+if [[ ! -x scripts/groma-web.sh ]]; then
+  fail "scripts/groma-web.sh is missing or not executable"
+else
+  stub_dir="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\necho "$BACKLOG_CWD|$*"\n' > "$stub_dir/groma"
+  chmod +x "$stub_dir/groma"
+  got="$(GROMA="$stub_dir/groma" BACKLOG_CWD="$stub_dir" bash scripts/groma-web.sh --port 4799 2>&1 || true)"
+  if [[ "$got" != "$stub_dir|web --port 4799" ]]; then
+    fail "scripts/groma-web.sh should run 'groma web <args>' with BACKLOG_CWD set; it printed: $got"
+  fi
+  rm -rf "$stub_dir"
+fi
+if ! grep -q 'scripts/groma-web.sh' AGENTS.md 2>/dev/null; then
+  fail "AGENTS.md does not name scripts/groma-web.sh"
 fi
 
 if ((failures > 0)); then
