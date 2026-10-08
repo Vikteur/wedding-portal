@@ -164,4 +164,15 @@ class MatcherGoldenSetTest {
                 .hasMessageContaining("expected 0.9173")
                 .hasMessageContaining("actual 0.9163");
     }
+
+    @Test
+    void a_copy_with_a_score_or_facet_that_is_not_a_number_fails() {
+        JsonNode copy = GoldenGate.set();
+        ((ObjectNode) copy.at("/cases/85/expected/candidates/0")).put("score", Double.NaN);
+        ((ObjectNode) copy.at("/cases/85/expected/candidates/0/parts")).put("title", Double.NaN);
+
+        assertThat(GoldenGate.differences(copy))
+                .anyMatch(line -> line.startsWith("case 85 ") && line.contains("score expected NaN"))
+                .anyMatch(line -> line.startsWith("case 85 ") && line.contains("facet title expected NaN"));
+    }
 }
