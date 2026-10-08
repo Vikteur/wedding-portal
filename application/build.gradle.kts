@@ -37,6 +37,13 @@ tasks.test {
     // GeneratedContractTest reads the spec's tags; lazily, so `help` works without the property.
     val contractSpec = providers.gradleProperty("contract.spec").map { rootProject.file(it).absolutePath }
     jvmArgumentProviders.add(CommandLineArgumentProvider { contractSpec.map { listOf("-Dcontract.spec=$it") }.getOrElse(listOf()) })
+    // Tests read repository files through wedding.repoRoot (ci.yml, the Dockerfile, build scripts, code-map leaves ...),
+    // so every file but build outputs and tool state is an input: an edit runs the tests again without --rerun.
+    // Anchored like .gitignore, so the test package named `build` stays an input.
+    inputs.files(fileTree(rootDir) {
+        exclude(".git", ".git/**", ".gradle/**", ".kotlin/**", ".idea/**", "**/*.iml",
+            "build/**", "*/build/**", "out/**", "*/out/**", "contract/**")
+    }).withPropertyName("repoFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // ClassFileVersionTest reads the class directories of every module, so they must be compiled first.
     // Derived from the subprojects so a module added to settings.gradle.kts cannot be skipped.
     rootProject.subprojects.filter { it != project }.forEach {
