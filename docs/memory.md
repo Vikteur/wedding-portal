@@ -127,6 +127,22 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 
 - The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
 
+## 2026-10-08 — TASK-31.1 release image
+
+- **Supersedes** the TASK-1.3 bullet "never pushed (UD-13.e): no registry login, no secret". On a push to main, after `build` is green and `image-check.sh` passes, the `image` job pushes `ghcr.io/<owner/name lowercased>:<full commit sha>` and `:latest`.
+- The job signs in with `github.token` (job permission `packages: write`, no stored secret) and signs out with `if: always()`. Only plain `docker login`/`tag`/`push` are used, no new action.
+- The tag logic is `.github/scripts/image-tags.sh` (tested by `ImageTagsTest`); the workflow structure is pinned by `CiWorkflowTest`.
+- Package visibility and the repository's Actions access to the package are GitHub settings owned by the user, not changed by this ticket.
+- The first real push is proven by the first main run after the merge (run id and SHA to be filled in after it).
+
+## 2026-10-08 — TASK-24.3 scoring and buckets
+
+- Playlist membership enters `TrackMatcher.matchOne` as a track-id → playlist-names map (a third argument; the two-argument form passes `Map.of()`), not as a field of `LibraryIndex.Track`. A missing id or a null map means no playlist.
+- The nudge (0.02 per playlist, at most 3) only orders candidates; the bucket reads the raw scores, and its margin guard also passes when the leader is in a playlist and the runner-up is in none.
+- UD-19.c: auto also needs the leader to be the requested song, through `Signature.songOf` (normalised artist and core title, no version). A null or empty-normalised artist gives null, so such a query or a filename-only file is never auto.
+- Of rekord-api's `Matcher.matchOne` only remembered choices (P3-E05-T02) remain unported.
+- UD-19.c compares the whole normalised artist field, so "A, B", "A & B" or "A feat. B" written into the artist field is a different song from "A" and stays ambiguous even at score 1.0 (pinned by `an_extra_artist_on_either_side_is_never_auto_even_at_1`), while a featured artist written into a title is dropped by the core-title split and still allows auto. Widening this (for example a token-set artist identity, as the scored artist facet already uses) is an open owner decision, not part of TASK-24.3.
+
 ## 2026-10-08 — TASK-5.2 error envelope mapper
 
 - `ErrorEnvelopeMapper` (package `app.rekord.application.error`) answers every refusal as `{"detail":{"code","message"}}` with `application/json`, like rekord-api. Fixtures in `application/src/test/resources/fixtures/error-*.json` were recorded from rekord-api at commit `ec65ae35c182e6e25f571c76d45b15a78f183c10` (a scratch copy plus a probe resource; rekord-api itself was not edited). The 413 answer is Vert.x's own: no body and no `Content-Type`.

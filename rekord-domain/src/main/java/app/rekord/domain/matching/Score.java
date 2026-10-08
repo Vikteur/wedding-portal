@@ -1,6 +1,7 @@
 package app.rekord.domain.matching;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -13,9 +14,14 @@ import java.util.Set;
  * which is why {@link Fuzz} reimplements it rather than substituting something
  * close.
  *
- * <p>Buckets: {@code auto} needs a high, well-separated, version-compatible
- * best candidate; anything merely plausible becomes {@code ambiguous} and the
- * DJ picks; the rest is {@code unmatched}.
+ * <p>Buckets: {@code auto} needs a high, well-separated (or a playlist leader
+ * over a runner-up in no playlist), version-compatible best candidate that is
+ * also the requested song (same normalised artist and core title, UD-19.c);
+ * anything merely plausible becomes {@code ambiguous} and the DJ picks; the
+ * rest is {@code unmatched}. A small playlist nudge ({@link #ranked}) orders
+ * candidates but never changes a score: every guard compares raw scores; the
+ * nudge only sets the order, which decides the leader, the runner-up the
+ * margin guard compares and which eight candidates are kept.
  */
 public final class Score {
 
@@ -24,13 +30,17 @@ public final class Score {
     /** "Could plausibly be it" — enough to make the whole result ambiguous. */
     public static final double STRONG_THRESHOLD = 0.60;
     public static final double AUTO_SCORE = 0.82;
-    /** Best minus second best. A close pair is a question, not an answer. */
+    /** Leader minus runner-up. A close pair is a question, not an answer, unless only the leader is in a playlist. */
     public static final double AUTO_MARGIN = 0.10;
     /** Never auto-pick a different version of the song. */
     public static final double AUTO_MIN_VERSION = 0.90;
     /** Roughly within 22 seconds. */
     public static final double AUTO_MIN_DURATION = 0.55;
     public static final int MAX_CANDIDATES = 8;
+    /** Added to a candidate's ordering key per imported playlist it is in. */
+    public static final double PLAYLIST_BONUS = 0.02;
+    /** Playlists beyond this many add nothing. */
+    public static final int PLAYLIST_BONUS_CAP = 3;
 
     public static final double WEIGHT_TITLE = 0.40;
     public static final double WEIGHT_ARTIST = 0.30;
@@ -48,6 +58,11 @@ public final class Score {
     private static final double REMASTER_FACTOR = 0.90;
 
     private Score() {
+    }
+
+    /** The ordering key: the score plus a small nudge per playlist. It never replaces the score. */
+    public static double ranked(double score, List<String> playlists) {
+        return score + PLAYLIST_BONUS * Math.min(playlists.size(), PLAYLIST_BONUS_CAP);
     }
 
     /**
