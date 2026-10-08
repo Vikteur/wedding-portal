@@ -2,9 +2,12 @@
 # Checks the Groma architecture map under groma/ (TASK-36): set up for the Java scanner, curated rather than a first
 # scan, every element described, in sync with the source (a fresh scan changes nothing), loaded into agent sessions, and
 # opened with the weddingapp backlog attached by scripts/groma-web.sh.
-# Needs the groma CLI (npm install -g groma.md) and a clean groma/ in the work tree, because it rescans.
+# Needs the groma CLI (npm install -g groma.md) and a clean groma/ in the work tree, because it rescans. GROMA names
+# the CLI (default: groma). Whatever the scan leaves in groma/ is undone when the script ends, however it ends.
 # Usage: groma-check.sh
 set -euo pipefail
+
+groma="${GROMA:-groma}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
@@ -23,7 +26,7 @@ elif ! grep -q '"id": *"java"' groma/scanners.json; then
 fi
 
 echo "Check: the map is curated, not a first scan"
-if [[ -d groma ]] && groma agent-instructions 2>/dev/null | head -1 | grep -q 'still its first scan'; then
+if [[ -d groma ]] && "$groma" agent-instructions 2>/dev/null | head -1 | grep -q 'still its first scan'; then
   fail "groma agent-instructions reports a first scan; curate the map"
 fi
 
@@ -39,11 +42,17 @@ if [[ -d groma ]]; then
   if [[ -n "$(git status --porcelain -- groma)" ]]; then
     fail "groma/ has uncommitted changes; commit or discard them before this check"
   else
-    groma scan >/dev/null
-    if [[ -n "$(git status --porcelain -- groma)" ]]; then
+    # groma/ is clean here, so putting it back to the committed state on exit only removes what the scan wrote: a scan
+    # that fails or is interrupted (Ctrl-C) must not leave a half-written map for the next push to trip over.
+    restore_groma() { git checkout -q -- groma 2>/dev/null && git clean -qfd -- groma 2>/dev/null || true; }
+    trap restore_groma EXIT
+    trap 'exit 1' INT TERM HUP
+    if ! "$groma" scan >/dev/null; then
+      fail "groma scan failed"
+    elif [[ -n "$(git status --porcelain -- groma)" ]]; then
       fail "a fresh groma scan changed groma/: $(git status --porcelain -- groma | tr '\n' ' ')"
-      git checkout -q -- groma && git clean -qfd -- groma
     fi
+    restore_groma
   fi
 fi
 
