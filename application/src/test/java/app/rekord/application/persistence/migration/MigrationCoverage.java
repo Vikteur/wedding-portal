@@ -6,12 +6,17 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URISyntaxException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,6 +34,9 @@ final class MigrationCoverage {
     private static final Pattern MIGRATION_FILE = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__.+[.]sql");
     private static final Pattern TEST_CLASS = Pattern.compile("V([0-9]+(?:_[0-9]+)*)MigrationIT");
     private static final String PACKAGE = MigrationSchemaCheck.class.getPackageName();
+    private static final String GATED_FOLDER = "application/src/main/resources/db/migration";
+    private static final Pattern SOURCE_MIGRATION_FOLDER = Pattern.compile("(?:.+/)?src/[^/]+/resources/db/migration");
+    private static final Set<String> SKIPPED_DIRECTORIES = Set.of(".git", ".gradle", "build", "node_modules", "contract");
 
     private MigrationCoverage() {}
 
@@ -79,6 +87,33 @@ final class MigrationCoverage {
                 })
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * The {@code src/<set>/resources/db/migration} folders of the repository other than the application's main one. Every
+     * module's resources reach {@code classpath:db/migration}, so a V file there would escape the gate.
+     */
+    static List<String> strayMigrationFolders(Path repoRoot) {
+        List<String> stray = new ArrayList<>();
+        try {
+            Files.walkFileTree(repoRoot, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) {
+                    String name = dir.getFileName() == null ? "" : dir.getFileName().toString();
+                    if (!dir.equals(repoRoot) && SKIPPED_DIRECTORIES.contains(name)) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    String relative = repoRoot.relativize(dir).toString().replace('\\', '/');
+                    if (SOURCE_MIGRATION_FOLDER.matcher(relative).matches() && !relative.equals(GATED_FOLDER)) {
+                        stray.add(relative);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return stray.stream().sorted().toList();
     }
 
     /** The files of the folder that Flyway would not run as a versioned migration. */
