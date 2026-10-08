@@ -89,8 +89,8 @@ class TrackMatcherTest {
     }
 
     // The cases below use the query "Daft Punk" / "One More Time" and scores computed with rekord-api's
-    // matcher classes (recorded in TASK-24.3). They pin the facets, the score order and rekord-api's
-    // three-guard bucket as ported here; TASK-24.3 tightens auto under UD-19.c.
+    // matcher classes (recorded in TASK-24.3). They pin the facets, the score order and the bucket: rekord-api's
+    // three guards plus UD-19.c's same-song rule.
 
     private static Track daftPunk(String id, String title, Double durationSec) {
         return new Track(id, "Daft Punk", title, durationSec);
@@ -129,6 +129,14 @@ class TrackMatcherTest {
 
         assertThat(low.candidates().get(0).durationDeltaSec()).isEqualTo(0.2);
         assertThat(high.candidates().get(0).durationDeltaSec()).isEqualTo(0.8);
+    }
+
+    // PIN-14-0369: the delta is signed, file minus query; -2.25 rounds half-even to -2.2.
+    @Test
+    void a_shorter_file_has_a_negative_delta() {
+        MatchResult result = match(320.0, daftPunk("f", "One More Time", 317.75));
+
+        assertThat(result.candidates().get(0).durationDeltaSec()).isEqualTo(-2.2);
     }
 
     // AC #3: no delta when either duration is unknown.
@@ -225,12 +233,28 @@ class TrackMatcherTest {
         assertThat(ids(result)).containsExactly("b", "a");
         assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(0.9893, 1.0);
         assertThat(result.candidates().get(0).playlists()).containsExactly("P1", "P2", "P3", "P4");
+        assertThat(result.candidates().get(1).playlists()).containsExactly("P1");
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
         assertThat(result.autoSelectedId()).isNull();
     }
 
-    // AC #10 (BR-MX-15, BR-LIB-42): at most 3 playlists count, and a playlist leader with a playlist-less
-    // runner-up is not what happens here, because the leader is in none.
+    // BR-MX-15: the margin guard reads raw scores. Raw margin 1.0 - 0.9214 = 0.0786 < 0.10; the ranked keys
+    // (1.06 vs 0.9414) would clear it. Both files are in a playlist, so the lone-member clause does not apply.
+    @Test
+    void the_margin_guard_reads_raw_scores_not_the_nudged_keys() {
+        MatchResult result = match(320.0, Map.of(
+                        "a", List.of("P1", "P2", "P3"),
+                        "b", List.of("P1")),
+                daftPunk("a", "One More Time", 320.0), daftPunk("b", "One More Time", 345.0));
+
+        assertThat(ids(result)).containsExactly("a", "b");
+        assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(1.0, 0.9214);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // AC #10 (BR-MX-15, BR-LIB-42): at most 3 playlists count. The lone-member clause does not apply: the
+    // leader is in no playlist.
     @Test
     void the_nudge_counts_at_most_3_playlists() {
         MatchResult result = match(320.0, Map.of("b", List.of("P1", "P2", "P3", "P4")),
@@ -265,6 +289,21 @@ class TrackMatcherTest {
 
         assertThat(result.candidates()).hasSize(8);
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    // BR-MX-15, BR-MX-17: the nudge orders before the cap, so a playlist member retrieval ranks 9th still leads.
+    @Test
+    void a_playlist_member_survives_the_cap_of_8_and_leads() {
+        Track[] tracks = new Track[9];
+        for (int i = 0; i < 9; i++) {
+            tracks[i] = daftPunk("t" + i, "One More Time", 320.0);
+        }
+
+        MatchResult result = match(320.0, Map.of("t0", List.of("Peak hour")), tracks);
+
+        assertThat(ids(result)).containsExactly("t0", "t8", "t7", "t6", "t5", "t4", "t3", "t2");
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("t0");
     }
 
     // AC #6
@@ -336,6 +375,31 @@ class TrackMatcherTest {
     @Test
     void a_featured_artist_in_the_file_title_still_allows_auto() {
         MatchResult result = match(320.0, daftPunk("f", "One More Time (feat. Romanthony)", 320.0));
+
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("f");
+    }
+
+    // UD-19.c: the song's artist is the whole normalised artist field, so an extra artist on either side is a
+    // different song even at score 1.0; a featured artist in the query's title is left out, as in the file's.
+    @Test
+    void an_extra_artist_on_either_side_is_never_auto_even_at_1() {
+        MatchResult extraInQuery = TrackMatcher.matchOne(
+                new MatchQuery(0, "Daft Punk, Romanthony", "One More Time", 320.0),
+                new LibraryIndex(List.of(daftPunk("f", "One More Time", 320.0))));
+        MatchResult extraInFile = match(320.0, new Track("f", "Daft Punk & Romanthony", "One More Time", 320.0));
+
+        assertThat(extraInQuery.candidates().get(0).score()).isEqualTo(1.0);
+        assertThat(extraInQuery.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(extraInFile.candidates().get(0).score()).isEqualTo(1.0);
+        assertThat(extraInFile.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_featured_artist_in_the_query_title_still_allows_auto() {
+        MatchResult result = TrackMatcher.matchOne(
+                new MatchQuery(0, "Daft Punk", "One More Time (feat. Romanthony)", 320.0),
+                new LibraryIndex(List.of(daftPunk("f", "One More Time", 320.0))));
 
         assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
         assertThat(result.autoSelectedId()).isEqualTo("f");
