@@ -1,7 +1,6 @@
 package app.rekord.application.persistence.bootstrap;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.rekord.application.error.LogCapture;
 import app.rekord.application.persistence.AbstractRepositoryTest;
@@ -12,6 +11,8 @@ import app.rekord.usecase.identity.port.NewFirstAdmin;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.PersistenceException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -108,7 +109,7 @@ class DefaultFirstAdminRepositoryIT extends AbstractRepositoryTest {
     }
 
     @Test
-    void a_disabled_membership_a_disabled_or_invited_account_a_deleted_account_or_another_role_does_not_count() {
+    void a_disabled_membership_a_disabled_or_invited_account_or_another_role_does_not_count() {
         seedAdmin("ACTIVE", null, "ADMIN", "DISABLED");
         assertThat(hasActiveAdmin()).as("disabled membership").isFalse();
         emptyThe("memberships", "users", "organizations");
@@ -121,12 +122,27 @@ class DefaultFirstAdminRepositoryIT extends AbstractRepositoryTest {
         assertThat(hasActiveAdmin()).as("invited account").isFalse();
         emptyThe("memberships", "users", "organizations");
 
-        seedAdmin("ACTIVE", NOW, "ADMIN", "ACTIVE");
-        assertThat(hasActiveAdmin()).as("deleted account").isFalse();
-        emptyThe("memberships", "users", "organizations");
-
         seedAdmin("ACTIVE", null, "PLANNER", "ACTIVE");
         assertThat(hasActiveAdmin()).as("planner role").isFalse();
+    }
+
+    @Test
+    void an_admin_membership_of_a_soft_deleted_account_does_not_count() {
+        // Everything else is as it is for an admin that counts: the account is ACTIVE, the membership ADMIN and ACTIVE.
+        seedAdmin("ACTIVE", NOW, "ADMIN", "ACTIVE");
+
+        assertThat(hasActiveAdmin()).isFalse();
+    }
+
+    @Test
+    void a_soft_deleted_account_with_the_same_address_does_not_block_the_first_admin() {
+        // ux_users_email is partial (deleted_at is null): the address of a deleted account is free again.
+        seedUser(50, "admin@example.com", "ACTIVE", NOW);
+
+        inNewTransaction(() -> repository.saveFirstAdmin(admin("admin@example.com", "rekord-match")));
+
+        assertThat(count("users")).isEqualTo(2);
+        assertThat(hasActiveAdmin()).isTrue();
     }
 
     @Test
@@ -187,39 +203,64 @@ class DefaultFirstAdminRepositoryIT extends AbstractRepositoryTest {
         assertThat(refused.code()).isEqualTo(ErrorCode.DUPLICATE_USERNAME);
         assertThat(refused.getCause()).isNull();
         assertThat(refused.getMessage()).doesNotContain("example.com");
-        for (LogRecord record : capture.records()) {
-            String text = LogCapture.text(record);
-            assertThat(text).doesNotContain("example.com").doesNotContain("The planner").doesNotContain(HASH);
-        }
+        assertNoPersonalData(capture, refused);
         assertThat(count("organizations")).isZero();
         assertThat(count("memberships")).isZero();
     }
 
     @Test
-    void a_taken_slug_is_refused_as_duplicate_name() {
+    void a_taken_slug_is_refused_as_duplicate_name_and_shows_no_value() {
         seedOrganization(60, "rekord-match");
+        LogCapture capture = new LogCapture();
+        capture.start();
+        Throwable thrown;
+        try {
+            thrown = catchThrowable(() -> inNewTransaction(
+                    () -> repository.saveFirstAdmin(admin("new@example.com", "Rekord-Match"))));
+        } finally {
+            capture.stop();
+        }
 
-        assertThatThrownBy(() -> inNewTransaction(
-                        () -> repository.saveFirstAdmin(admin("new@example.com", "Rekord-Match"))))
-                .isInstanceOfSatisfying(RejectedException.class, refused -> {
-                    assertThat(refused.kind()).isEqualTo(RejectedException.Kind.CONFLICT);
-                    assertThat(refused.code()).isEqualTo(ErrorCode.DUPLICATE_NAME);
-                    assertThat(refused.getCause()).isNull();
-                    assertThat(refused.getMessage()).doesNotContain("example.com");
-                });
+        assertThat(thrown).isInstanceOf(RejectedException.class);
+        RejectedException refused = (RejectedException) thrown;
+        assertThat(refused.kind()).isEqualTo(RejectedException.Kind.CONFLICT);
+        assertThat(refused.code()).isEqualTo(ErrorCode.DUPLICATE_NAME);
+        assertThat(refused.getCause()).isNull();
+        assertThat(refused.getMessage()).doesNotContain("example.com");
+        assertNoPersonalData(capture, refused);
         assertThat(count("users")).isZero();
     }
 
     @Test
-    void another_violation_is_no_refusal_and_stores_nothing() {
+    void another_violation_is_no_refusal_stores_nothing_and_shows_no_value() {
         NewFirstAdmin unknownStatus = new NewFirstAdmin(id(1), "Rekord Match", "rekord-match", "Europe/Amsterdam",
                 id(2), "admin@example.com", "The planner", HASH, id(3), "UNKNOWN", "ADMIN", "ACTIVE", NOW);
+        LogCapture capture = new LogCapture();
+        capture.start();
+        Throwable thrown;
+        try {
+            thrown = catchThrowable(() -> inNewTransaction(() -> repository.saveFirstAdmin(unknownStatus)));
+        } finally {
+            capture.stop();
+        }
 
-        assertThatThrownBy(() -> inNewTransaction(() -> repository.saveFirstAdmin(unknownStatus)))
-                .isInstanceOf(PersistenceException.class)
-                .isNotInstanceOf(RejectedException.class);
+        // This is the exception that stops the start: the original one, with its whole cause chain.
+        assertThat(thrown).isInstanceOf(PersistenceException.class).isNotInstanceOf(RejectedException.class);
+        assertNoPersonalData(capture, thrown);
         assertThat(count("organizations")).isZero();
         assertThat(count("users")).isZero();
+    }
+
+    /** No record and no exception (message, causes, suppressed, stack trace) holds a value the test stored. */
+    private static void assertNoPersonalData(LogCapture capture, Throwable thrown) {
+        StringWriter trace = new StringWriter();
+        thrown.printStackTrace(new PrintWriter(trace));
+        assertThat(trace.toString()).as("the exception, rendered").isNotBlank().doesNotContain("example.com")
+                .doesNotContain("The planner").doesNotContain("Rekord Match").doesNotContain(HASH);
+        for (LogRecord record : capture.records()) {
+            assertThat(LogCapture.text(record)).as("log record").doesNotContain("example.com")
+                    .doesNotContain("The planner").doesNotContain("Rekord Match").doesNotContain(HASH);
+        }
     }
 
     private static Throwable catchThrowable(Runnable action) {
