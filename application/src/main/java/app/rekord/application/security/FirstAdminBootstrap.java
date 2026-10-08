@@ -11,8 +11,16 @@ import java.util.Optional;
 import org.jboss.logging.Logger;
 
 /**
- * Creates the first admin once the application has started. A refusal is logged and the application still starts.
- * No line names an address, a name, a password or a hash: only the new ids and the reason.
+ * Creates the first admin once the application has started. A refusal (the password is too short, the address or the
+ * business name is taken, or a unique violation the database does not name) is logged and the application still
+ * starts. Any other failure is not caught and stops the start, on purpose: the database being down, or a bug, must
+ * not look like a healthy start without the admin the deployment asked for, and a "catch everything" here would hide
+ * it. That exception is the original one, with its causes; it holds no refused value only because the datasource sets
+ * {@code logServerErrorDetail=false} (docs/memory.md, TASK-7.3).
+ *
+ * <p>No line names an address, a name, a password or a hash: only the new ids and the reason. The bootstrap is meant
+ * for the first start of a single instance: the check for an admin and the creation are not one lock, so two
+ * instances starting at the same moment can both pass the check.
  */
 @ApplicationScoped
 public class FirstAdminBootstrap {
