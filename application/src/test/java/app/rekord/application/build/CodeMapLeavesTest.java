@@ -181,6 +181,45 @@ class CodeMapLeavesTest {
                 "table-specific constraint name");
     }
 
+    @Test
+    void jvm_testing_states_that_the_repository_files_tests_read_are_inputs_of_the_test_task() throws IOException {
+        // TASK-40: an edit to a file a test reads runs the test again without --rerun
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "wedding.repoRoot",
+                "inputs of the",
+                "repoFiles",
+                "contractFiles",
+                "contract.spec",
+                "smoke/pom.xml",
+                "--rerun");
+    }
+
+    @Test
+    void memory_supersedes_the_task_2_4_rerun_bullet_and_leaves_it_unedited() throws IOException {
+        // Given the append-only memory file
+        String memory = Files.readString(REPO_ROOT.resolve(Path.of("docs", "memory.md")));
+
+        // When the TASK-40 section is cut out
+        int start = memory.indexOf("## 2026-10-08 — TASK-40");
+        if (start < 0) {
+            start = memory.indexOf("TASK-40 ");
+            start = memory.lastIndexOf("\n## ", start);
+        }
+        assertThat(start).as("a '## ... TASK-40 ...' section").isNotNegative();
+        int next = memory.indexOf("\n## ", start + 1);
+        String section = memory.substring(start, next < 0 ? memory.length() : next);
+
+        // Then it supersedes the TASK-2.4 bullet and points to the code map
+        assertThat(section).contains("Supersedes", "TASK-2.4", "--rerun", "docs/code-maps/jvm-testing.md");
+
+        // And the old bullet is still there, word for word
+        assertThat(memory)
+                .contains("- To see a test that reads `ci.yml` or another repo file go red after a temporary edit,"
+                        + " run it with `--rerun`: those files are not inputs of the Gradle `test` task, so a"
+                        + " cached pass hides the edit.");
+    }
+
     private static void assertLeaf(Path relative, String... phrases) throws IOException {
         Path file = REPO_ROOT.resolve(relative);
         assertThat(file).as("the leaf %s", relative).isRegularFile();
