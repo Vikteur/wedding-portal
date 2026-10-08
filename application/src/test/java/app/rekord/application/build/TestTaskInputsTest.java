@@ -18,6 +18,18 @@ class TestTaskInputsTest {
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Pattern EXCLUDE_ARGUMENTS = Pattern.compile("exclude\\(([^)]*)\\)");
     private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"]*)\"");
+    private static final Pattern NAMED_FILES = Pattern.compile("rootProject\\.files\\(([^)]*)\\)");
+    /**
+     * The Ant default excludes Gradle applies to every {@code fileTree} on top of its own excludes
+     * ({@code DirectoryScanner.getDefaultExcludes()}): a tracked file they match is an input only when named itself.
+     */
+    private static final List<String> GRADLE_DEFAULT_EXCLUDES = List.of(
+            "**/%*%", "**/.#*", "**/._*", "**/#*#", "**/*~", "**/.DS_Store",
+            "**/CVS", "**/CVS/**", "**/.cvsignore", "**/SCCS", "**/SCCS/**", "**/vssver.scc",
+            "**/.bzr", "**/.bzr/**", "**/.bzrignore",
+            "**/.git", "**/.git/**", "**/.gitattributes", "**/.gitignore", "**/.gitmodules",
+            "**/.hg", "**/.hg/**", "**/.hgignore", "**/.hgsub", "**/.hgsubstate", "**/.hgtags",
+            "**/.svn", "**/.svn/**");
 
     @Test
     void the_test_task_declares_the_repository_tree_as_a_relative_input() throws IOException {
@@ -33,13 +45,17 @@ class TestTaskInputsTest {
 
     @Test
     void every_tracked_file_is_an_input_of_the_test_task() throws Exception {
-        // Given the excludes of the repository tree input and the files git tracks
-        List<String> excludes = excludes(testTaskBlock());
+        // Given the excludes of the repository tree input, the files it names itself, and the files git tracks
+        String block = testTaskBlock();
+        List<String> excludes = excludes(block);
+        List<String> named = namedFiles(block);
         List<String> tracked = trackedFiles();
 
-        // When the excludes are matched against every tracked path
-        List<String> dropped =
-                tracked.stream().filter(path -> isExcluded(excludes, path)).toList();
+        // When the excludes, and Gradle's default excludes unless a file is named itself, meet every tracked path
+        List<String> dropped = tracked.stream()
+                .filter(path -> isExcluded(excludes, path)
+                        || (isExcluded(GRADLE_DEFAULT_EXCLUDES, path) && !named.contains(path)))
+                .toList();
 
         // Then no tracked file is dropped, and the ticket's examples are tracked
         assertThat(excludes).isNotEmpty();
@@ -91,6 +107,15 @@ class TestTaskInputsTest {
         assertThat(isExcluded(
                         unanchored, "application/src/test/java/app/rekord/application/build/CiWorkflowTest.java"))
                 .isTrue();
+    }
+
+    @Test
+    void gradle_drops_the_git_files_tests_read_from_a_file_tree_by_default() {
+        // Given the files GitAttributesTest, BuildLayoutTest and ContractPinTest read
+        // Then Gradle's default excludes drop them from fileTree, so the tracked-file check must account for them
+        assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, ".gitattributes")).isTrue();
+        assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, ".gitignore")).isTrue();
+        assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, "docs/memory.md")).isFalse();
     }
 
     @Test
@@ -163,6 +188,19 @@ class TestTaskInputsTest {
     private static boolean matches(String glob, Path relative) {
         PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
         return matcher.matches(relative);
+    }
+
+    /** The literals of {@code rootProject.files(...)}: files declared one by one, past Gradle's default excludes. */
+    private static List<String> namedFiles(String block) {
+        List<String> literals = new ArrayList<>();
+        Matcher calls = NAMED_FILES.matcher(block);
+        while (calls.find()) {
+            Matcher strings = STRING_LITERAL.matcher(calls.group(1));
+            while (strings.find()) {
+                literals.add(strings.group(1));
+            }
+        }
+        return literals;
     }
 
     private static List<String> excludes(String block) {
