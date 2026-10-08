@@ -1,0 +1,543 @@
+package app.rekord.application.build;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.Test;
+
+/**
+ * TASK-2.4 (AC 9): every CI job that starts the application checks out the rekord-contract ref the build file pins
+ * and passes {@code -Pcontract.spec} pointing into that checkout, so no job depends on a sibling path CI lacks.
+ * "Starts the application" is every Gradle run that is not a diagnostic (test, integrationTest, build, check,
+ * quarkusBuild, ...) and every image build, whose Dockerfile is read for the Gradle lines it runs.
+ *
+ * <p>Complements {@code ContractSpecWiringTest}, which pins the exact lines of {@code ci.yml}; this reads every
+ * workflow by job, derives the expected spec path from the checkout step instead of repeating it, and proves on
+ * fixtures that each way of leaving the spec out is found.
+ */
+class CiContractSpecTest {
+
+    private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
+
+    private static final String SPEC_FILE = "dist/openapi.yaml";
+    private static final String SPEC_PROPERTY = "-Pcontract.spec=";
+    private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
+    private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
+    private static final Pattern GRADLE = Pattern.compile("(.*/)?gradlew(\\.bat)?|gradle");
+    /** What may stand in front of the wrapper without making it a mere argument. */
+    private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
+    /** Tasks that only report; the words after one are its own arguments (help --task test). */
+    private static final Set<String> DIAGNOSTIC_TASKS = Set.of(
+            "help", "tasks", "projects", "properties", "dependencies", "dependencyInsight", "buildEnvironment",
+            "components", "outgoingVariants", "resolvableConfigurations", "javaToolchains", "wrapper");
+    /** Gradle options that take their value as the next word. */
+    private static final Set<String> VALUE_OPTIONS = Set.of(
+            "-x", "--exclude-task", "-p", "--project-dir", "-b", "--build-file", "-c", "--settings-file", "-g",
+            "--gradle-user-home", "-I", "--init-script", "--include-build", "--project-cache-dir");
+
+    private static final String PIN =
+            "{id: contract-pin, run: 'bash .github/scripts/contract-pin.sh gradle.properties'}";
+    private static final String CHECKOUT = "{uses: 'actions/checkout@v4', with: {repository: Vikteur/rekord-contract,"
+            + " ref: '${{ steps.contract-pin.outputs.ref }}', path: contract}}";
+    private static final String SPEC = "-Pcontract.spec=contract/dist/openapi.yaml";
+    private static final String BUILD = "./gradlew test integrationTest build --stacktrace " + SPEC;
+    private static final String DOCKERFILE = "FROM x\n"
+            + "COPY gradlew settings.gradle.kts build.gradle.kts ./\n"
+            + "RUN ./gradlew --no-daemon --version\n"
+            + "RUN --mount=type=cache,target=/root/.gradle \\\n"
+            + "    ./gradlew --no-daemon :application:quarkusBuild -x test " + SPEC + "\n";
+
+    private static final String NO_PIN = "ci.yml job build: no step before the first one that starts the application"
+            + " reads the pin (contract-pin.sh gradle.properties)";
+    private static final String NO_CHECKOUT = "ci.yml job build: no step before the first one that starts the"
+            + " application checks out rekord-contract to a path of its own at the ref the pin step outputs";
+
+    @Test
+    void every_ci_job_that_starts_the_application_checks_out_the_pinned_contract_and_passes_its_spec()
+            throws IOException {
+        // Given
+        var workflows = Workflows.files(REPO_ROOT);
+        String dockerfile = Files.readString(REPO_ROOT.resolve("Dockerfile"));
+        List<String> started = new ArrayList<>();
+        List<String> violations = new ArrayList<>();
+
+        // When
+        for (Path file : workflows) {
+            String name = file.getFileName().toString();
+            JsonNode workflow = Workflows.read(file);
+            started.addAll(jobsStartingTheApplication(name, workflow));
+            violations.addAll(violations(name, workflow, dockerfile));
+        }
+
+        // Then
+        assertThat(workflows).isNotEmpty();
+        assertThat(started).as("jobs that start the application").contains("ci.yml: build", "ci.yml: image");
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void a_job_with_the_pin_the_checkout_and_the_spec_of_the_checkout_has_no_violation() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run(BUILD));
+
+        // When / Then
+        assertThat(jobsStartingTheApplication("ci.yml", workflow)).containsExactly("ci.yml: build");
+        assertThat(violations(workflow)).isEmpty();
+    }
+
+    @Test
+    void a_gradle_run_without_the_spec_argument_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("./gradlew test integrationTest build --stacktrace"));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `./gradlew test integrationTest build --stacktrace`"
+                        + " does not pass -Pcontract.spec");
+    }
+
+    @Test
+    void a_spec_in_a_sibling_directory_instead_of_the_checkout_is_found() throws IOException {
+        // Given
+        String sibling = "-Pcontract.spec=../rekord-contract/dist/openapi.yaml";
+        JsonNode workflow = build(PIN, CHECKOUT, run("./gradlew test " + sibling));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `./gradlew test " + sibling + "`"
+                        + " passes ../rekord-contract/dist/openapi.yaml, not contract/dist/openapi.yaml,"
+                        + " the spec in the contract checkout");
+    }
+
+    @Test
+    void a_spec_outside_the_path_the_contract_was_checked_out_to_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("./gradlew build -Pcontract.spec=spec/dist/openapi.yaml"));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `./gradlew build -Pcontract.spec=spec/dist/openapi.yaml`"
+                        + " passes spec/dist/openapi.yaml, not contract/dist/openapi.yaml,"
+                        + " the spec in the contract checkout");
+    }
+
+    @Test
+    void the_last_spec_argument_is_the_one_gradle_uses() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("./gradlew build -Pcontract.spec=x/dist/openapi.yaml " + SPEC));
+
+        // When / Then
+        assertThat(violations(workflow)).isEmpty();
+    }
+
+    @Test
+    void a_job_without_the_contract_checkout_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    @Test
+    void a_job_without_the_pin_step_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(CHECKOUT, run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_PIN, NO_CHECKOUT);
+    }
+
+    @Test
+    void a_checkout_that_is_not_at_the_ref_the_pin_step_outputs_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT.replace("'${{ steps.contract-pin.outputs.ref }}'", "main"), run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    @Test
+    void a_checkout_without_a_path_of_its_own_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT.replace(", path: contract", ""), run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    @Test
+    void a_checkout_after_the_step_that_starts_the_application_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(run(BUILD), PIN, CHECKOUT);
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_PIN, NO_CHECKOUT);
+    }
+
+    @Test
+    void a_checkout_path_outside_the_workspace_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(
+                PIN,
+                CHECKOUT.replace("path: contract", "path: ../contract"),
+                run("./gradlew build -Pcontract.spec=../contract/dist/openapi.yaml"));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: the contract is checked out to ../contract, outside the workspace");
+    }
+
+    @Test
+    void every_gradle_task_that_is_not_a_diagnostic_starts_the_application() throws IOException {
+        // Given
+        var scripts = List.of(
+                "./gradlew test",
+                "./gradlew integrationTest",
+                "./gradlew build",
+                "./gradlew check",
+                "./gradlew :application:quarkusBuild",
+                "./gradlew quarkusDev",
+                "./gradlew assemble",
+                "./gradlew --no-daemon -x test build",
+                "./gradlew clean build",
+                "echo start && ./gradlew test",
+                "docker build -t x .",
+                "docker buildx build -t x .",
+                "docker compose up");
+
+        // When / Then
+        for (String script : scripts) {
+            assertThat(jobsStartingTheApplication("ci.yml", build(run(script))))
+                    .as(script)
+                    .containsExactly("ci.yml: build");
+        }
+    }
+
+    @Test
+    void a_diagnostic_or_a_command_that_only_names_the_wrapper_does_not_start_the_application() throws IOException {
+        // Given
+        var scripts = List.of(
+                "./gradlew -q help --task test",
+                "./gradlew -q :application:help --task quarkusBuild",
+                "./gradlew --version",
+                "./gradlew --no-daemon --version",
+                "./gradlew tasks",
+                "./gradlew clean",
+                "docker login ghcr.io",
+                "docker run --rm x",
+                "docker push x",
+                "docker tag a b",
+                "chmod +x gradlew",
+                "test -f gradlew",
+                "echo ./gradlew test");
+
+        // When / Then
+        for (String script : scripts) {
+            JsonNode workflow = build(run(script));
+            assertThat(jobsStartingTheApplication("ci.yml", workflow)).as(script).isEmpty();
+            assertThat(violations(workflow)).as(script).isEmpty();
+        }
+    }
+
+    @Test
+    void a_continued_or_chained_gradle_command_is_read_whole() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - id: contract-pin
+                        run: bash .github/scripts/contract-pin.sh gradle.properties
+                      - uses: actions/checkout@v4
+                        with:
+                          repository: Vikteur/rekord-contract
+                          ref: ${{ steps.contract-pin.outputs.ref }}
+                          path: contract
+                      - run: |
+                          echo start
+                          ./gradlew test \\
+                            integrationTest
+                      - run: ./gradlew build && ./gradlew check -Pcontract.spec=contract/dist/openapi.yaml
+                      - run: >
+                          ./gradlew test
+                          -Pcontract.spec=contract/dist/openapi.yaml
+                """);
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, DOCKERFILE))
+                .containsExactly(
+                        "ci.yml job build: `./gradlew test integrationTest` does not pass -Pcontract.spec",
+                        "ci.yml job build: `./gradlew build` does not pass -Pcontract.spec");
+    }
+
+    @Test
+    void an_image_build_whose_dockerfile_runs_gradle_without_the_spec_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = DOCKERFILE.replace(" " + SPEC, "");
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile"
+                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+        assertThat(violations("ci.yml", workflow, DOCKERFILE)).isEmpty();
+    }
+
+    @Test
+    void an_image_build_whose_dockerfile_takes_the_spec_from_a_sibling_path_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = DOCKERFILE.replace(SPEC, "-Pcontract.spec=../rekord-contract/dist/openapi.yaml");
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .singleElement()
+                .asString()
+                .startsWith("ci.yml job build: Dockerfile `./gradlew --no-daemon :application:quarkusBuild -x test")
+                .contains("passes ../rekord-contract/dist/openapi.yaml, not contract/dist/openapi.yaml");
+    }
+
+    @Test
+    void an_image_build_from_another_dockerfile_is_found_rather_than_passed_unread() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -f other.Dockerfile -t x ."));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `docker build -f other.Dockerfile -t x .`"
+                        + " builds from a Dockerfile this test does not read");
+    }
+
+    @Test
+    void an_image_build_without_the_contract_checkout_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, run("docker build -t x ."));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    private static JsonNode build(String... steps) throws IOException {
+        StringBuilder yaml = new StringBuilder("jobs:\n  build:\n    steps:\n");
+        for (String step : steps) {
+            yaml.append("      - ").append(step).append('\n');
+        }
+        return Workflows.parse(yaml.toString());
+    }
+
+    private static String run(String script) {
+        return "{run: '" + script + "'}";
+    }
+
+    private static List<String> violations(JsonNode workflow) {
+        return violations("ci.yml", workflow, DOCKERFILE);
+    }
+
+    /** Every job, as {@code file: job}, with a step that starts the application. */
+    static List<String> jobsStartingTheApplication(String file, JsonNode workflow) {
+        List<String> jobs = new ArrayList<>();
+        for (var job : workflow.path("jobs").properties()) {
+            if (firstStartingStep(Workflows.steps(workflow, job.getKey())) >= 0) {
+                jobs.add(file + ": " + job.getKey());
+            }
+        }
+        return jobs;
+    }
+
+    /**
+     * One line per way a job that starts the application leaves out the pinned contract or its spec: no step before
+     * it reading the pin from gradle.properties, no checkout of rekord-contract to a path of its own at the ref that
+     * step outputs, a checkout path outside the workspace, a Gradle run (or the Dockerfile of an image build) whose
+     * last {@code -Pcontract.spec} is missing or is not {@code <checkout path>/dist/openapi.yaml}.
+     */
+    static List<String> violations(String file, JsonNode workflow, String dockerfile) {
+        List<String> violations = new ArrayList<>();
+        for (var job : workflow.path("jobs").properties()) {
+            List<JsonNode> steps = Workflows.steps(workflow, job.getKey());
+            int first = firstStartingStep(steps);
+            if (first < 0) {
+                continue;
+            }
+            String where = file + " job " + job.getKey() + ": ";
+            List<JsonNode> before = steps.subList(0, first);
+            String pin = pinStepId(before);
+            String path = pin == null ? null : checkoutPath(before, pin);
+            if (pin == null) {
+                violations.add(where + "no step before the first one that starts the application reads the pin"
+                        + " (contract-pin.sh gradle.properties)");
+            }
+            if (path == null) {
+                violations.add(where + "no step before the first one that starts the application checks out"
+                        + " rekord-contract to a path of its own at the ref the pin step outputs");
+            } else if (!insideTheWorkspace(path)) {
+                violations.add(where + "the contract is checked out to " + path + ", outside the workspace");
+            }
+            for (JsonNode step : steps.subList(first, steps.size())) {
+                for (List<String> words : commands(step.path("run").asText(""))) {
+                    var gradle = gradleArguments(words);
+                    if (gradle.isPresent() && !startedTasks(gradle.get()).isEmpty()) {
+                        checkSpec(where, gradle.get(), path, violations);
+                    } else if (buildsImage(words) && namesAnotherDockerfile(words)) {
+                        violations.add(where + "`" + String.join(" ", words)
+                                + "` builds from a Dockerfile this test does not read");
+                    } else if (buildsImage(words)) {
+                        for (List<String> line : commands(dockerfile)) {
+                            var arguments = gradleArguments(line).filter(a -> !startedTasks(a).isEmpty());
+                            arguments.ifPresent(a -> checkSpec(where + "Dockerfile ", a, path, violations));
+                        }
+                    }
+                }
+            }
+        }
+        return violations;
+    }
+
+    private static void checkSpec(String where, List<String> arguments, String path, List<String> violations) {
+        String command = "./gradlew " + String.join(" ", arguments);
+        String spec = null;
+        for (String argument : arguments) {
+            if (argument.startsWith(SPEC_PROPERTY)) {
+                spec = argument.substring(SPEC_PROPERTY.length());
+            }
+        }
+        if (spec == null) {
+            violations.add(where + "`" + command + "` does not pass -Pcontract.spec");
+        } else if (path != null && !spec.equals(path + "/" + SPEC_FILE)) {
+            violations.add(where + "`" + command + "` passes " + spec + ", not " + path + "/" + SPEC_FILE
+                    + ", the spec in the contract checkout");
+        }
+    }
+
+    private static int firstStartingStep(List<JsonNode> steps) {
+        for (int i = 0; i < steps.size(); i++) {
+            var commands = commands(steps.get(i).path("run").asText(""));
+            if (commands.stream().anyMatch(CiContractSpecTest::startsTheApplication)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean startsTheApplication(List<String> words) {
+        return gradleArguments(words).map(arguments -> !startedTasks(arguments).isEmpty()).orElse(false)
+                || buildsImage(words);
+    }
+
+    /** The id of the step, among those given, that reads the pin from gradle.properties; null when there is none. */
+    private static String pinStepId(List<JsonNode> steps) {
+        for (JsonNode step : steps) {
+            if (!step.path("id").asText("").isBlank() && PIN_SCRIPT.matcher(step.path("run").asText("")).find()) {
+                return step.path("id").asText();
+            }
+        }
+        return null;
+    }
+
+    /** The path the contract is checked out to at the ref the pin step outputs; null when no step does that. */
+    private static String checkoutPath(List<JsonNode> steps, String pinId) {
+        for (JsonNode step : steps) {
+            JsonNode with = step.path("with");
+            if (step.path("uses").asText("").startsWith("actions/checkout@")
+                    && with.path("repository").asText("").endsWith("/rekord-contract")
+                    && ("${{ steps." + pinId + ".outputs.ref }}").equals(with.path("ref").asText("").trim())
+                    && !with.path("path").asText("").isBlank()) {
+                return with.path("path").asText().trim();
+            }
+        }
+        return null;
+    }
+
+    private static boolean insideTheWorkspace(String path) {
+        return !path.startsWith("/")
+                && !path.matches("^[A-Za-z]:.*")
+                && !path.equals(".")
+                && !List.of(path.split("/")).contains("..");
+    }
+
+    /** The commands of a script, one list of words each: continued lines joined, split at {@code && || ; |}. */
+    private static List<List<String>> commands(String script) {
+        List<List<String>> commands = new ArrayList<>();
+        for (String part : SEPARATOR.split(script.replaceAll("\\\\\\R", " "))) {
+            List<String> words = Arrays.stream(part.trim().split("\\s+"))
+                    .map(word -> word.replace("\"", "").replace("'", ""))
+                    .filter(word -> !word.isEmpty())
+                    .toList();
+            if (!words.isEmpty()) {
+                commands.add(words);
+            }
+        }
+        return commands;
+    }
+
+    /**
+     * What follows the Gradle wrapper (or gradle) when the command runs it: it comes first, behind at most a Dockerfile
+     * RUN, a shell or an env prefix, their options and variable assignments. Empty for a command that only names the
+     * wrapper (COPY gradlew, chmod +x gradlew, test -f gradlew, echo ./gradlew).
+     */
+    private static Optional<List<String>> gradleArguments(List<String> words) {
+        return argumentsOf(words, word -> GRADLE.matcher(word).matches());
+    }
+
+    private static Optional<List<String>> argumentsOf(List<String> words, Predicate<String> program) {
+        for (int i = 0; i < words.size(); i++) {
+            String word = words.get(i);
+            if (program.test(word)) {
+                return Optional.of(words.subList(i + 1, words.size()));
+            }
+            if (!PREFIXES.contains(word) && !word.startsWith("-") && !word.contains("=")) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The tasks one Gradle run starts: options and their values skipped, project paths dropped, {@code clean} left
+     * out, and everything from the first diagnostic task on ignored (it is that task's own argument).
+     */
+    private static List<String> startedTasks(List<String> arguments) {
+        List<String> tasks = new ArrayList<>();
+        for (int i = 0; i < arguments.size(); i++) {
+            String argument = arguments.get(i);
+            if (VALUE_OPTIONS.contains(argument)) {
+                i++;
+            } else if (!argument.startsWith("-")) {
+                String task = argument.substring(argument.lastIndexOf(':') + 1);
+                if (DIAGNOSTIC_TASKS.contains(task)) {
+                    break;
+                }
+                if (!task.equals("clean")) {
+                    tasks.add(task);
+                }
+            }
+        }
+        return tasks;
+    }
+
+    private static boolean namesAnotherDockerfile(List<String> words) {
+        return words.contains("-f")
+                || words.contains("--file")
+                || words.stream().anyMatch(word -> word.startsWith("--file="));
+    }
+
+    /** An image build: {@code docker [image|buildx|builder] build}, {@code docker compose up|run}. */
+    private static boolean buildsImage(List<String> words) {
+        return argumentsOf(words, "docker"::equals)
+                .map(arguments -> arguments.stream().takeWhile(word -> !word.startsWith("-")).limit(3).toList())
+                .map(subcommands -> subcommands.contains("build")
+                        || (subcommands.contains("compose")
+                                && (subcommands.contains("up") || subcommands.contains("run"))))
+                .orElse(false);
+    }
+}
