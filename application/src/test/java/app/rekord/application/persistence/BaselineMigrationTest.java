@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class BaselineMigrationTest {
 
@@ -23,14 +24,36 @@ class BaselineMigrationTest {
     @Test
     void db_migration_starts_with_v1_baseline_and_holds_only_versioned_migrations() throws IOException {
         // Given the migration directory
-        try (Stream<Path> files = Files.list(MIGRATIONS)) {
-            List<String> names = files.map(path -> path.getFileName().toString())
+        List<String> names = byVersion(MIGRATIONS);
+
+        // Then the first file by version is the baseline, and every file is a versioned migration
+        assertThat(names).first().isEqualTo("V1__baseline.sql");
+        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+    }
+
+    @Test
+    void a_dotted_or_underscored_version_that_the_migration_gate_accepts_sorts_by_its_flyway_version(@TempDir Path dir)
+            throws IOException {
+        // Given versioned migrations that MigrationCoverage accepts, V1.1 and V1_2 among them
+        for (String name : List.of("V10__later.sql", "V2__identity.sql", "V1_2__fix.sql", "V1.1__fix.sql",
+                "V1__baseline.sql")) {
+            Files.writeString(dir.resolve(name), "-- x\n");
+        }
+
+        // When they are sorted by version
+        List<String> names = byVersion(dir);
+
+        // Then they sort as Flyway orders them, and each is a versioned migration
+        assertThat(names).containsExactly(
+                "V1__baseline.sql", "V1.1__fix.sql", "V1_2__fix.sql", "V2__identity.sql", "V10__later.sql");
+        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+    }
+
+    private static List<String> byVersion(Path dir) throws IOException {
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.map(path -> path.getFileName().toString())
                     .sorted(Comparator.comparingInt(BaselineMigrationTest::version))
                     .toList();
-
-            // Then the first file by version is the baseline, and every file is a versioned migration
-            assertThat(names).first().isEqualTo("V1__baseline.sql");
-            assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
         }
     }
 
