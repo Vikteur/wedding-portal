@@ -150,6 +150,17 @@ class FirstAdminBootstrapTest {
     }
 
     @Test
+    void another_refusal_is_one_error_line_naming_only_its_code() {
+        repository.failure = new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.VALIDATION_FAILED,
+                "Refused for " + EMAIL);
+
+        start(EMAIL, PASSWORD);
+
+        assertThat(text(theOnlyRecord(Level.SEVERE))).isEqualTo("Refusing to bootstrap the first admin: the database"
+                + " refused it (VALIDATION_FAILED). No admin was created.");
+    }
+
+    @Test
     void no_settings_or_an_existing_admin_logs_nothing() {
         start(null, PASSWORD);
         start(EMAIL, "   ");

@@ -31,6 +31,10 @@ public class FirstAdminBootstrap {
         return value.isEmpty() || value.get().isBlank();
     }
 
+    private static String refused(String reason) {
+        return "Refusing to bootstrap the first admin: " + reason + ". No admin was created.";
+    }
+
     void onStart(@Observes StartupEvent event) {
         if (isBlank(settings.email()) || isBlank(settings.password())) {
             // Not configured: the use case, and with it the datasource, is not touched (resource tests have none).
@@ -44,14 +48,20 @@ public class FirstAdminBootstrap {
                     settings.displayName(),
                     settings.orgName()));
         } catch (RejectedException e) {
-            LOG.error("First admin not created: the address or the business name is already taken.");
+            // Built from the refusal code alone: the refusal carries no cause, and its values are never read.
+            LOG.error(refused(switch (e.code()) {
+                case DUPLICATE_USERNAME -> "the bootstrap address (app.bootstrap.email) already belongs to an account";
+                case DUPLICATE_NAME ->
+                        "the business name (app.bootstrap.org-name) gives a slug another business already has";
+                default -> "the database refused it (" + e.code() + ")";
+            }));
             return;
         }
         switch (outcome) {
             case BootstrapOutcome.Created created -> LOG.infof(
-                    "First admin created: business %s, account %s.", created.businessId(), created.accountId());
-            case BootstrapOutcome.PasswordTooShort tooShort ->
-                    LOG.error("First admin not created: the password must have at least 12 characters.");
+                    "Created the first admin account %s in business %s", created.accountId(), created.businessId());
+            case BootstrapOutcome.PasswordTooShort tooShort -> LOG.error(refused(
+                    "the bootstrap password (app.bootstrap.password) needs at least 12 characters"));
             case BootstrapOutcome.NotConfigured notConfigured -> { }
             case BootstrapOutcome.AdminExists adminExists -> { }
         }
