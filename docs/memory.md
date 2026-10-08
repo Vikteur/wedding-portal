@@ -133,7 +133,9 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - The job signs in with `github.token` (job permission `packages: write`, no stored secret) and signs out with `if: always()`. Only plain `docker login`/`tag`/`push` are used, no new action.
 - The tag logic is `.github/scripts/image-tags.sh` (tested by `ImageTagsTest`); the workflow structure is pinned by `CiWorkflowTest`.
 - Package visibility and the repository's Actions access to the package are GitHub settings owned by the user, not changed by this ticket.
-- The first real push is proven by the first main run after the merge (run id and SHA to be filled in after it).
+- The first real push is proven by main run 37764772877 on `37adf81481fe8dda937819e0a169e7e61c7dd1f4`: `build` and
+  `image` green, and both tags (the full SHA and `latest`) pushed with digest
+  `sha256:d4ed08d986ae2be81953c0a23e9f0748415d971b97c16a545a3dee0bbbc6994b`.
 
 ## 2026-10-08 — TASK-24.3 scoring and buckets
 
