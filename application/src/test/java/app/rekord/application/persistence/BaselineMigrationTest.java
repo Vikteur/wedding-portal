@@ -2,12 +2,12 @@ package app.rekord.application.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import app.rekord.application.persistence.migration.MigrationCoverage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.flywaydb.core.api.MigrationVersion;
@@ -19,8 +19,6 @@ class BaselineMigrationTest {
     private static final Path MIGRATIONS =
             Path.of(System.getProperty("wedding.repoRoot")).resolve("application/src/main/resources/db/migration");
     private static final Path BASELINE = MIGRATIONS.resolve("V1__baseline.sql");
-    // What MigrationCoverage accepts: V1, V1.1 and V1_1 (Flyway reads an underscore as a dot), any description.
-    private static final Pattern VERSIONED = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__.+[.]sql");
     private static final Pattern STATEMENT =
             Pattern.compile("\\b(create|alter|drop|insert)\\b|;", Pattern.CASE_INSENSITIVE);
 
@@ -31,7 +29,7 @@ class BaselineMigrationTest {
 
         // Then the first file by version is the baseline, and every file is a versioned migration
         assertThat(names).first().isEqualTo("V1__baseline.sql");
-        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+        assertThat(names).allMatch(name -> MigrationCoverage.versionOf(name).isPresent());
     }
 
     @Test
@@ -49,7 +47,7 @@ class BaselineMigrationTest {
         // Then they sort as Flyway orders them, and each is a versioned migration
         assertThat(names).containsExactly(
                 "V1__baseline.sql", "V1.1__fix.sql", "V1_2__fix.sql", "V2__identity.sql", "V10__later.sql");
-        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+        assertThat(names).allMatch(name -> MigrationCoverage.versionOf(name).isPresent());
     }
 
     @Test
@@ -65,7 +63,7 @@ class BaselineMigrationTest {
 
         // Then the hyphenated file is accepted and sorts after the baseline
         assertThat(names).containsExactly("V1__baseline.sql", "V3__add-x.sql");
-        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+        assertThat(names).allMatch(name -> MigrationCoverage.versionOf(name).isPresent());
     }
 
     private static List<String> byVersion(Path dir) throws IOException {
@@ -77,11 +75,9 @@ class BaselineMigrationTest {
     }
 
     private static MigrationVersion version(String fileName) {
-        Matcher m = VERSIONED.matcher(fileName);
-        if (!m.matches()) {
-            throw new AssertionError(fileName + " is not a versioned migration");
-        }
-        return MigrationVersion.fromVersion(m.group(1).replace('_', '.'));
+        // The version comes from the migration gate itself, so what it accepts and what this test sorts cannot drift
+        return MigrationVersion.fromVersion(MigrationCoverage.versionOf(fileName)
+                .orElseThrow(() -> new AssertionError(fileName + " is not a versioned migration")));
     }
 
     @Test
