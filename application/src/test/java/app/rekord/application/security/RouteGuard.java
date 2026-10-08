@@ -3,9 +3,11 @@ package app.rekord.application.security;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -15,6 +17,9 @@ final class RouteGuard {
 
     static final String API_PACKAGE = "app.rekord.api";
     static final int FLOOR = 60;
+    static final String PERMIT_ALL = "jakarta.annotation.security.PermitAll";
+
+    private static final String PATH = "jakarta.ws.rs.Path";
 
     private static final Set<String> ACCESS_ANNOTATIONS = Set.of(
             "io.quarkus.security.Authenticated",
@@ -85,11 +90,93 @@ final class RouteGuard {
     }
 
     /**
-     * The routes of generated interfaces outside the allow-list whose implementing method and implementing class both
-     * lack an access annotation, as {@code Api#method  (Resource)}. The annotations of the interface are never read.
+     * The routes of generated interfaces outside the allow-list whose implementing method and the class that declares
+     * that method both lack an access annotation, as {@code Api#method  (Resource)}. For a method inherited from a
+     * superclass, only the annotation of that superclass counts, not one on the scanned subclass. The annotations of
+     * the interface are never read.
      */
     static Set<String> unguarded(JavaClasses classes, Set<String> allowList) {
         Set<String> unguarded = new TreeSet<>();
+        for (ImplementedRoute route : implementedRoutes(classes)) {
+            if (!allowList.contains(route.name()) && !route.guarded()) {
+                unguarded.add(route.label());
+            }
+        }
+        return unguarded;
+    }
+
+    /** Allow-listed routes whose implementation still carries an access annotation, which would refuse a visitor. */
+    static Set<String> overGuarded(JavaClasses classes, Set<String> allowList) {
+        Set<String> over = new TreeSet<>();
+        for (ImplementedRoute route : implementedRoutes(classes)) {
+            if (allowList.contains(route.name()) && route.guarded()) {
+                over.add(route.label());
+            }
+        }
+        return over;
+    }
+
+    /** D2: no {@code @PermitAll} anywhere; a public route is public through {@link #PUBLIC} only. */
+    static Set<String> permitAllUses(JavaClasses classes) {
+        Set<String> uses = new TreeSet<>();
+        for (JavaClass type : classes) {
+            if (type.isAnnotatedWith(PERMIT_ALL)) {
+                uses.add(type.getName());
+            }
+            for (JavaMethod method : type.getMethods()) {
+                if (method.isAnnotatedWith(PERMIT_ALL)) {
+                    uses.add(type.getName() + "#" + method.getName());
+                }
+            }
+        }
+        return uses;
+    }
+
+    /** Production endpoints that implement no generated interface, which the route guard would otherwise never see. */
+    static Set<String> resourcesOutsideTheGuard(JavaClasses classes) {
+        Set<String> implementations = implementations(classes);
+        Set<String> outside = new TreeSet<>();
+        for (JavaClass type : classes) {
+            if (type.isInterface()
+                    || API_PACKAGE.equals(type.getPackageName())
+                    || implementations.contains(type.getName())) {
+                continue;
+            }
+            boolean routesFromInterface = type.getAllRawInterfaces().stream()
+                    .filter(api -> !isApi(api))
+                    .anyMatch(RouteGuard::declaresRoute);
+            if (declaresRoute(type) || routesFromInterface) {
+                outside.add(type.getName());
+            }
+        }
+        return outside;
+    }
+
+    static void requireGuarded(JavaClasses classes, Set<String> allowList) {
+        Set<String> unguarded = unguarded(classes, allowList);
+        if (!unguarded.isEmpty()) {
+            throw new AssertionError("routes without @Authenticated, @RolesAllowed, @PermitAll or @DenyAll:\n  "
+                    + String.join("\n  ", unguarded));
+        }
+    }
+
+    /** One route of a generated interface, as implemented by one concrete class. */
+    private record ImplementedRoute(String name, JavaClass resource, JavaMethod route) {
+
+        /** The implementing method carries an access annotation, or so does the class that declares that method. */
+        boolean guarded() {
+            return implementing(resource, route)
+                    .map(method -> hasAccessAnnotation(method) || hasAccessAnnotation(method.getOwner()))
+                    .orElse(false);
+        }
+
+        String label() {
+            return name + "  (" + resource.getSimpleName() + ")";
+        }
+    }
+
+    private static List<ImplementedRoute> implementedRoutes(JavaClasses classes) {
+        List<ImplementedRoute> routes = new ArrayList<>();
         for (JavaClass type : classes) {
             if (!isImplementation(type)) {
                 continue;
@@ -99,42 +186,18 @@ final class RouteGuard {
                     continue;
                 }
                 for (JavaMethod route : api.getMethods()) {
-                    String name = api.getSimpleName() + "#" + route.getName();
-                    if (!isRoute(route) || allowList.contains(name)) {
-                        continue;
-                    }
-                    boolean guarded = hasAccessAnnotation(type)
-                            || implementing(type, route).map(RouteGuard::hasAccessAnnotation).orElse(false);
-                    if (!guarded) {
-                        unguarded.add(name + "  (" + type.getSimpleName() + ")");
+                    if (isRoute(route)) {
+                        routes.add(new ImplementedRoute(api.getSimpleName() + "#" + route.getName(), type, route));
                     }
                 }
             }
         }
-        return unguarded;
+        return routes;
     }
 
-    /** D2: no {@code @PermitAll} anywhere; a public route is public through {@link #PUBLIC} only. */
-    static Set<String> permitAllUses(JavaClasses classes) {
-        return new TreeSet<>();
-    }
-
-    /** Production endpoints that implement no generated interface, which the route guard would otherwise never see. */
-    static Set<String> resourcesOutsideTheGuard(JavaClasses classes) {
-        return new TreeSet<>();
-    }
-
-    /** Allow-listed routes whose implementation still carries an access annotation, which would refuse a visitor. */
-    static Set<String> overGuarded(JavaClasses classes, Set<String> allowList) {
-        return new TreeSet<>();
-    }
-
-    static void requireGuarded(JavaClasses classes, Set<String> allowList) {
-        Set<String> unguarded = unguarded(classes, allowList);
-        if (!unguarded.isEmpty()) {
-            throw new AssertionError("routes without @Authenticated, @RolesAllowed, @PermitAll or @DenyAll:\n  "
-                    + String.join("\n  ", unguarded));
-        }
+    private static boolean declaresRoute(JavaClass type) {
+        return type.isAnnotatedWith(PATH)
+                || type.getMethods().stream().anyMatch(method -> isRoute(method) || method.isAnnotatedWith(PATH));
     }
 
     private static boolean isApi(JavaClass type) {
