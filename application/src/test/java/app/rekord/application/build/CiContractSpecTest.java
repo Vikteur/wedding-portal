@@ -194,12 +194,15 @@ class CiContractSpecTest {
 
     @Test
     void a_comment_after_quoted_text_is_still_dropped() throws IOException {
-        // Given
-        JsonNode workflow = build(run("echo \"a #b\" # ./gradlew build"));
+        // Given: the quote closes, so the # after the Gradle run starts a comment and its spec is not passed
+        JsonNode comment = build(PIN, CHECKOUT, run("echo \"a #b\" && ./gradlew build # " + SPEC));
+        JsonNode mention = build(run("echo \"a #b\" # ./gradlew build"));
 
         // When / Then
-        assertThat(jobsStartingTheApplication("ci.yml", workflow)).isEmpty();
-        assertThat(violations(workflow)).isEmpty();
+        assertThat(violations(comment))
+                .containsExactly("ci.yml job build: `./gradlew build` does not pass -Pcontract.spec");
+        assertThat(jobsStartingTheApplication("ci.yml", mention)).isEmpty();
+        assertThat(violations(mention)).isEmpty();
     }
 
     @Test
