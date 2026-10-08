@@ -11,14 +11,26 @@ import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
 
 /**
- * Storage of the first-admin bootstrap. A taken address or slug is refused from the name of the violated constraint
- * alone: the refusal has no cause, so no stored address, name or hash can reach a message or a log line.
+ * Storage of the first-admin bootstrap.
+ *
+ * <p>Refusals: a unique violation is refused as a {@link RejectedException} that has no cause and no stored value, so
+ * the refused address, name or hash cannot reach a message or a log line through it. Which refusal depends on what is
+ * known of the violated constraint: {@code ux_users_email} is a taken address ({@code DUPLICATE_USERNAME}),
+ * {@code ux_organizations_slug} a taken slug ({@code DUPLICATE_NAME}), and a unique violation (SQLState 23505) whose
+ * constraint cannot be named is {@code VALIDATION_FAILED}. Hibernate cuts the name out of the server's message text,
+ * and PostgreSQL writes that text in its {@code lc_messages} language, so on a server that does not write English the
+ * name is {@code null}; the SQLState does not depend on the language. Any other failure (another constraint, a
+ * database that is down) is rethrown unchanged, with its cause chain, and the transaction rolls back.
+ *
+ * <p>The check for an existing admin and the save are two steps, not one lock: two instances that start at the same
+ * moment can both pass the check. The bootstrap is for the first start of one instance (see docs/memory.md, TASK-7.3).
  */
 @ApplicationScoped
 public class DefaultFirstAdminRepository implements FirstAdminRepository {
 
     private static final String ADDRESS_INDEX = "ux_users_email";
     private static final String SLUG_INDEX = "ux_organizations_slug";
+    private static final String UNIQUE_VIOLATION = "23505";
 
     // An Instance, so that a start without a datasource (the resource tests) does not resolve the inactive session.
     private final Instance<EntityManager> entityManager;
@@ -86,6 +98,12 @@ public class DefaultFirstAdminRepository implements FirstAdminRepository {
                 if (SLUG_INDEX.equals(constraint)) {
                     return new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.DUPLICATE_NAME,
                             "That business name is already taken.");
+                }
+                if (constraint == null && UNIQUE_VIOLATION.equals(violation.getSQLState())) {
+                    // The name is unknown (a server that does not write English): still a taken value, still no
+                    // cause and no value in the refusal. The reason is the generic one; nothing says which value.
+                    return new RejectedException(RejectedException.Kind.CONFLICT, ErrorCode.VALIDATION_FAILED,
+                            "A stored value is already taken.");
                 }
                 break;
             }
