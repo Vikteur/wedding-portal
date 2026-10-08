@@ -18,7 +18,7 @@ import java.util.List;
  * on-update, match and deferrability, and the content of other schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
-        List<Index> indexes) {
+        List<Index> indexes, List<Default> defaults) {
 
     /**
      * {@code type} is {@code data_type} plus {@code (n)} for a length, {@code (p,s)} for a numeric precision and scale,
@@ -35,10 +35,23 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
      */
     public record Index(String table, String name, String definition) {}
 
-    /** A snapshot that declares no index. */
+    /**
+     * A column of {@code public} that has a default or is an identity column. {@code expression} is
+     * {@code column_default} as PostgreSQL renders it, null for an identity column; {@code identity} is
+     * {@code identity_generation} ({@code ALWAYS} or {@code BY DEFAULT}), null when the column is no identity column.
+     */
+    public record Default(String table, String column, String expression, String identity) {}
+
+    /** A snapshot that declares no column default and no identity. */
+    public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
+            List<Constraint> constraints, List<Index> indexes) {
+        this(schemas, tables, columns, constraints, indexes, List.of());
+    }
+
+    /** A snapshot that declares no index, no column default and no identity. */
     public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
             List<Constraint> constraints) {
-        this(schemas, tables, columns, constraints, List.of());
+        this(schemas, tables, columns, constraints, List.of(), List.of());
     }
 
     private static final String HISTORY = "flyway_schema_history";
@@ -47,12 +60,12 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
 
     public static SchemaSnapshot empty() {
-        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of());
+        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static SchemaSnapshot read(Connection connection) throws SQLException {
         return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection),
-                indexes(connection));
+                indexes(connection), defaults(connection));
     }
 
     private static List<String> schemas(Connection c) throws SQLException {
@@ -177,6 +190,10 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
             }
         }
         return result;
+    }
+
+    private static List<Default> defaults(Connection c) throws SQLException {
+        return List.of();
     }
 
     private static List<String> strings(Connection c, String sql) throws SQLException {
