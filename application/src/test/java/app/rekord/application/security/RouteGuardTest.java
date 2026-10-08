@@ -55,6 +55,7 @@ class RouteGuardTest {
         Set<String> routes = RouteGuard.routes(production);
 
         // Then the floor holds and the health route is among them
+        assertThatCode(() -> RouteGuard.requireFloor(routes)).doesNotThrowAnyException();
         assertThat(routes).hasSizeGreaterThanOrEqualTo(60).contains("HealthApi#health");
     }
 
