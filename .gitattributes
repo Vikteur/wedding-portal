@@ -7,3 +7,5 @@ gradlew text eol=lf
 *.sql text eol=lf
 # gradle.properties is read by the build and by .github/scripts/contract-pin.sh: no CRLF.
 *.properties text eol=lf
+# Git hooks have no .sh extension and run under bash: no CRLF.
+.githooks/* text eol=lf

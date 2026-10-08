@@ -75,6 +75,9 @@ jobs:
       - name: Groma architecture map is curated and in sync
         run: bash .github/scripts/groma-check.sh
 
+      - name: Pre-push hook stops a push the map check rejects
+        run: bash scripts/test/pre-push.test.sh
+
       - name: Upload test reports
         if: failure() && steps.gradle.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pre-push hook (TASK-37): runs the Groma map check before a push, so a map that is out of step with the code, or holds
+# an undescribed element, is caught here instead of in CI.
+# Git does not version .git/hooks; switch this hook on once per clone with: bash scripts/install-hooks.sh
+# Linked worktrees share the clone's git config, so the hook also runs on their pushes.
+# GROMA names the groma CLI (default: groma).
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+groma_cli="${GROMA:-groma}"
+if ! command -v "$groma_cli" >/dev/null 2>&1; then
+  {
+    echo "pre-push: the groma CLI ('$groma_cli') is not installed, so the map check cannot run."
+    echo "Install it with: npm install -g groma.md@0.6.6"
+  } >&2
+  exit 1
+fi
+
+if ! bash .github/scripts/groma-check.sh; then
+  {
+    echo
+    echo "pre-push: the Groma map check failed; the push is stopped. To fix it:"
+    echo "  1. groma scan"
+    echo "  2. curate what is new (groma agent-instructions tells how)"
+    echo "  3. commit groma/"
+    echo "  4. push again"
+  } >&2
+  exit 1
+fi
