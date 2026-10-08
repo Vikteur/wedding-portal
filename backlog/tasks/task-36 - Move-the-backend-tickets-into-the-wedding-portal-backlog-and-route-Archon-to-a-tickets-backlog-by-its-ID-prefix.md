@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-08 00:34'
-updated_date: '2026-10-08 00:35'
+updated_date: '2026-10-08 00:55'
 labels:
   - archon
   - tooling
@@ -25,7 +25,7 @@ Every ticket lives in the umbrella backlog today, although nearly all of them (T
 <!-- AC:BEGIN -->
 - [ ] #1 Given the umbrella and wedding-portal backlogs When listed Then wedding-portal holds every TASK-n ticket and the five phase milestones with their IDs, history and relations intact and backlog doctor reports no problem, and the umbrella backlog holds none of them
 - [ ] #2 Given each repo's backlog/config.yml When read Then every backlog has a task_prefix no other repo uses: wedding-portal keeps task, the umbrella has its own prefix for new tickets
-- [ ] #3 Given a build-feature request naming a ticket ID When ticket.sh runs in any repo Then it reads the ticket from the backlog whose task_prefix matches the ID prefix (searched in the run repo main checkout and its siblings), fails naming the ID when no backlog has that prefix, and BACKLOG_CWD still overrides
+- [ ] #3 Given a build-feature request naming a ticket ID When ticket.sh runs in any repo Then it reads the ticket from the backlog whose task_prefix matches the ID prefix (searched in the run repo main checkout and its siblings); an ID whose prefix no backlog uses is no ticket, a known ID the backlog lacks or a prefix two backlogs share fails naming the ID, and BACKLOG_CWD still overrides
 - [ ] #4 Given a merged build-feature pull request When wait-merge.sh and close-out.sh run Then the ticket is finalized, committed and pushed in its own backlog, including when that backlog is in the same repo as the pull request whose main is behind origin after the merge
 - [ ] #5 Given the retro scripts When they look for the umbrella Then they find the repo with docs/retro/README.md, not the first backlog/, so a backlog in a product repo never becomes the retro home
 - [ ] #6 Given wedding-portal When its .archon directory is compared with the umbrella one Then they are identical
@@ -45,3 +45,9 @@ Every ticket lives in the umbrella backlog today, although nearly all of them (T
 7. Mirror .archon into wedding-portal; wedding-portal AGENTS.md Backlog block and CLAUDE.md loading AGENTS.md.
 8. All .archon and scripts/test suites green in both repos; PRs: umbrella, wedding-portal (stacked on the Groma init PR).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Built by hand (no Archon run), test first in both repos. backlog-home.sh routes an ID to the backlog whose task_prefix it carries (main checkout + siblings). wait-merge.sh takes the ticket as its second argument; close-out pulls --ff-only --autostash before committing. Retro scripts find the umbrella by docs/retro/README.md (RETRO_HOME overrides) and name folders by any known prefix (TICKET_PREFIXES for retro.js). The tickets were copied byte for byte (no Backlog move command; a prefix change hides old-prefix tasks); TASK-34/35/36 moved too because they carry the task prefix. Umbrella prefix is now tool. AC #3 reworded: an unknown prefix cannot be recognised as an ID, so it is no ticket.
+<!-- SECTION:NOTES:END -->
