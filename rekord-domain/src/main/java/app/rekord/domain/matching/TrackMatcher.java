@@ -28,7 +28,8 @@ public final class TrackMatcher {
 
     /** One file, scored against a query, with the reasoning left visible. */
     public record ScoredCandidate(LibraryIndex.Track track, double score,
-                                  Map<String, Double> parts, Versions.TitleParts version) {
+                                  Map<String, Double> parts, Versions.TitleParts version,
+                                  Double durationDeltaSec) {
     }
 
     public record MatchResult(MatchQuery input, Versions.TitleParts inputVersion, Bucket bucket,
@@ -75,7 +76,7 @@ public final class TrackMatcher {
         facets.put("duration", Score.durationScore(queryDuration, candidate.track().durationSec()));
 
         return new ScoredCandidate(candidate.track(), round(Score.combine(facets, WEIGHTS), 4),
-                facets, candidate.parts());
+                facets, candidate.parts(), durationDelta(queryDuration, candidate.track().durationSec()));
     }
 
     private record Bucketed(Bucket bucket, String autoSelectedId) {
@@ -108,6 +109,11 @@ public final class TrackMatcher {
             }
         }
         return new Bucketed(Bucket.UNMATCHED, null);
+    }
+
+    /** File minus query, one decimal; null when either duration is unknown. */
+    private static Double durationDelta(Double query, Double file) {
+        return query == null || file == null ? null : round(file - query, 1);
     }
 
     /** Python's round(): half to even, which matters at the recorded precision. */
