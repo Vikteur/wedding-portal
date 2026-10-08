@@ -8,13 +8,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
+import io.restassured.config.HttpClientConfig;
+import io.restassured.config.RestAssuredConfig;
 import io.restassured.response.Response;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -225,5 +232,67 @@ class ErrorEnvelopeMapperIT {
 
         assertThat(log.fromMapper()).isEmpty();
         assertThat(log.errors()).isEmpty();
+    }
+
+    // --- TASK-5.7: a cause cycle on the request path ---
+
+    private static final String QUARKUS_REST_EXCEPTION_MAPPER =
+            "org.jboss.resteasy.reactive.server.core.RuntimeExceptionMapper";
+
+    /**
+     * Quarkus REST 3.39.1 does not survive a cause cycle: after our mapper has run,
+     * {@code RuntimeExceptionMapper.mapException} calls {@code logBlockingErrorIfRequired}, whose
+     * {@code isKnownProblem} walks {@code getCause()} in a {@code while (e != null)} loop with no visited set. A cycle
+     * keeps that worker thread at 100% CPU and the response is never written, although the catch-all had already
+     * logged its one line. The socket timeouts below make the hang a failure with a message that names the looping
+     * method, instead of a build that never ends.
+     */
+    @Test
+    @Timeout(60)
+    void an_exception_with_a_cyclic_cause_answers_the_500_fixture_and_logs_one_redacted_error() throws Exception {
+        // Given: sockets that give up, so a request the server never answers fails this test instead of hanging it
+        RestAssuredConfig bounded = RestAssured.config()
+                .httpClient(HttpClientConfig.httpClientConfig()
+                        .setParam("http.connection.timeout", 5_000)
+                        .setParam("http.socket.timeout", 20_000));
+
+        // When: the resource method throws top -> SQLException -> top
+        Response response;
+        try {
+            response = given().config(bounded).when().get(PROBE + "/cyclic-cause");
+        } catch (Exception failure) {
+            // REST Assured rethrows the client's checked exception without declaring it, so it is caught as Exception
+            if (failure instanceof SocketTimeoutException) {
+                throw new AssertionError(
+                        "No answer within 20 s to a request whose exception has a cyclic cause; a thread is looping in "
+                                + whereQuarkusRestLoops(),
+                        failure);
+            }
+            throw failure;
+        }
+
+        // Then: the cycle reached the catch-all, which answered and logged exactly as for an acyclic chain
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-cause");
+        String text = LogCapture.text(log.errors().get(0));
+        assertThat(text)
+                .contains("java.lang.IllegalStateException")
+                .contains("Caused by: java.sql.SQLException")
+                .contains("ErrorEnvelopeProbeResource")
+                .doesNotContain("CIRCULAR REFERENCE");
+    }
+
+    /** The Quarkus REST class, the methods on the looping thread's stack (innermost first) and the thread, if any. */
+    private static String whereQuarkusRestLoops() {
+        for (var thread : Thread.getAllStackTraces().entrySet()) {
+            String methods = Arrays.stream(thread.getValue())
+                    .filter(frame -> frame.getClassName().equals(QUARKUS_REST_EXCEPTION_MAPPER))
+                    .map(frame -> frame.getMethodName() + ":" + frame.getLineNumber())
+                    .collect(Collectors.joining(" <- "));
+            if (!methods.isEmpty()) {
+                return QUARKUS_REST_EXCEPTION_MAPPER + " [" + methods + "] on thread " + thread.getKey().getName();
+            }
+        }
+        return "no thread inside " + QUARKUS_REST_EXCEPTION_MAPPER;
     }
 }

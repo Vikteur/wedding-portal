@@ -157,4 +157,11 @@ public class ErrorEnvelopeProbeResource {
         throw new RejectedException(
                 RejectedException.Kind.VALIDATION, ErrorCode.NO_WEDDING, "no row for member@example.com tok-example-123");
     }
+
+    /** The sentinel chain with its cause cycle (TASK-5.7): Quarkus REST itself has to cope with it. */
+    @GET
+    @Path("/cyclic-cause")
+    public String cyclicCause() {
+        throw chain(true);
+    }
 }
