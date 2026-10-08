@@ -15,7 +15,13 @@ import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
-/** Every refusal leaves as {@code {"detail":{"code","message"}}}, byte for byte as rekord-api writes it. */
+/**
+ * Every refusal raised inside JAX-RS leaves as {@code {"detail":{"code","message"}}}, byte for byte as rekord-api
+ * writes it. Three answers are not ours: the 413 for an oversized body (Vert.x answers it, with no body), the
+ * role-denied {@code io.quarkus.security.ForbiddenException} (no mapper names it, so the framework's body stays;
+ * TASK-6.2), and a {@code WebApplicationException} that carries its own entity (the framework writes that response as
+ * it is).
+ */
 public class ErrorEnvelopeMapper {
 
     private static final Logger LOG = Logger.getLogger(ErrorEnvelopeMapper.class);
