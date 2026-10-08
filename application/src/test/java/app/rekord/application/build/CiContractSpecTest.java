@@ -103,6 +103,8 @@ class CiContractSpecTest {
             + " that starts the application checks out rekord-contract to a path of its own at the ref the pin step"
             + " outputs";
 
+    private static final String ON_PUSH = "github.event_name == 'push'";
+
     @Test
     void every_ci_job_that_starts_the_application_checks_out_the_pinned_contract_and_passes_its_spec()
             throws IOException {
@@ -181,7 +183,9 @@ class CiContractSpecTest {
         // When / Then
         for (var shape : shapes) {
             JsonNode workflow = build(PIN, CHECKOUT, run(shape.get(0)));
-            assertThat(jobsStartingTheApplication("ci.yml", workflow)).as(shape.get(0)).containsExactly("ci.yml: build");
+            assertThat(jobsStartingTheApplication("ci.yml", workflow))
+                    .as(shape.get(0))
+                    .containsExactly("ci.yml: build");
             assertThat(violations(workflow)).as(shape.get(0))
                     .containsExactly("ci.yml job build: `" + shape.get(1) + "` does not pass -Pcontract.spec");
 
@@ -197,7 +201,8 @@ class CiContractSpecTest {
                 List.of("sudo -u ci ./gradlew build", "sudo -u ci ./gradlew build"),
                 List.of("stdbuf -oL ./gradlew build", "stdbuf -oL ./gradlew build"),
                 List.of("parallel ./gradlew ::: build", "parallel ./gradlew ::: build"),
-                List.of("xvfb-run -s \"-screen 0 1x1x24\" ./gradlew test", "xvfb-run -s -screen 0 1x1x24 ./gradlew test"));
+                List.of("xvfb-run -s \"-screen 0 1x1x24\" ./gradlew test",
+                        "xvfb-run -s -screen 0 1x1x24 ./gradlew test"));
 
         // When / Then: in a job that starts nothing else, so the refusal does not depend on a starting step
         for (var script : scripts) {
@@ -528,7 +533,8 @@ class CiContractSpecTest {
         // When / Then
         for (String command : otherContexts) {
             assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command)
-                    .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not read");
+                    .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not"
+                            + " read");
         }
         for (String command : rootContexts) {
             assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command).isEmpty();
@@ -588,24 +594,6 @@ class CiContractSpecTest {
 
         // When / Then
         assertThat(violations(workflow)).isEmpty();
-    }
-
-    private static final String ON_PUSH = "github.event_name == 'push'";
-
-    private static String when(String condition, String step) {
-        return "{if: " + "\"" + condition + "\", " + step.substring(1);
-    }
-
-    private static String conditionalPin(String condition) {
-        return when(condition, PIN);
-    }
-
-    private static String conditionalCheckout(String condition) {
-        return "{name: 'Check out rekord-contract', " + when(condition, CHECKOUT).substring(1);
-    }
-
-    private static String notShared(String step, String condition) {
-        return step + " runs only if `" + condition + "`, a condition the steps that start the application do not share";
     }
 
     @Test
@@ -673,6 +661,23 @@ class CiContractSpecTest {
         return "{run: '" + script + "'}";
     }
 
+    private static String when(String condition, String step) {
+        return "{if: \"" + condition + "\", " + step.substring(1);
+    }
+
+    private static String conditionalPin(String condition) {
+        return when(condition, PIN);
+    }
+
+    private static String conditionalCheckout(String condition) {
+        return "{name: 'Check out rekord-contract', " + when(condition, CHECKOUT).substring(1);
+    }
+
+    private static String notShared(String step, String condition) {
+        return step + " runs only if `" + condition + "`, a condition the steps that start the application do not"
+                + " share";
+    }
+
     private static List<String> violations(JsonNode workflow) {
         return violations("ci.yml", workflow, DOCKERFILE);
     }
@@ -693,7 +698,10 @@ class CiContractSpecTest {
      * it reading the pin from gradle.properties, no checkout of rekord-contract after that step (before it the ref
      * output is still empty, so the default branch is checked out) to a path of its own at the ref that step outputs,
      * a checkout path outside the workspace, a Gradle run (or the Dockerfile of an image build) whose
-     * last {@code -Pcontract.spec} is missing or is not {@code <checkout path>/dist/openapi.yaml}.
+     * last {@code -Pcontract.spec} is missing or is not {@code <checkout path>/dist/openapi.yaml}, a pin or checkout
+     * step whose {@code if:} the steps that start the application do not share. Fails closed, in every job: a command
+     * (or Dockerfile line) that names the wrapper in a shape it cannot classify, an image build from a Dockerfile it
+     * does not read, a {@code uses:} action it does not know, and a reusable workflow are reported too.
      */
     static List<String> violations(String file, JsonNode workflow, String dockerfile) {
         List<String> violations = new ArrayList<>();
@@ -871,8 +879,8 @@ class CiContractSpecTest {
     }
 
     /**
-     * The commands of a script, one list of words each: the text after a {@code #} that starts a word dropped, continued
-     * lines joined, a Dockerfile RUN in exec form read as its shell form, split at {@code && || ; |}.
+     * The commands of a script, one list of words each: the text after a {@code #} that starts a word dropped,
+     * continued lines joined, a Dockerfile RUN in exec form read as its shell form, split at {@code && || ; |}.
      */
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
@@ -890,8 +898,9 @@ class CiContractSpecTest {
     }
 
     /**
-     * Every Dockerfile {@code RUN [--option ...] ["program", "argument", ...]} as RUN, its options and the JSON words
-     * joined by spaces, so {@code ["sh", "-c", "./gradlew build"]} reads as the shell form {@code sh -c ./gradlew build}.
+     * Every Dockerfile {@code RUN [--option ...] ["program", "argument", ...]} as RUN, its options and the JSON
+     * words joined by spaces, so {@code ["sh", "-c", "./gradlew build"]} reads as the shell form
+     * {@code sh -c ./gradlew build}.
      * A line whose brackets are not a JSON array stays as written.
      */
     private static String shellForm(String script) {
