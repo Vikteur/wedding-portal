@@ -68,7 +68,7 @@ class ErrorEnvelopeMapperIT {
     @ParameterizedTest
     @CsvSource({
         "/test-only/error-envelope/auth-failed,error-authentication-failed-401",
-        "/test-only/error-envelope/unauthorized,error-authentication-failed-401",
+        "/test-only/error-envelope/unauthorized,error-not-signed-in-401",
         "/test-only/error-envelope/forbidden,error-forbidden-403",
         "/no-such-route,error-unknown-route-404",
         "/q/metrics,error-q-metrics-404",
