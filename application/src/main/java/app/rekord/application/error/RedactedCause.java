@@ -15,6 +15,8 @@ final class RedactedCause extends RuntimeException {
     private RedactedCause redactedCause;
 
     private RedactedCause(String className) {
+        // No message and no cause (getCause is overridden below); the last two flags keep suppression and the stack
+        // trace writable, because the original's suppressed exceptions and frames are copied in.
         super(null, null, true, true);
         this.className = className;
     }
@@ -23,7 +25,10 @@ final class RedactedCause extends RuntimeException {
         return copy(original, new IdentityHashMap<>());
     }
 
-    /** Each throwable is copied once; a link back to one already copied (a cycle) is cut, so no renderer can loop. */
+    /**
+     * Each throwable is copied once; a link to one already copied (a cycle, or the same throwable reached by a second
+     * path) is cut, so no renderer can loop.
+     */
     private static RedactedCause copy(Throwable original, Map<Throwable, RedactedCause> done) {
         RedactedCause copy = new RedactedCause(original.getClass().getName());
         done.put(original, copy);
@@ -46,6 +51,7 @@ final class RedactedCause extends RuntimeException {
         return redactedCause;
     }
 
+    // Throwable.toString would print this class's own name; the log line must show the original exception's class name.
     @Override
     public String toString() {
         return className;
