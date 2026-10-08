@@ -21,7 +21,13 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
-/** Test-only: throws what rekord-api's probe threw, with the oracle's messages. */
+/**
+ * Test-only. The family, auth-failed, forbidden, web-application-exception and uuid probes replay what rekord-api's
+ * probe threw, with the oracle's messages; invite-accept replays the oracle's invalid request body, and unauthorized
+ * throws the exception behind the oracle's anonymous 401. The role-denied probe has no oracle: the framework answers
+ * it. The unhandled, service-unavailable, internal-server-error and pair-without-row probes throw sentinel chains
+ * (or sentinel messages), to prove none of them reaches a log record.
+ */
 @Path("/test-only/error-envelope")
 @Produces(MediaType.APPLICATION_JSON)
 public class ErrorEnvelopeProbeResource {
