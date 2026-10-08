@@ -240,12 +240,13 @@ class ErrorEnvelopeMapperIT {
             "org.jboss.resteasy.reactive.server.core.RuntimeExceptionMapper";
 
     /**
-     * Quarkus REST 3.39.1 does not survive a cause cycle: after our mapper has run,
+     * Quarkus REST 3.39.1 does not survive a cause cycle on its own: after our mapper has run,
      * {@code RuntimeExceptionMapper.mapException} calls {@code logBlockingErrorIfRequired}, whose
      * {@code isKnownProblem} walks {@code getCause()} in a {@code while (e != null)} loop with no visited set. A cycle
      * keeps that worker thread at 100% CPU and the response is never written, although the catch-all had already
-     * logged its one line. The socket timeouts below make the hang a failure with a message that names the looping
-     * method, instead of a build that never ends.
+     * logged its one line. {@code AcyclicCauseInterceptor} rethrows an acyclic copy from every resource method, which
+     * is what these two tests hold. The socket timeouts make a regression a failure with a message that names the
+     * looping method, instead of a build that never ends.
      */
     @Test
     @Timeout(60)

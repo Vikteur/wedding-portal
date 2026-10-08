@@ -118,7 +118,17 @@ public class ErrorEnvelopeProbeResource {
         return chain(true);
     }
 
-    /** The cycle is left out when the framework itself has to walk the chain: it loops on a cause cycle. */
+    /**
+     * With {@code withCycle}, the SQLException's cause is the top exception again. Proven in TASK-5.7: Quarkus REST
+     * 3.39.1 does not survive that. After the mapper has answered, {@code RuntimeExceptionMapper.mapException} calls
+     * {@code logBlockingErrorIfRequired}, then {@code isBlockingProblem}, then {@code isKnownProblem}
+     * ({@code RuntimeExceptionMapper.java:187}), which follows {@code getCause()} in {@code while (e != null)} with no
+     * visited set: the worker thread spins at full CPU and no response is written. Only a chain thrown from a resource
+     * method is now safe, because {@code AcyclicCauseInterceptor} rethrows a redacted, acyclic copy of it; the
+     * {@code /cyclic-cause} probe and {@code ErrorEnvelopeMapperIT} hold that. A cycle raised anywhere else (a filter,
+     * a body reader, a parameter conversion) would still hang the thread, and {@code chain(false)} stays the safe
+     * input for a probe that is not about the guard. See docs/memory.md, section TASK-5.7.
+     */
     static IllegalStateException chain(boolean withCycle) {
         SQLException sql = new SQLException(
                 "ERROR: duplicate key Key (email)=(member@example.com) +12025550100 Testa Persona 4821-7735 pw-test-0001");
@@ -158,7 +168,7 @@ public class ErrorEnvelopeProbeResource {
                 RejectedException.Kind.VALIDATION, ErrorCode.NO_WEDDING, "no row for member@example.com tok-example-123");
     }
 
-    /** The sentinel chain with its cause cycle (TASK-5.7): Quarkus REST itself has to cope with it. */
+    /** The sentinel chain with its cause cycle (TASK-5.7): only the interceptor keeps Quarkus REST from looping on it. */
     @GET
     @Path("/cyclic-cause")
     public String cyclicCause() {

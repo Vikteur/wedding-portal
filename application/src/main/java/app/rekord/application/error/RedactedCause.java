@@ -21,7 +21,14 @@ final class RedactedCause extends RuntimeException {
         this.className = className;
     }
 
+    /**
+     * The redacted copy of {@code original}. A throwable that is already a copy is answered as it is: the cause-cycle
+     * guard (TASK-5.7) throws a copy, and the catch-all mapper redacts what it logs, which must not copy it again.
+     */
     static RedactedCause of(Throwable original) {
+        if (original instanceof RedactedCause alreadyRedacted) {
+            return alreadyRedacted;
+        }
         return copy(original, new IdentityHashMap<>());
     }
 

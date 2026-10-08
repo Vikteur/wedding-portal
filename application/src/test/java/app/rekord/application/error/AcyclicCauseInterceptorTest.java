@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import jakarta.interceptor.InvocationContext;
+import jakarta.ws.rs.WebApplicationException;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -137,6 +138,22 @@ class AcyclicCauseInterceptorTest {
         List<Throwable> links = causeLinks(thrown);
         assertThat(links).hasSize(3);
         assertThat(links.get(2).getCause()).isNull();
+    }
+
+    @Test
+    void a_web_application_exception_whose_chain_loops_back_loses_its_status_to_the_copy() {
+        // Given: the accepted price of the guard (owner, 2026-10-08): the copy is a RedactedCause, which no mapper
+        // answers as a 409, so the catch-all answers it as an unhandled 500
+        IllegalStateException inner = new IllegalStateException("cause");
+        WebApplicationException conflict = new WebApplicationException(inner, 409);
+        inner.initCause(conflict);
+
+        // When
+        Throwable thrown = thrownWhenMethodThrows(conflict);
+
+        // Then
+        assertThat(thrown).isInstanceOf(RedactedCause.class).isNotInstanceOf(WebApplicationException.class);
+        assertThat(thrown.toString()).isEqualTo("jakarta.ws.rs.WebApplicationException");
     }
 
     @Test
