@@ -35,8 +35,11 @@ class TestTaskInputsTest {
                     Pattern.compile("(?i)excludes"), "excludes (a setter or +=) changes the patterns outside exclude(...)"),
             new Narrowing(Pattern.compile("\\bexclude\\s*\\{"), "an exclude closure is code, not a pattern"));
     /**
-     * The Ant default excludes Gradle applies to every {@code fileTree} on top of its own excludes
-     * ({@code DirectoryScanner.getDefaultExcludes()}): a tracked file they match is an input only when named itself.
+     * A copy of the Ant default excludes Gradle applies to every {@code fileTree} on top of its own excludes
+     * ({@code DirectoryScanner.getDefaultExcludes()}), as of Gradle 9.8.0 (gradle/wrapper/gradle-wrapper.properties):
+     * keep it in step on a Gradle upgrade. A tracked file they match is an input only when named itself.
+     * No build script may change the defaults it copies: Gradle allows that in settings.gradle.kts only, and
+     * {@code no_build_script_changes_gradles_default_excludes} reads every tracked *.gradle.kts for it.
      */
     private static final List<String> GRADLE_DEFAULT_EXCLUDES = List.of(
             "**/%*%", "**/.#*", "**/._*", "**/#*#", "**/*~", "**/.DS_Store",
@@ -247,6 +250,22 @@ class TestTaskInputsTest {
         assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, ".gitattributes")).isTrue();
         assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, ".gitignore")).isTrue();
         assertThat(isExcluded(GRADLE_DEFAULT_EXCLUDES, "docs/memory.md")).isFalse();
+    }
+
+    @Test
+    void no_build_script_changes_gradles_default_excludes() throws Exception {
+        // Given the Kotlin build scripts git tracks
+        List<String> scripts =
+                trackedFiles().stream().filter(path -> path.endsWith(".gradle.kts")).toList();
+
+        // Then none adds or removes a default exclude (DirectoryScanner.addDefaultExclude and removeDefaultExclude),
+        // so GRADLE_DEFAULT_EXCLUDES is the list fileTree applies in this build
+        assertThat(scripts).isNotEmpty();
+        for (String script : scripts) {
+            assertThat(Files.readString(REPO_ROOT.resolve(script)))
+                    .as("%s changes Gradle's default excludes, which GRADLE_DEFAULT_EXCLUDES copies", script)
+                    .doesNotContain("DefaultExclude");
+        }
     }
 
     @Test
