@@ -8,7 +8,9 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
@@ -16,6 +18,9 @@ class FreshDatabaseIT {
 
     @Inject
     DataSource dataSource;
+
+    @Inject
+    Flyway flyway;
 
     @Test
     void dev_services_database_was_started_by_this_run_and_holds_no_row_of_an_earlier_one() throws SQLException {
@@ -25,12 +30,14 @@ class FreshDatabaseIT {
             // When the server's start is compared with this JVM's
             FreshDatabase.assertStartedAfterThisJvm(c);
 
-            // Then the history holds only the V file rows, each installed by this server
+            // Then the history holds only the rows of the V files Flyway resolves, each installed by this server
+            long versionedMigrations = Arrays.stream(flyway.info().all()).filter(i -> i.getVersion() != null).count();
+            assertThat(flyway.info().pending()).as("pending migrations").isEmpty();
             try (Statement s = c.createStatement();
                     ResultSet rs = s.executeQuery("select count(*), count(*) filter (where installed_on >= pg_postmaster_start_time())"
                             + " from flyway_schema_history")) {
                 rs.next();
-                assertThat(rs.getInt(1)).as("rows of the V files").isEqualTo(1);
+                assertThat(rs.getLong(1)).as("rows of the V files").isEqualTo(versionedMigrations);
                 assertThat(rs.getInt(2)).as("rows installed by this server").isEqualTo(rs.getInt(1));
             }
         }
