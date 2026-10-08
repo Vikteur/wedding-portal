@@ -239,8 +239,14 @@ class SchemaSnapshotIT {
         // When an index is dropped, or its predicate, expression or uniqueness differs, then the snapshot is not equal
         for (String change : List.of(
                 "drop index ix_tagged_label",
+                "drop index ux_tagged_code",
                 "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (lower(code))",
                 "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (code) where gone_at is null",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (lower(code))"
+                        + " where gone_at is not null",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (upper(code))"
+                        + " where gone_at is null",
+                "drop index ix_tagged_label; create index ix_tagged_label on tagged (label) where gone_at is null",
                 "drop index ix_tagged_label; create unique index ix_tagged_label on tagged (label)")) {
             try (Connection c = freshDatabase()) {
                 execute(c, TAGGED);
