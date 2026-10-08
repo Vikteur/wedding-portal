@@ -210,6 +210,115 @@ class RouteGuardTest {
     }
 
     @Test
+    void a_permit_all_on_a_class_a_method_or_a_generated_interface_is_named() {
+        // Given a generated interface with a @PermitAll route, a class with @PermitAll, and a method with @PermitAll
+        String openApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                public interface OpenApi {
+                    @jakarta.annotation.security.PermitAll @GET @Path("/open") void open();
+                    @GET @Path("/closed") void closed();
+                }
+                """;
+        String classLevel = """
+                package app.rekord.fixture;
+
+                @jakarta.annotation.security.PermitAll
+                public class OpenClassResource implements app.rekord.api.OpenApi {
+                    @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String methodLevel = """
+                package app.rekord.fixture;
+
+                public class OpenMethodResource implements app.rekord.api.OpenApi {
+                    @jakarta.annotation.security.PermitAll @Override public void open() {}
+                    @io.quarkus.security.Authenticated @Override public void closed() {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(openApi, classLevel, methodLevel);
+
+        // When the uses of @PermitAll are listed
+        Set<String> uses = RouteGuard.permitAllUses(fixtures);
+
+        // Then each use is named, and the @Authenticated method is not
+        assertThat(uses)
+                .containsExactlyInAnyOrder(
+                        "app.rekord.api.OpenApi#open",
+                        "app.rekord.fixture.OpenClassResource",
+                        "app.rekord.fixture.OpenMethodResource#open");
+    }
+
+    @Test
+    void a_class_level_access_annotation_on_an_allow_listed_route_is_reported() {
+        // Given a class-level @Authenticated implementation, with only open on the allow-list
+        JavaClasses fixtures = FixtureCompiler.compile(
+                FIXTURE_API, implementation("@io.quarkus.security.Authenticated", ""));
+
+        // When the allow-listed routes are checked for an access annotation
+        Set<String> overGuarded = RouteGuard.overGuarded(fixtures, Set.of("FixtureApi#open"));
+
+        // Then open is named, and closed is not, because it is not on the allow-list
+        assertThat(overGuarded).containsExactly("FixtureApi#open  (UnguardedResource)");
+    }
+
+    @Test
+    void a_method_level_access_annotation_on_an_allow_listed_route_is_reported() {
+        JavaClasses annotated = FixtureCompiler.compile(
+                FIXTURE_API, implementation("", "@io.quarkus.security.Authenticated"));
+        JavaClasses bare = FixtureCompiler.compile(FIXTURE_API, implementation("", ""));
+
+        assertThat(RouteGuard.overGuarded(annotated, Set.of("FixtureApi#open")))
+                .containsExactly("FixtureApi#open  (UnguardedResource)");
+        assertThat(RouteGuard.overGuarded(bare, Set.of("FixtureApi#open"))).isEmpty();
+    }
+
+    @Test
+    void an_allow_listed_route_is_over_guarded_by_the_class_that_declares_its_implementing_method() {
+        // Given an @Authenticated base that declares both methods, and an @Authenticated subclass of a plain base
+        String guardedBase = """
+                package app.rekord.fixture;
+
+                @io.quarkus.security.Authenticated
+                public abstract class GuardedBaseResource implements app.rekord.api.FixtureApi {
+                    @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String plainSub = """
+                package app.rekord.fixture;
+
+                public class PlainSubResource extends GuardedBaseResource {}
+                """;
+        String plainBase = """
+                package app.rekord.fixture;
+
+                public abstract class PlainBaseResource implements app.rekord.api.FixtureApi {
+                    @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String annotatedSub = """
+                package app.rekord.fixture;
+
+                @io.quarkus.security.Authenticated
+                public class AnnotatedSubResource extends PlainBaseResource {}
+                """;
+        JavaClasses inherited = FixtureCompiler.compile(FIXTURE_API, guardedBase, plainSub);
+        JavaClasses subclassed = FixtureCompiler.compile(FIXTURE_API, plainBase, annotatedSub);
+
+        // When the allow-listed route open is checked in both
+        // Then the annotation of the declaring base counts, and the annotation of the subclass does not
+        assertThat(RouteGuard.overGuarded(inherited, Set.of("FixtureApi#open")))
+                .containsExactly("FixtureApi#open  (PlainSubResource)");
+        assertThat(RouteGuard.overGuarded(subclassed, Set.of("FixtureApi#open"))).isEmpty();
+    }
+
+    @Test
     void a_class_implementing_no_generated_interface_is_not_scanned() {
         String outsideApi = """
                 package app.rekord.elsewhere;
@@ -243,6 +352,61 @@ class RouteGuardTest {
 
         assertThat(RouteGuard.implementations(fixtures)).isEmpty();
         assertThat(RouteGuard.unguarded(fixtures, Set.of())).isEmpty();
+    }
+
+    @Test
+    void a_hand_written_resource_that_implements_no_generated_interface_is_named() {
+        // Given a loose @Path resource, one that gets its routes from a foreign interface, and three classes to skip
+        String loose = """
+                package app.rekord.application.debug;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                @Path("/debug")
+                public class LooseResource {
+                    @GET public String dump() { return ""; }
+                }
+                """;
+        String outsideApi = """
+                package app.rekord.elsewhere;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                public interface OutsideApi {
+                    @GET @Path("/x") void x();
+                }
+                """;
+        String viaInterface = """
+                package app.rekord.fixture;
+
+                public class ViaInterfaceResource implements app.rekord.elsewhere.OutsideApi {
+                    @Override public void x() {}
+                }
+                """;
+        String abstractImpl = """
+                package app.rekord.fixture;
+
+                public abstract class AbstractResource implements app.rekord.api.FixtureApi {}
+                """;
+        String plainBean = """
+                package app.rekord.fixture;
+
+                public class PlainBean {
+                    public void run() {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(
+                FIXTURE_API, implementation("", ""), loose, outsideApi, viaInterface, abstractImpl, plainBean);
+
+        // When the resources the guard does not see are listed
+        Set<String> outside = RouteGuard.resourcesOutsideTheGuard(fixtures);
+
+        // Then only the two classes that serve routes without a generated interface are named
+        assertThat(outside)
+                .containsExactlyInAnyOrder(
+                        "app.rekord.application.debug.LooseResource", "app.rekord.fixture.ViaInterfaceResource");
     }
 
     @Test
@@ -334,6 +498,60 @@ class RouteGuardTest {
     }
 
     @Test
+    void a_class_annotation_on_a_subclass_does_not_guard_a_route_implemented_in_its_unannotated_superclass() {
+        // Given an unannotated abstract base that implements FixtureApi, and a subclass annotated at class level
+        String base = """
+                package app.rekord.fixture;
+
+                public abstract class PlainBaseResource implements app.rekord.api.FixtureApi {
+                    @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String subclass = """
+                package app.rekord.fixture;
+
+                @io.quarkus.security.Authenticated
+                public class AnnotatedSubResource extends PlainBaseResource {}
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, base, subclass);
+
+        // When the implementations are checked
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then both inherited routes are named: the annotation of the subclass does not reach the methods of the base
+        assertThat(unguarded)
+                .containsExactlyInAnyOrder(
+                        "FixtureApi#closed  (AnnotatedSubResource)", "FixtureApi#open  (AnnotatedSubResource)");
+    }
+
+    @Test
+    void a_class_annotation_on_the_superclass_that_declares_the_route_guards_it() {
+        // Given an @Authenticated abstract base that declares both methods, and a plain subclass
+        String base = """
+                package app.rekord.fixture;
+
+                @io.quarkus.security.Authenticated
+                public abstract class GuardedBaseResource implements app.rekord.api.FixtureApi {
+                    @Override public void open() {}
+                    @Override public void closed() {}
+                }
+                """;
+        String subclass = """
+                package app.rekord.fixture;
+
+                public class PlainSubResource extends GuardedBaseResource {}
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, base, subclass);
+
+        // When the implementations are checked
+        Set<String> unguarded = RouteGuard.unguarded(fixtures, Set.of());
+
+        // Then the base guards its own declared methods
+        assertThat(unguarded).isEmpty();
+    }
+
+    @Test
     void a_route_is_matched_to_the_implementing_method_with_the_same_parameter_types() {
         // Given a route find(String) and two implementations, each with a find(Integer) overload
         String paramApi = """
@@ -409,6 +627,31 @@ class RouteGuardTest {
         assertThat(RouteGuard.implementations(production))
                 .contains("app.rekord.adapter.web.health.HealthResource");
         assertThat(RouteGuard.unguarded(production, RouteGuard.PUBLIC.keySet())).isEmpty();
+    }
+
+    @Test
+    void no_production_class_or_method_carries_permit_all() {
+        assertThat(RouteGuard.permitAllUses(ProductionClasses.importAll()))
+                .as("D2: public routes go through RouteGuard.PUBLIC, never @PermitAll")
+                .isEmpty();
+    }
+
+    @Test
+    void every_production_resource_is_seen_by_the_guard() {
+        assertThat(RouteGuard.resourcesOutsideTheGuard(ProductionClasses.importAll()))
+                .as("a production class with routes that implements no generated interface")
+                .isEmpty();
+    }
+
+    @Test
+    void no_allow_listed_production_route_carries_an_access_annotation() {
+        JavaClasses production = ProductionClasses.importAll();
+
+        assertThat(RouteGuard.implementations(production))
+                .contains("app.rekord.adapter.web.health.HealthResource");
+        assertThat(RouteGuard.overGuarded(production, RouteGuard.PUBLIC.keySet()))
+                .as("a public route that an access annotation would refuse")
+                .isEmpty();
     }
 
     private static Set<String> names(int count) {

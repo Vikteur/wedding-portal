@@ -114,6 +114,21 @@ final class RouteGuard {
         return unguarded;
     }
 
+    /** D2: no {@code @PermitAll} anywhere; a public route is public through {@link #PUBLIC} only. */
+    static Set<String> permitAllUses(JavaClasses classes) {
+        return new TreeSet<>();
+    }
+
+    /** Production endpoints that implement no generated interface, which the route guard would otherwise never see. */
+    static Set<String> resourcesOutsideTheGuard(JavaClasses classes) {
+        return new TreeSet<>();
+    }
+
+    /** Allow-listed routes whose implementation still carries an access annotation, which would refuse a visitor. */
+    static Set<String> overGuarded(JavaClasses classes, Set<String> allowList) {
+        return new TreeSet<>();
+    }
+
     static void requireGuarded(JavaClasses classes, Set<String> allowList) {
         Set<String> unguarded = unguarded(classes, allowList);
         if (!unguarded.isEmpty()) {
