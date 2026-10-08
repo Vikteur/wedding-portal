@@ -12,6 +12,6 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation(libs.assertj.core)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testCompileOnly("jakarta.enterprise:jakarta.enterprise.cdi-api")
-    testCompileOnly("jakarta.transaction:jakarta.transaction-api")
+    testImplementation("jakarta.enterprise:jakarta.enterprise.cdi-api")
+    testImplementation("jakarta.transaction:jakarta.transaction-api")
 }
