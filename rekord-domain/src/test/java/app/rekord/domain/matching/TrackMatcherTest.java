@@ -502,7 +502,7 @@ class TrackMatcherTest {
     }
 
     @Test
-    void the_choice_is_looked_up_by_the_queries_signature_id() {
+    void the_choice_is_looked_up_by_the_query_signature_id() {
         LibraryIndex index = new LibraryIndex(List.of(daftPunk("f", "Strobe", 320.0), daftPunk("g", "Strobe (Radio Edit)", 200.0)));
         Map<String, String> filedUnderRadioEdit = choice("Daft Punk", "Strobe (Radio Edit)", "g");
 
@@ -514,6 +514,40 @@ class TrackMatcherTest {
         assertThat(plain.fromPreference()).isFalse();
         assertThat(radio.fromPreference()).isTrue();
         assertThat(radio.autoSelectedId()).isEqualTo("g");
+    }
+
+    @Test
+    void a_choice_for_a_query_without_an_artist_is_applied_and_the_bucket_stays_ambiguous() {
+        // Given two files of the same title and a remembered choice for the artist-less query
+        LibraryIndex index = new LibraryIndex(List.of(
+                new Track("a", null, "Dancing Queen", null), new Track("b", null, "Dancing Queen", null)));
+
+        // When the query has no artist
+        MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, "", "Dancing Queen", null), index, Map.of(),
+                choice("", "Dancing Queen", "b"));
+
+        // Then the remembered file is picked and first, and the bucket is scoring's (never auto without an artist)
+        assertThat(result.autoSelectedId()).isEqualTo("b");
+        assertThat(result.fromPreference()).isTrue();
+        assertThat(ids(result).getFirst()).isEqualTo("b");
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_choice_equal_to_the_auto_leader_keeps_the_order_and_the_bucket() {
+        // Given a lone file that scoring picks as AUTO
+        LibraryIndex index = new LibraryIndex(List.of(daftPunk("f", "One More Time", 320.0)));
+        MatchQuery query = new MatchQuery(0, "Daft Punk", "One More Time", 320.0);
+        List<String> before = ids(TrackMatcher.matchOne(query, index));
+
+        // When the DJ's remembered choice is that same file
+        MatchResult result = TrackMatcher.matchOne(query, index, Map.of(), choice("Daft Punk", "One More Time", "f"));
+
+        // Then the list is unchanged (the leader is not listed twice), the bucket stays AUTO, and it is marked remembered
+        assertThat(ids(result)).isEqualTo(before);
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("f");
+        assertThat(result.fromPreference()).isTrue();
     }
 
     @Test
