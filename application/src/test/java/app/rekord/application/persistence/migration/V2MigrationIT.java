@@ -2,17 +2,19 @@ package app.rekord.application.persistence.migration;
 
 import app.rekord.application.persistence.migration.SchemaSnapshot.Column;
 import app.rekord.application.persistence.migration.SchemaSnapshot.Constraint;
+import app.rekord.application.persistence.migration.SchemaSnapshot.Default;
 import app.rekord.application.persistence.migration.SchemaSnapshot.Index;
 import java.util.List;
 
 /**
  * V2 creates the identity tables in the final shape of the rekord-api oracle (V1 + V9 for memberships, V2 for
  * sessions), with the role ADMIN and without {@code failed_login_count} and {@code locked_until}. The literals are
- * PostgreSQL's rendering of the DDL.
+ * PostgreSQL's rendering of the DDL. The ids have no default and no identity column: the caller assigns them.
  */
 class V2MigrationIT extends MigrationSchemaCheck {
 
     private static final String TZ = "timestamp with time zone";
+    private static final String NOW = "now()";
 
     @Override
     protected String version() {
@@ -115,6 +117,18 @@ class V2MigrationIT extends MigrationSchemaCheck {
                                 "CREATE UNIQUE INDEX ux_sessions_token ON public.sessions USING btree (token_hash)"),
                         new Index("users", "ux_users_email",
                                 "CREATE UNIQUE INDEX ux_users_email ON public.users USING btree (lower(email))"
-                                        + " WHERE (deleted_at IS NULL)")));
+                                        + " WHERE (deleted_at IS NULL)")),
+                List.of(
+                        new Default("memberships", "status", "'ACTIVE'::text", null),
+                        new Default("memberships", "created_at", NOW, null),
+                        new Default("memberships", "updated_at", NOW, null),
+                        new Default("organizations", "timezone", "'Europe/Amsterdam'::text", null),
+                        new Default("organizations", "created_at", NOW, null),
+                        new Default("organizations", "updated_at", NOW, null),
+                        new Default("sessions", "created_at", NOW, null),
+                        new Default("sessions", "last_seen_at", NOW, null),
+                        new Default("users", "status", "'INVITED'::text", null),
+                        new Default("users", "created_at", NOW, null),
+                        new Default("users", "updated_at", NOW, null)));
     }
 }
