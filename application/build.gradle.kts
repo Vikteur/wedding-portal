@@ -44,6 +44,10 @@ tasks.test {
         exclude(".git", ".git/**", ".gradle/**", ".kotlin/**", ".idea/**", "**/*.iml",
             "build/**", "*/build/**", "out/**", "*/out/**", "contract/**")
     }).withPropertyName("repoFiles").withPathSensitivity(PathSensitivity.RELATIVE)
+    // The checkout contract.spec points into: the spec and the hub's smoke/pom.xml (HubProbeParityTest).
+    // Derived from the property, never a path or tag; optional, so `help` and a run without it still configure.
+    inputs.files(contractSpec.map { listOf(File(it), File(it).parentFile.parentFile.resolve("smoke/pom.xml")) }.orElse(listOf()))
+        .withPropertyName("contractFiles").withPathSensitivity(PathSensitivity.NAME_ONLY).optional()
     // ClassFileVersionTest reads the class directories of every module, so they must be compiled first.
     // Derived from the subprojects so a module added to settings.gradle.kts cannot be skipped.
     rootProject.subprojects.filter { it != project }.forEach {
