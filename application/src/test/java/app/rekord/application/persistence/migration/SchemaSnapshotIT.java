@@ -89,6 +89,39 @@ class SchemaSnapshotIT {
     }
 
     @Test
+    void a_numeric_or_time_column_carries_its_precision_and_scale() throws SQLException {
+        // Given numeric and time columns with and without an explicit precision
+        try (Connection c = freshDatabase()) {
+            execute(c, """
+                    create table priced (
+                        amount numeric(10,2) not null,
+                        ratio numeric,
+                        paid_at timestamp(3) with time zone,
+                        seen_at timestamp with time zone,
+                        starts time(0) without time zone
+                    )""");
+
+            // When the schema is read
+            SchemaSnapshot snapshot = SchemaSnapshot.read(c);
+
+            // Then precision and scale are part of the type; the default time precision (6) is not written out
+            assertThat(snapshot.columns()).containsExactly(
+                    new SchemaSnapshot.Column("priced", "amount", "numeric(10,2)", false),
+                    new SchemaSnapshot.Column("priced", "ratio", "numeric", true),
+                    new SchemaSnapshot.Column("priced", "paid_at", "timestamp(3) with time zone", true),
+                    new SchemaSnapshot.Column("priced", "seen_at", "timestamp with time zone", true),
+                    new SchemaSnapshot.Column("priced", "starts", "time(0) without time zone", true));
+
+            // And a changed scale or time precision makes the snapshot differ
+            execute(c, "alter table priced alter column amount type numeric(10,4)");
+            assertThat(SchemaSnapshot.read(c)).isNotEqualTo(snapshot);
+            execute(c, "alter table priced alter column amount type numeric(10,2)");
+            execute(c, "alter table priced alter column paid_at type timestamp(6) with time zone");
+            assertThat(SchemaSnapshot.read(c)).isNotEqualTo(snapshot);
+        }
+    }
+
+    @Test
     void an_empty_database_has_the_empty_snapshot() throws SQLException {
         // Given a fresh database, even with a Flyway history table
         try (Connection c = freshDatabase()) {
