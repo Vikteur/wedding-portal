@@ -20,8 +20,6 @@ class GoldenFixturesTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern MACHINE_PATH = Pattern.compile("^([A-Za-z]:[/\\\\]|/Users/|/home/).*", Pattern.DOTALL);
-    private static final List<Integer> UD19C = List.of(82, 85, 86, 88, 90, 100, 101, 107, 108, 109, 110, 111,
-            115, 122, 152, 155, 156, 161);
 
     private static JsonNode read(String name) {
         try (InputStream in = GoldenFixturesTest.class.getResourceAsStream(name)) {
@@ -104,7 +102,8 @@ class GoldenFixturesTest {
     @Test
     void the_18_ud19c_cases_are_recorded_ambiguous_with_no_pick() {
         JsonNode cases = set().get("cases");
-        for (int pos : UD19C) {
+        assertThat(GoldenGate.UD19C).hasSize(18);
+        for (int pos : GoldenGate.UD19C) {
             JsonNode expected = cases.get(pos).get("expected");
             assertThat(expected.get("bucket").asText()).as("case %d bucket", pos).isEqualTo("ambiguous");
             assertThat(expected.get("auto_selected_id").isNull()).as("case %d auto_selected_id", pos).isTrue();

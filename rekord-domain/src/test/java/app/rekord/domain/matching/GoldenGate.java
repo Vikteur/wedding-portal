@@ -22,6 +22,10 @@ import java.util.TreeSet;
  */
 final class GoldenGate {
 
+    /** The 18 cases whose same-song candidates the owner left with the DJ (UD-19.c), by position in the set. */
+    static final List<Integer> UD19C = List.of(82, 85, 86, 88, 90, 100, 101, 107, 108, 109, 110, 111,
+            115, 122, 152, 155, 156, 161);
+
     private static final double TOLERANCE = 1e-6;
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final JsonNode SET = read("/golden/golden-set.json");

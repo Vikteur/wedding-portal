@@ -28,9 +28,6 @@ import org.junit.jupiter.params.provider.CsvSource;
  */
 class MatcherGoldenSetTest {
 
-    private static final List<Integer> UD19C = List.of(82, 85, 86, 88, 90, 100, 101, 107, 108, 109, 110, 111,
-            115, 122, 152, 155, 156, 161);
-
     private static List<Integer> positionsOf(String family) {
         JsonNode cases = GoldenGate.set().get("cases");
         return IntStream.range(0, cases.size())
@@ -72,8 +69,8 @@ class MatcherGoldenSetTest {
     void the_18_ud19c_cases_answer_ambiguous_with_no_pick_and_their_recorded_candidates() {
         JsonNode cases = GoldenGate.set().get("cases");
         List<MatchResult> answers = GoldenGate.answers();
-        assertThat(UD19C).hasSize(18);
-        for (int i : UD19C) {
+        assertThat(GoldenGate.UD19C).hasSize(18);
+        for (int i : GoldenGate.UD19C) {
             MatchResult actual = answers.get(i);
             assertThat(GoldenGate.contractBucket(actual.bucket())).as("case %d bucket", i).isEqualTo("ambiguous");
             assertThat(actual.autoSelectedId()).as("case %d auto_selected_id", i).isNull();
