@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -81,6 +82,7 @@ class HubProbeParityTest {
     private static final List<String> PORTAL_ENVIRONMENT = List.of("inputSpec", "outputDir", "cleanupOutput");
 
     private static final String BUILD_SCRIPT = "rekord-adapter/build.gradle.kts";
+    private static final String HUB_POM_FILE = "smoke/pom.xml";
     private static final String GENERATOR_ALIAS_SOURCE = "alias(libs.plugins.openapi.generator)";
     private static final Pattern GENERATOR_ALIAS =
             Pattern.compile("\\balias\\(\\s*libs\\.plugins\\.openapi\\.generator\\s*\\)");
@@ -539,6 +541,423 @@ class HubProbeParityTest {
                         "does not apply org.openapi.generator"));
     }
 
+    // ---- the dependencies: smoke/pom.xml <dependencies> against the external api(...) of rekord-adapter (TASK-2.10) ----
+
+    @Test
+    void the_hub_smoke_probe_and_rekord_adapter_declare_the_same_dependencies() throws IOException {
+        // Given
+        Path pom = hubPom();
+        String script = Files.readString(REPO_ROOT.resolve(BUILD_SCRIPT));
+
+        // When
+        Set<String> hub = hubDependencies(Files.readString(pom));
+        Set<String> portal = portalDependencies(script);
+
+        // Then: the comparison must have something to compare
+        assertThat(hub).as("<dependencies> read from %s", pom).isNotEmpty();
+        assertThat(portal).as("external api(...) coordinates read from %s", BUILD_SCRIPT).isNotEmpty();
+        assertThat(dependencyDifferences(hub, portal))
+                .as("differences between the <dependencies> of the hub's %s and the api(...) of wedding-portal's %s", pom, BUILD_SCRIPT)
+                .isEmpty();
+    }
+
+    @Test
+    void dependencies_that_are_alike_have_no_difference_whatever_else_the_script_declares() {
+        // Given / When
+        Set<String> hub = hubDependencies(HUB_DEPENDENCIES_POM);
+        Set<String> portal = portalDependencies(PORTAL_DEPENDENCIES_SCRIPT);
+
+        // Then: versions, project(...), compileOnly, implementation and the test configurations are not compared
+        assertThat(hub).containsExactlyInAnyOrder(
+                "jakarta.ws.rs:jakarta.ws.rs-api",
+                "jakarta.validation:jakarta.validation-api",
+                "jakarta.annotation:jakarta.annotation-api",
+                "com.fasterxml.jackson.core:jackson-annotations");
+        assertThat(portal).isEqualTo(hub);
+        assertThat(dependencyDifferences(hub, portal)).isEmpty();
+    }
+
+    @Test
+    void a_dependency_only_the_hub_has_is_reported_by_coordinate_and_file() {
+        // Given: the probe gained jackson-databind and rekord-adapter did not
+        String pom = HUB_DEPENDENCIES_POM.replace("</dependencies>", DATABIND + "</dependencies>");
+
+        // When
+        var differences = dependencyDifferences(hubDependencies(pom), portalDependencies(PORTAL_DEPENDENCIES_SCRIPT));
+
+        // Then
+        assertThat(pom).isNotEqualTo(HUB_DEPENDENCIES_POM);
+        assertThat(differences)
+                .containsExactly("com.fasterxml.jackson.core:jackson-databind: in smoke/pom.xml <dependencies>, "
+                        + "not in rekord-adapter/build.gradle.kts api(...)");
+    }
+
+    @Test
+    void an_api_coordinate_removed_from_or_added_to_rekord_adapter_is_reported_by_coordinate_and_file() {
+        // Given
+        String removed = PORTAL_DEPENDENCIES_SCRIPT.replace("    api(\"jakarta.annotation:jakarta.annotation-api\")\n", "");
+        String added = withDependencyLine(PORTAL_DEPENDENCIES_SCRIPT, "api(\"com.fasterxml.jackson.core:jackson-databind\")");
+        Set<String> hub = hubDependencies(HUB_DEPENDENCIES_POM);
+
+        // When / Then
+        assertThat(removed).isNotEqualTo(PORTAL_DEPENDENCIES_SCRIPT);
+        assertThat(dependencyDifferences(hub, portalDependencies(removed)))
+                .containsExactly("jakarta.annotation:jakarta.annotation-api: in smoke/pom.xml <dependencies>, "
+                        + "not in rekord-adapter/build.gradle.kts api(...)");
+        assertThat(dependencyDifferences(hub, portalDependencies(added)))
+                .containsExactly("com.fasterxml.jackson.core:jackson-databind: in rekord-adapter/build.gradle.kts api(...), "
+                        + "not in smoke/pom.xml <dependencies>");
+    }
+
+    @Test
+    void a_copy_of_each_real_file_with_a_dependency_added_or_removed_is_reported() throws IOException {
+        // Given: the files themselves, so a change of their shape shows here and not only in the fixtures
+        String pom = Files.readString(hubPom());
+        String script = Files.readString(REPO_ROOT.resolve(BUILD_SCRIPT));
+        Matcher externalApi = Pattern.compile("(?m)^[ \\t]*api\\(\"([^\":]+:[^\":]+)\"\\)[ \\t]*\\R").matcher(script);
+        assertThat(externalApi.find()).as("an api(\"group:artifact\") line in %s", BUILD_SCRIPT).isTrue();
+        String removed = externalApi.group(1);
+        String withDatabind = pom.replace("</dependencies>", DATABIND + "</dependencies>");
+        String withoutOne = script.substring(0, externalApi.start()) + script.substring(externalApi.end());
+
+        // When / Then
+        assertThat(withDatabind).isNotEqualTo(pom);
+        assertThat(dependencyDifferences(hubDependencies(withDatabind), portalDependencies(script)))
+                .containsExactly("com.fasterxml.jackson.core:jackson-databind: in smoke/pom.xml <dependencies>, "
+                        + "not in rekord-adapter/build.gradle.kts api(...)");
+        assertThat(dependencyDifferences(hubDependencies(pom), portalDependencies(withoutOne)))
+                .containsExactly(removed + ": in smoke/pom.xml <dependencies>, not in rekord-adapter/build.gradle.kts api(...)");
+    }
+
+    @Test
+    void a_dependency_that_both_sides_declare_differently_is_compared_by_group_and_artifact_only() {
+        // Given: a version on the portal side, another version and the optional flag on the hub side
+        String pom = HUB_DEPENDENCIES_POM.replace("<version>2.22</version>", "<version>9.9</version><optional>true</optional>");
+        String script = PORTAL_DEPENDENCIES_SCRIPT.replace(
+                "api(\"com.fasterxml.jackson.core:jackson-annotations\")", "api(\"com.fasterxml.jackson.core:jackson-annotations:2.22\")");
+
+        // When / Then
+        assertThat(pom).isNotEqualTo(HUB_DEPENDENCIES_POM);
+        assertThat(script).isNotEqualTo(PORTAL_DEPENDENCIES_SCRIPT);
+        assertThat(dependencyDifferences(hubDependencies(pom), portalDependencies(script))).isEmpty();
+    }
+
+    @Test
+    void a_pom_construct_that_does_not_put_a_dependency_on_the_probe_is_not_refused() {
+        // Given: a plugin's own <dependencies>, a comment, an explicit compile scope and jar type are not a difference
+        String pluginDependencies = HUB_DEPENDENCIES_POM.replace("</plugin>", "<dependencies>" + DATABIND + "</dependencies></plugin>");
+        String inComments = HUB_DEPENDENCIES_POM.replace(
+                "<dependencies>",
+                "<!-- <parent><artifactId>p</artifactId></parent> <profiles/> <dependencyManagement/> --><dependencies>");
+        String explicit = HUB_DEPENDENCIES_POM.replace(
+                "<version>4.0.0</version>", "<version>4.0.0</version><scope>compile</scope><type>jar</type>");
+
+        // When / Then
+        Set<String> expected = hubDependencies(HUB_DEPENDENCIES_POM);
+        assertThat(pluginDependencies).isNotEqualTo(HUB_DEPENDENCIES_POM);
+        assertThat(hubDependencies(pluginDependencies)).isEqualTo(expected);
+        assertThat(hubDependencies(inComments)).isEqualTo(expected);
+        assertThat(hubDependencies(explicit)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("pomsWhoseDependenciesTheReaderCannotFollow")
+    void a_pom_whose_dependencies_the_reader_cannot_follow_fails_loudly(String form, String pom, String named) {
+        // When / Then: no empty set to pass on, and the message names the file
+        assertThatThrownBy(() -> hubDependencies(pom))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(HUB_POM_FILE)
+                .hasMessageContaining(named);
+    }
+
+    static Stream<Arguments> pomsWhoseDependenciesTheReaderCannotFollow() {
+        String jakartaWsRsAgain = "<dependency><groupId>jakarta.ws.rs</groupId><artifactId>jakarta.ws.rs-api</artifactId></dependency>";
+        return Stream.of(
+                Arguments.of("no <dependencies> block", HUB_POM, "has no <dependencies> block"),
+                Arguments.of(
+                        "<dependencies> only inside the plugin",
+                        HUB_POM.replace("<executions>", "<dependencies>" + DATABIND + "</dependencies><executions>"),
+                        "has no <dependencies> block"),
+                Arguments.of(
+                        "an empty <dependencies/>",
+                        HUB_DEPENDENCIES_POM.replaceAll("(?s)<dependencies>.*?</dependencies>", "<dependencies/>"),
+                        "<dependencies> block without a <dependency>"),
+                Arguments.of(
+                        "a <dependencies> holding only a comment",
+                        HUB_DEPENDENCIES_POM.replaceAll("(?s)<dependencies>.*?</dependencies>", "<dependencies><!-- none --></dependencies>"),
+                        "<dependencies> block without a <dependency>"),
+                Arguments.of(
+                        "two <dependencies> blocks",
+                        HUB_DEPENDENCIES_POM.replace("</dependencies>", "</dependencies><dependencies>" + DATABIND + "</dependencies>"),
+                        "more than one <dependencies> block"),
+                Arguments.of(
+                        "a <parent>",
+                        HUB_DEPENDENCIES_POM.replace(
+                                "<dependencies>",
+                                "<parent><groupId>g</groupId><artifactId>p</artifactId><version>1</version></parent><dependencies>"),
+                        "<parent>, which this test does not read"),
+                Arguments.of(
+                        "a <profiles> section",
+                        HUB_DEPENDENCIES_POM.replace(
+                                "</project>",
+                                "<profiles><profile><id>more</id><dependencies>" + DATABIND + "</dependencies></profile></profiles></project>"),
+                        "<profiles> section, which this test does not read"),
+                Arguments.of(
+                        "a <dependencyManagement> section",
+                        HUB_DEPENDENCIES_POM.replace(
+                                "<dependencies>",
+                                "<dependencyManagement><dependencies>" + DATABIND + "</dependencies></dependencyManagement><dependencies>"),
+                        "<dependencyManagement>, which this test does not read"),
+                Arguments.of(
+                        "<scope>test</scope>",
+                        HUB_DEPENDENCIES_POM.replace("<version>4.0.0</version>", "<version>4.0.0</version><scope>test</scope>"),
+                        "cannot read <scope>test</scope> of jakarta.ws.rs:jakarta.ws.rs-api"),
+                Arguments.of(
+                        "<type>pom</type>",
+                        HUB_DEPENDENCIES_POM.replace("<version>3.1.1</version>", "<version>3.1.1</version><type>pom</type>"),
+                        "cannot read <type>pom</type> of jakarta.validation:jakarta.validation-api"),
+                Arguments.of(
+                        "a <classifier>",
+                        HUB_DEPENDENCIES_POM.replace("<version>3.0.0</version>", "<version>3.0.0</version><classifier>x</classifier>"),
+                        "cannot read <classifier> of jakarta.annotation:jakarta.annotation-api"),
+                Arguments.of(
+                        "<exclusions>",
+                        HUB_DEPENDENCIES_POM.replace(
+                                "<version>2.22</version>",
+                                "<version>2.22</version><exclusions><exclusion><groupId>x</groupId><artifactId>y</artifactId></exclusion></exclusions>"),
+                        "cannot read <exclusions> of com.fasterxml.jackson.core:jackson-annotations"),
+                Arguments.of(
+                        "a property placeholder in the coordinate",
+                        HUB_DEPENDENCIES_POM.replace(
+                                "<artifactId>jackson-annotations</artifactId>", "<artifactId>${jackson.artifact}</artifactId>"),
+                        "cannot read the coordinate com.fasterxml.jackson.core:${jackson.artifact}, a property placeholder"),
+                Arguments.of(
+                        "a dependency without an <artifactId>",
+                        HUB_DEPENDENCIES_POM.replace("<artifactId>jakarta.ws.rs-api</artifactId>", ""),
+                        "expected exactly one <artifactId> in <dependency>"),
+                Arguments.of(
+                        "a dependency declared twice",
+                        HUB_DEPENDENCIES_POM.replace("</dependencies>", jakartaWsRsAgain + "</dependencies>"),
+                        "declares jakarta.ws.rs:jakarta.ws.rs-api twice"),
+                Arguments.of("XML that is not XML", "<project>", "is not readable XML"));
+    }
+
+    @Test
+    void a_build_script_with_the_dependencies_block_missing_or_repeated_fails_loudly() {
+        // Given: the block moved, only a comment names it, or a second one appeared
+        String none = "plugins {\n    `java-library`\n}\n";
+        String onlyInComment = "// dependencies {\n//     api(\"x:y\")\n// }\n" + none;
+        String twice = PORTAL_DEPENDENCIES_SCRIPT + "\ndependencies {\n    api(\"x:y\")\n}\n";
+
+        // When / Then
+        assertThatThrownBy(() -> portalDependencies(none))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(BUILD_SCRIPT)
+                .hasMessageContaining("no `dependencies {` block");
+        assertThatThrownBy(() -> portalDependencies(onlyInComment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("no `dependencies {` block");
+        assertThatThrownBy(() -> portalDependencies(twice))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(BUILD_SCRIPT)
+                .hasMessageContaining("more than one `dependencies {` block");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("dependenciesInAnotherForm")
+    void a_build_script_with_dependencies_in_another_form_fails_loudly(String form, String construct, String named) {
+        // Given: the one top-level block is there, and a second way in is added next to it
+        String script = PORTAL_DEPENDENCIES_SCRIPT + "\n" + construct;
+
+        // When / Then
+        assertThatThrownBy(() -> portalDependencies(script))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(BUILD_SCRIPT)
+                .hasMessageContaining("in another form")
+                .hasMessageContaining(named)
+                .hasMessageContaining("does not read");
+    }
+
+    static Stream<Arguments> dependenciesInAnotherForm() {
+        return Stream.of(
+                Arguments.of("subprojects { dependencies { ... } }", """
+                        subprojects {
+                            dependencies {
+                                api("com.fasterxml.jackson.core:jackson-databind")
+                            }
+                        }
+                        """, "dependencies {"),
+                Arguments.of("afterEvaluate { dependencies { ... } }", """
+                        afterEvaluate {
+                            dependencies {
+                                api("com.fasterxml.jackson.core:jackson-databind")
+                            }
+                        }
+                        """, "dependencies {"),
+                Arguments.of("a buildscript dependencies block", """
+                        buildscript {
+                            dependencies {
+                                classpath("org.example:plugin:1")
+                            }
+                        }
+                        """, "dependencies {"),
+                Arguments.of(
+                        "project.dependencies.add(...)",
+                        "project.dependencies.add(\"api\", \"com.fasterxml.jackson.core:jackson-databind\")\n",
+                        "project.dependencies.add(\"api\", \"com.fasterxml.jackson.core:jackson-databind\")"),
+                Arguments.of(
+                        "configurations.api.get().dependencies",
+                        "configurations.api.get().dependencies.add(project.dependencies.create(\"a:b\"))\n",
+                        "configurations.api.get().dependencies.add(project.dependencies.create(\"a:b\"))"),
+                Arguments.of(
+                        "configurations.api { withDependencies { ... } }",
+                        "configurations.api { withDependencies { add(project.dependencies.create(\"a:b\")) } }\n",
+                        "configurations.api { withDependencies {"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("apiArgumentsTheReaderCannotFollow")
+    void an_api_argument_the_reader_cannot_follow_fails_loudly(String form, String line, String named, String says) {
+        // Given
+        String script = withDependencyLine(PORTAL_DEPENDENCIES_SCRIPT, line);
+
+        // When / Then
+        assertThat(script).contains(line);
+        assertThatThrownBy(() -> portalDependencies(script))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(BUILD_SCRIPT)
+                .hasMessageContaining(named)
+                .hasMessageContaining(says);
+    }
+
+    static Stream<Arguments> apiArgumentsTheReaderCannotFollow() {
+        String notALiteral = "not a string literal or project(...)";
+        String notACoordinate = "not group:artifact or group:artifact:version";
+        return Stream.of(
+                Arguments.of(
+                        "a version catalog accessor",
+                        "api(libs.jackson.databind)",
+                        "`libs.jackson.databind`",
+                        "a version catalog accessor, which this test does not resolve"),
+                Arguments.of("a variable", "api(jacksonAnnotations)", "`jacksonAnnotations`", notALiteral),
+                Arguments.of(
+                        "a string template",
+                        "api(\"com.fasterxml.jackson.core:jackson-annotations:$jackson\")",
+                        "\"com.fasterxml.jackson.core:jackson-annotations:$jackson\"",
+                        "a string template"),
+                Arguments.of(
+                        "a concatenation",
+                        "api(\"com.fasterxml.jackson.core:jackson-annotations:\" + jackson)",
+                        "\"com.fasterxml.jackson.core:jackson-annotations:\" + jackson",
+                        notALiteral),
+                Arguments.of("a platform", "api(platform(libs.jackson.bom))", "`platform(libs.jackson.bom)`", notALiteral),
+                Arguments.of(
+                        "map notation",
+                        "api(group = \"com.fasterxml.jackson.core\", name = \"jackson-databind\")",
+                        "`group = \"com.fasterxml.jackson.core\"`",
+                        notALiteral),
+                Arguments.of(
+                        "a classifier",
+                        "api(\"com.fasterxml.jackson.core:jackson-annotations:2.22:sources\")",
+                        "\"com.fasterxml.jackson.core:jackson-annotations:2.22:sources\"",
+                        notACoordinate),
+                Arguments.of(
+                        "an artifact type",
+                        "api(\"com.fasterxml.jackson.core:jackson-annotations:2.22@jar\")",
+                        "\"com.fasterxml.jackson.core:jackson-annotations:2.22@jar\"",
+                        notACoordinate),
+                Arguments.of("a lone name", "api(\"jackson-annotations\")", "\"jackson-annotations\"", notACoordinate),
+                Arguments.of(
+                        "a configuration block",
+                        "api(\"com.fasterxml.jackson.core:jackson-databind\") { exclude(group = \"x\") }",
+                        "api(\"com.fasterxml.jackson.core:jackson-databind\")",
+                        "with a configuration block"),
+                Arguments.of(
+                        "a coordinate declared twice",
+                        "api(\"jakarta.ws.rs:jakarta.ws.rs-api\")",
+                        "jakarta.ws.rs:jakarta.ws.rs-api",
+                        "twice"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("statementsTheReaderDoesNotKnow")
+    void a_statement_or_configuration_the_reader_does_not_know_fails_loudly(String form, String line, String says) {
+        // Given
+        String script = withDependencyLine(PORTAL_DEPENDENCIES_SCRIPT, line);
+
+        // When / Then
+        assertThatThrownBy(() -> portalDependencies(script))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(BUILD_SCRIPT)
+                .hasMessageContaining(says);
+    }
+
+    static Stream<Arguments> statementsTheReaderDoesNotKnow() {
+        String statement = "cannot read this statement of the dependencies block";
+        return Stream.of(
+                Arguments.of(
+                        "add(\"api\", ...)",
+                        "add(\"api\", \"com.fasterxml.jackson.core:jackson-databind\")",
+                        "`add(...)`, a configuration this test does not know"),
+                Arguments.of(
+                        "compileOnlyApi(...)",
+                        "compileOnlyApi(\"com.fasterxml.jackson.core:jackson-databind\")",
+                        "`compileOnlyApi(...)`, a configuration this test does not know"),
+                Arguments.of(
+                        "a conditional",
+                        "if (withDatabind) api(\"com.fasterxml.jackson.core:jackson-databind\")",
+                        "`if(...)`, a configuration this test does not know"),
+                Arguments.of("a string as the configuration", "\"api\"(\"com.fasterxml.jackson.core:jackson-databind\")", statement),
+                Arguments.of("the Groovy form", "api \"com.fasterxml.jackson.core:jackson-databind\"", statement),
+                Arguments.of("a constraints block", "constraints { api(\"x:y:1\") }", statement),
+                Arguments.of("a variable declaration", "val extra = \"com.fasterxml.jackson.core:jackson-databind\"", statement),
+                Arguments.of("a call chained onto the dependency", "api(\"x:y\").also { }", statement));
+    }
+
+    @Test
+    void the_api_forms_the_reader_follows_are_read_and_everything_else_in_the_block_is_left_alone() {
+        // Given: calls over several lines, several coordinates in one call, a version, project(...), the other configurations
+        String block = """
+                dependencies {
+                    api(
+                        "g1:a1",
+                        "g2:a2:1.0",
+                    )
+                    api("g3:a3", project(":p"))
+                    api(project(path = ":q", configuration = "c"))
+                    // api("hidden:one")
+                    /* api("hidden:two") */
+                    implementation("x:y:1") { exclude(group = "q") }
+                    implementation(platform(libs.some.bom))
+                    compileOnly("hidden:three")
+                    testImplementation(libs.assertj.core)
+                    runtimeOnly("hidden:four")
+                    annotationProcessor("hidden:five")
+                    api("g4:a4"); api("g5:a5")
+                }
+                val note = "see dependencies { api(\\"hidden:six\\") }"
+                """;
+
+        // When / Then
+        assertThat(portalDependencies(block)).containsExactlyInAnyOrder("g1:a1", "g2:a2", "g3:a3", "g4:a4", "g5:a5");
+    }
+
+    @Test
+    void a_dependency_construct_that_appears_only_in_a_comment_or_a_string_is_not_refused() {
+        // Given
+        String script = PORTAL_DEPENDENCIES_SCRIPT
+                + """
+
+                // subprojects { dependencies { api("x:y") } }
+                /* project.dependencies.add("api", "x:y")
+                   configurations.api.get().dependencies */
+                val note = "dependencies { api(\\"x:y\\") }"
+                """;
+
+        // When / Then
+        assertThat(portalDependencies(script)).isEqualTo(hubDependencies(HUB_DEPENDENCIES_POM));
+    }
+
     // ---- the files under test -------------------------------------------------------------------------------------
 
     /** The hub's smoke job: {@code smoke/pom.xml} next to {@code dist/} in the checkout {@code contract.spec} is in. */
@@ -897,6 +1316,23 @@ class HubProbeParityTest {
         throw unreadable("the " + OPENAPI_GENERATOR_PLUGIN_ID + " plugin entry of gradle/libs.versions.toml names no version");
     }
 
+    // ---- the dependencies: smoke/pom.xml <dependencies> and the external api(...) of rekord-adapter (TASK-2.10) ---------
+
+    /** The {@code groupId:artifactId} of every {@code <dependency>} of the pom's own {@code <dependencies>}. */
+    static Set<String> hubDependencies(String pomXml) {
+        throw new UnsupportedOperationException("TASK-2.10: hubDependencies is not implemented");
+    }
+
+    /** The {@code group:artifact} of every external {@code api("...")} in the script's one top-level {@code dependencies { }}. */
+    static Set<String> portalDependencies(String buildScript) {
+        throw new UnsupportedOperationException("TASK-2.10: portalDependencies is not implemented");
+    }
+
+    /** One line per coordinate only one side declares, naming the file it is in; empty when the two sets are equal. */
+    static List<String> dependencyDifferences(Set<String> hub, Set<String> portal) {
+        throw new UnsupportedOperationException("TASK-2.10: dependencyDifferences is not implemented");
+    }
+
     // ---- comparison -------------------------------------------------------------------------------------------------
 
     /** One line per difference, naming the setting and both values; empty when the two sides generate alike. */
@@ -1008,4 +1444,78 @@ class HubProbeParityTest {
             [plugins]
             openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
             """;
+
+    private static final String DATABIND =
+            "<dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId>"
+                    + "<version>2.22</version></dependency>";
+
+    private static final String HUB_DEPENDENCIES_POM = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <dependencies>
+                <!-- Only what the generated interfaces reference. -->
+                <dependency>
+                  <groupId>jakarta.ws.rs</groupId>
+                  <artifactId>jakarta.ws.rs-api</artifactId>
+                  <version>4.0.0</version>
+                </dependency>
+                <dependency>
+                  <groupId>jakarta.validation</groupId>
+                  <artifactId>jakarta.validation-api</artifactId>
+                  <version>3.1.1</version>
+                </dependency>
+                <dependency>
+                  <groupId>jakarta.annotation</groupId>
+                  <artifactId>jakarta.annotation-api</artifactId>
+                  <version>3.0.0</version>
+                </dependency>
+                <dependency>
+                  <groupId>com.fasterxml.jackson.core</groupId>
+                  <artifactId>jackson-annotations</artifactId>
+                  <version>2.22</version>
+                </dependency>
+              </dependencies>
+              <build>
+                <plugins>
+                  <plugin>
+                    <groupId>org.openapitools</groupId>
+                    <artifactId>openapi-generator-maven-plugin</artifactId>
+                  </plugin>
+                </plugins>
+              </build>
+            </project>
+            """;
+
+    /** The shape of rekord-adapter/build.gradle.kts: the four external api(...), project(...), and the other configurations. */
+    private static final String PORTAL_DEPENDENCIES_SCRIPT = """
+            plugins {
+                `java-library`
+                alias(libs.plugins.openapi.generator)
+            }
+
+            dependencies {
+                implementation(platform(libs.quarkus.bom))
+                compileOnly(platform(libs.quarkus.bom))
+                compileOnly("jakarta.enterprise:jakarta.enterprise.cdi-api")
+                // The APIs the generated sources import; versions come from the BOM.
+                api("jakarta.ws.rs:jakarta.ws.rs-api")
+                api("jakarta.validation:jakarta.validation-api")
+                api("com.fasterxml.jackson.core:jackson-annotations")
+                api("jakarta.annotation:jakarta.annotation-api")
+                api(project(":rekord-usecase"))
+                api(project(":rekord-domain"))
+                implementation(project(":logging"))
+                testImplementation("org.junit.jupiter:junit-jupiter")
+                testImplementation(libs.assertj.core)
+                testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+                testImplementation(project(path = ":rekord-usecase", configuration = "testArtifacts"))
+                testCompileOnly("jakarta.enterprise:jakarta.enterprise.cdi-api")
+            }
+            """;
+
+    /** {@code script} with one more statement in its {@code dependencies { }} block. */
+    private static String withDependencyLine(String script, String line) {
+        String domain = "    api(project(\":rekord-domain\"))\n";
+        return script.replace(domain, "    " + line + "\n" + domain);
+    }
 }
