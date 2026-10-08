@@ -70,6 +70,40 @@ import org.w3c.dom.Node;
  *
  * <p>Not refused: the source-root wiring {@code java.srcDir(tasks.named("openApiGenerate").map { ... })}, which names
  * the task without configuring it.
+ *
+ * <p>The dependencies (TASK-2.10): the probe compiles the generated sources against the {@code <dependencies>} of
+ * {@code smoke/pom.xml}, which the hub keeps as a hand copy of the external {@code api(...)} list of
+ * {@code rekord-adapter/build.gradle.kts}. A generator change that needs one more library breaks the hub's job when only
+ * one side has it, so the {@code groupId:artifactId} sets of the two are compared too, and a difference names the
+ * coordinate and the file it is in. Versions are not compared: the portal takes them from the Quarkus BOM and the probe
+ * pins its own.
+ *
+ * <p>Ignored on the portal side: {@code api(project(...))}, which is a module of this build, and every configuration
+ * other than {@code api} ({@code implementation}, {@code compileOnly}, {@code runtimeOnly}, {@code annotationProcessor}
+ * and the {@code test*} ones), because those do not reach the generated sources' consumers.
+ *
+ * <p>Refused, and named with the file, because an empty or partial set would pass:
+ * <ul>
+ *   <li>in {@code smoke/pom.xml}: no {@code <dependencies>} block of the project itself (a plugin's own does not count),
+ *       more than one, or one without a {@code <dependency>}; a {@code <parent>}, a {@code <profiles>} section or a
+ *       {@code <dependencyManagement>}, which Maven merges into the dependencies; a dependency with a scope other than
+ *       {@code compile}, a type other than {@code jar}, a classifier, exclusions, a property placeholder in its
+ *       coordinate, or one declared twice;</li>
+ *   <li>in {@code rekord-adapter/build.gradle.kts}: no top-level {@code dependencies { }} block or more than one, and
+ *       dependencies reached in any other form ({@code subprojects { }}, {@code afterEvaluate { }}, a
+ *       {@code buildscript} block, {@code project.dependencies.add}, {@code configurations.api { withDependencies { } }});
+ *       a statement that is not a call, or a call of a configuration this test does not know; an {@code api(...)} with a
+ *       configuration block, with a version catalog accessor ({@code libs.x}), a variable, a string template, a
+ *       concatenation, map notation, a {@code platform(...)}, a classifier or an {@code @} artifact type, or with a
+ *       coordinate declared twice.</li>
+ * </ul>
+ *
+ * <p>Known limits: only {@code rekord-adapter/build.gradle.kts} is read, so a dependency that arrives through the root
+ * build script, a convention plugin in {@code plugins { }} or {@code apply(from = ...)} is not seen; a
+ * {@code buildscript { dependencies { } }} block is refused although it is not the project's classpath, because the
+ * reader cannot tell the two apart without a parser; raw strings ({@code """}) and character literals are not
+ * understood by the string scan; and the external {@code implementation(...)} dependencies are not compared because
+ * they do not reach the consumers of the generated sources.
  */
 class HubProbeParityTest {
 
@@ -90,6 +124,17 @@ class HubProbeParityTest {
     private static final Pattern SOURCE_ROOT_WIRING = Pattern.compile(
             "\\btasks\\s*\\.\\s*named\\s*\\(\\s*\"openApiGenerate\"\\s*\\)\\s*\\.\\s*map\\s*\\{");
     private static final Pattern GENERATOR_SETTING_NAME = Pattern.compile("\\b(?:configOptions|generatorName)\\b");
+    /** Any word that ends in "dependencies": the block header, but also {@code project.dependencies} and {@code withDependencies}. */
+    private static final Pattern DEPENDENCIES_WORD = Pattern.compile("(?i)\\w*dependencies\\b");
+    private static final Pattern DEPENDENCIES_BLOCK_OPEN = Pattern.compile("\\s*\\{");
+    /** A statement of the dependencies block: the configuration name and the opening parenthesis of its call. */
+    private static final Pattern DEPENDENCY_CALL = Pattern.compile("(\\w+)\\s*\\(");
+    private static final Pattern PROJECT_DEPENDENCY = Pattern.compile("project\\s*\\(");
+    private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"\\\\]*)\"");
+    /** The configurations whose dependencies are not compared with the probe's: they are not on the generated sources' API. */
+    private static final Set<String> OTHER_CONFIGURATIONS = Set.of(
+            "implementation", "compileOnly", "runtimeOnly", "annotationProcessor",
+            "testImplementation", "testCompileOnly", "testRuntimeOnly", "testAnnotationProcessor");
 
     /** A construct this reader does not follow: what it looks like in the script, and what to call it in the message. */
     private record Construct(Pattern pattern, String description) {}
@@ -1318,19 +1363,257 @@ class HubProbeParityTest {
 
     // ---- the dependencies: smoke/pom.xml <dependencies> and the external api(...) of rekord-adapter (TASK-2.10) ---------
 
-    /** The {@code groupId:artifactId} of every {@code <dependency>} of the pom's own {@code <dependencies>}. */
+    /**
+     * The {@code groupId:artifactId} of every {@code <dependency>} of the pom's own {@code <dependencies>}. A pom with no
+     * such block, or with one this reader does not follow, is refused: an empty set would pass against nothing.
+     */
     static Set<String> hubDependencies(String pomXml) {
-        throw new UnsupportedOperationException("TASK-2.10: hubDependencies is not implemented");
+        Element project = parse(pomXml);
+        refuseWhatMavenMergesIntoTheDependencies(project);
+        List<Element> blocks = children(project, "dependencies");
+        if (blocks.isEmpty()) {
+            throw unreadable(HUB_POM_FILE + " has no <dependencies> block, so the probe's classpath cannot be compared with the api(...) of "
+                    + BUILD_SCRIPT + "; a <dependencies> inside a plugin is not the project's");
+        }
+        if (blocks.size() > 1) {
+            throw unreadable(HUB_POM_FILE + " has more than one <dependencies> block");
+        }
+        Set<String> coordinates = new TreeSet<>();
+        for (Element dependency : children(blocks.get(0), null)) {
+            if (!"dependency".equals(dependency.getLocalName())) {
+                throw unreadable(HUB_POM_FILE + ": cannot read <" + dependency.getLocalName() + "> in <dependencies>, only <dependency>");
+            }
+            String coordinate = hubCoordinate(dependency);
+            if (!coordinates.add(coordinate)) {
+                throw unreadable(HUB_POM_FILE + " declares " + coordinate + " twice");
+            }
+        }
+        if (coordinates.isEmpty()) {
+            throw unreadable(HUB_POM_FILE + " has a <dependencies> block without a <dependency>, so there is nothing to compare");
+        }
+        return coordinates;
     }
 
-    /** The {@code group:artifact} of every external {@code api("...")} in the script's one top-level {@code dependencies { }}. */
+    /**
+     * Maven adds the parent's {@code <dependencies>} and those of an active profile to the pom's own, and merges the scope
+     * and exclusions of {@code <dependencyManagement>} into them; this reader looks at the pom's own block only.
+     */
+    private static void refuseWhatMavenMergesIntoTheDependencies(Element project) {
+        if (!children(project, "parent").isEmpty()) {
+            throw unreadable(HUB_POM_FILE + " has a <parent>, which this test does not read; Maven inherits the parent's "
+                    + "<dependencies>, so declare every dependency in the pom itself");
+        }
+        if (!children(project, "profiles").isEmpty()) {
+            throw unreadable(HUB_POM_FILE + " has a <profiles> section, which this test does not read; an active profile adds "
+                    + "its own <dependencies> to the pom, so keep every dependency out of profiles");
+        }
+        if (!children(project, "dependencyManagement").isEmpty()) {
+            throw unreadable(HUB_POM_FILE + " has a <dependencyManagement>, which this test does not read; Maven merges its "
+                    + "scope and exclusions into the dependencies, so declare them on the dependency itself");
+        }
+    }
+
+    /**
+     * The {@code groupId:artifactId} of one {@code <dependency>}. Only a dependency on the compile classpath, as a plain
+     * jar, is read: another scope, type, classifier or exclusion changes what the generated sources compile against.
+     */
+    private static String hubCoordinate(Element dependency) {
+        String groupId = text(single(dependency, "groupId", "<dependency>"));
+        String artifactId = text(single(dependency, "artifactId", "<dependency>"));
+        String coordinate = groupId + ":" + artifactId;
+        if (groupId.contains("${") || artifactId.contains("${")) {
+            throw unreadable(HUB_POM_FILE + ": cannot read the coordinate " + coordinate + ", a property placeholder; write the "
+                    + "group and the artifact out");
+        }
+        for (Element child : children(dependency, null)) {
+            String name = child.getLocalName();
+            boolean plain = List.of("groupId", "artifactId", "version", "optional").contains(name);
+            boolean compileScope = "scope".equals(name) && "compile".equals(text(child));
+            boolean jar = "type".equals(name) && "jar".equals(text(child));
+            if (!plain && !compileScope && !jar) {
+                String shown = "scope".equals(name) || "type".equals(name)
+                        ? "<" + name + ">" + text(child) + "</" + name + ">"
+                        : "<" + name + ">";
+                throw unreadable(HUB_POM_FILE + ": cannot read " + shown + " of " + coordinate
+                        + "; this test compares the groupId:artifactId of the plain jars on the compile classpath");
+            }
+        }
+        return coordinate;
+    }
+
+    /**
+     * The {@code group:artifact} of every external {@code api(...)} in the one top-level {@code dependencies { }} block,
+     * with {@code project(...)} and the other configurations left out. A script with no such block, with dependencies in
+     * another form, or with a statement or argument this reader does not follow, is refused.
+     */
     static Set<String> portalDependencies(String buildScript) {
-        throw new UnsupportedOperationException("TASK-2.10: portalDependencies is not implemented");
+        String code = withoutComments(buildScript);
+        String bare = withoutStringContents(code);
+        int open = -1;
+        Matcher word = DEPENDENCIES_WORD.matcher(bare);
+        while (word.find()) {
+            Matcher brace = DEPENDENCIES_BLOCK_OPEN.matcher(bare).region(word.end(), bare.length());
+            boolean topLevelHeader = word.group().equals("dependencies")
+                    && bare.substring(bare.lastIndexOf('\n', word.start()) + 1, word.start()).isBlank()
+                    && braceDepth(bare, word.start()) == 0
+                    && brace.lookingAt();
+            if (!topLevelHeader) {
+                throw unreadable(BUILD_SCRIPT + " has dependencies in another form (`" + lineAt(code, word.start()) + "`), which this "
+                        + "test does not read; keep every dependency in the one top-level dependencies { } block, or extend this test");
+            }
+            if (open >= 0) {
+                throw unreadable("more than one `dependencies {` block in " + BUILD_SCRIPT);
+            }
+            open = brace.end() - 1;
+        }
+        if (open < 0) {
+            throw unreadable("no `dependencies {` block in " + BUILD_SCRIPT + "; if it moved, point this test at it");
+        }
+        return apiCoordinates(code.substring(open + 1, matching(code, open, '{', '}')));
+    }
+
+    /** The coordinates of the {@code api(...)} calls of a {@code dependencies { }} body; every statement in it must be a call. */
+    private static Set<String> apiCoordinates(String body) {
+        Set<String> coordinates = new TreeSet<>();
+        Matcher call = DEPENDENCY_CALL.matcher(body);
+        int at = skipSeparators(body, 0);
+        while (at < body.length()) {
+            if (!call.region(at, body.length()).lookingAt()) {
+                throw unreadable(BUILD_SCRIPT + ": cannot read this statement of the dependencies block, which this test does not "
+                        + "follow: " + lineAt(body, at));
+            }
+            String configuration = call.group(1);
+            int open = call.end() - 1;
+            int close = matching(body, open, '(', ')');
+            int lambda = skipSeparators(body, close + 1);
+            boolean hasBlock = lambda < body.length() && body.charAt(lambda) == '{';
+            if ("api".equals(configuration)) {
+                if (hasBlock) {
+                    throw unreadable(BUILD_SCRIPT + " has `" + body.substring(at, close + 1) + "` with a configuration block, which "
+                            + "this test does not read; a block can exclude or change what api(...) puts on the classpath");
+                }
+                for (String argument : arguments(body.substring(open + 1, close))) {
+                    String coordinate = apiCoordinate(argument);
+                    if (coordinate != null && !coordinates.add(coordinate)) {
+                        throw unreadable(BUILD_SCRIPT + " declares " + coordinate + " in api(...) twice");
+                    }
+                }
+            } else if (!OTHER_CONFIGURATIONS.contains(configuration)) {
+                throw unreadable(BUILD_SCRIPT + " declares a dependency through `" + configuration + "(...)`, a configuration this "
+                        + "test does not know; use api(...) or one of " + OTHER_CONFIGURATIONS.stream().sorted().toList()
+                        + ", or extend this test");
+            }
+            at = skipSeparators(body, hasBlock ? matching(body, lambda, '{', '}') + 1 : close + 1);
+        }
+        return coordinates;
+    }
+
+    /** The {@code group:artifact} of one {@code api(...)} argument, or null for {@code project(...)}: a module of this build. */
+    private static String apiCoordinate(String argument) {
+        Matcher project = PROJECT_DEPENDENCY.matcher(argument);
+        if (project.lookingAt() && matching(argument, project.end() - 1, '(', ')') == argument.length() - 1) {
+            return null;
+        }
+        if (argument.startsWith("libs.")) {
+            throw unreadableArgument(argument, "a version catalog accessor, which this test does not resolve; write the coordinate "
+                    + "as a string literal, or extend this test");
+        }
+        Matcher literal = STRING_LITERAL.matcher(argument);
+        if (!literal.matches()) {
+            throw unreadableArgument(argument, "not a string literal or project(...)");
+        }
+        if (literal.group(1).contains("$")) {
+            throw unreadableArgument(argument, "a string template");
+        }
+        String[] parts = literal.group(1).split(":", -1);
+        boolean readable = (parts.length == 2 || parts.length == 3)
+                && Stream.of(parts).noneMatch(part -> part.isBlank() || part.contains("@"));
+        if (!readable) {
+            throw unreadableArgument(argument, "not group:artifact or group:artifact:version");
+        }
+        return parts[0] + ":" + parts[1];
+    }
+
+    private static IllegalStateException unreadableArgument(String argument, String reason) {
+        return unreadable(BUILD_SCRIPT + ": cannot read the argument `" + argument + "` of api(...) (" + reason + ")");
+    }
+
+    /** The arguments of a call: the text between its parentheses cut at the commas that are not inside a bracket or a string. */
+    private static List<String> arguments(String inside) {
+        List<String> arguments = new ArrayList<>();
+        int depth = 0;
+        int from = 0;
+        for (int i = 0; i < inside.length(); i++) {
+            char c = inside.charAt(i);
+            if (c == '"') {
+                i = endOfString(inside, i);
+            } else if ("([{".indexOf(c) >= 0) {
+                depth++;
+            } else if (")]}".indexOf(c) >= 0) {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                arguments.add(inside.substring(from, i).strip());
+                from = i + 1;
+            }
+        }
+        arguments.add(inside.substring(from).strip());
+        if (arguments.size() > 1 && arguments.get(arguments.size() - 1).isEmpty()) {
+            arguments.remove(arguments.size() - 1);
+        }
+        return arguments;
+    }
+
+    /** The index of the first character at or after {@code from} that is not white space or a statement separator. */
+    private static int skipSeparators(String text, int from) {
+        int i = from;
+        while (i < text.length() && (Character.isWhitespace(text.charAt(i)) || text.charAt(i) == ';')) {
+            i++;
+        }
+        return i;
+    }
+
+    /** How many {@code {} are open at {@code index}; strings are already blanked out of {@code bare}. */
+    private static int braceDepth(String bare, int index) {
+        int depth = 0;
+        for (int i = 0; i < index; i++) {
+            if (bare.charAt(i) == '{') {
+                depth++;
+            } else if (bare.charAt(i) == '}') {
+                depth--;
+            }
+        }
+        return depth;
+    }
+
+    /** {@code code} with the inside of every string literal blanked, so a word or a brace in a string is not read as code. */
+    private static String withoutStringContents(String code) {
+        StringBuilder bare = new StringBuilder(code);
+        for (int i = 0; i < code.length(); i++) {
+            if (code.charAt(i) == '"') {
+                int end = endOfString(code, i);
+                for (int inside = i + 1; inside < end; inside++) {
+                    bare.setCharAt(inside, ' ');
+                }
+                i = end;
+            }
+        }
+        return bare.toString();
     }
 
     /** One line per coordinate only one side declares, naming the file it is in; empty when the two sets are equal. */
     static List<String> dependencyDifferences(Set<String> hub, Set<String> portal) {
-        throw new UnsupportedOperationException("TASK-2.10: dependencyDifferences is not implemented");
+        List<String> differences = new ArrayList<>();
+        for (String coordinate : new TreeSet<>(hub)) {
+            if (!portal.contains(coordinate)) {
+                differences.add(coordinate + ": in " + HUB_POM_FILE + " <dependencies>, not in " + BUILD_SCRIPT + " api(...)");
+            }
+        }
+        for (String coordinate : new TreeSet<>(portal)) {
+            if (!hub.contains(coordinate)) {
+                differences.add(coordinate + ": in " + BUILD_SCRIPT + " api(...), not in " + HUB_POM_FILE + " <dependencies>");
+            }
+        }
+        return differences;
     }
 
     // ---- comparison -------------------------------------------------------------------------------------------------
