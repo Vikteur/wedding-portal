@@ -161,7 +161,8 @@ nodes:
       if [ -f .github/scripts/groma-check.sh ]; then bash .github/scripts/groma-check.sh; fi
 
   # Link the ticket to the map (TASK-36): its changed files and the elements that own them, so Groma shows the ticket on
-  # the map while it is open. The ticket is edited in the umbrella checkout; close-out commits it with the ticket's Done.
+  # the map while it is open. A container the ticket was planned on is dropped once a component under it is linked
+  # (`dropped` lists those ids). The ticket is edited in the umbrella checkout; close-out commits it with the ticket's Done.
   - id: map-links
     depends_on: [map-check]
     bash: |
@@ -172,6 +173,7 @@ nodes:
       properties:
         files: { type: number }
         refs: { type: string }
+        dropped: { type: string }
       required: [files, refs]
 
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
