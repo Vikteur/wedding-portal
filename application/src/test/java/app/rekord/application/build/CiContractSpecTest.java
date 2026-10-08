@@ -436,6 +436,18 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_spec_inside_a_dockerfile_comment_is_not_passed() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = "FROM x\nRUN ./gradlew --no-daemon build # " + SPEC + "\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `./gradlew --no-daemon build` does not pass"
+                        + " -Pcontract.spec");
+    }
+
+    @Test
     void an_image_build_whose_dockerfile_takes_the_spec_from_a_sibling_path_is_found() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
