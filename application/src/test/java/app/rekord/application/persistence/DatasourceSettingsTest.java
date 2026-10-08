@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -15,6 +16,8 @@ class DatasourceSettingsTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Path RESOURCES = REPO_ROOT.resolve("application/src/main/resources");
+    private static final String SERVER_ERROR_DETAIL =
+            "quarkus.datasource.jdbc.additional-jdbc-properties.logServerErrorDetail";
     private static final Pattern DB_KIND = Pattern.compile("(%[\\w-]+\\.)?quarkus\\.datasource\\.(.+\\.)?db-kind");
     private static final Pattern FORBIDDEN = Pattern.compile(
             "rekord-api|sqlite|\\.db(?![\\w-])|\\.sqlite3?\\b|import|jdbc:[^\\s]*/rekord\\b", Pattern.CASE_INSENSITIVE);
@@ -118,5 +121,18 @@ class DatasourceSettingsTest {
         assertThat(properties.getProperty("%prod.quarkus.datasource.jdbc.url")).isEqualTo("${DB_URL}");
         assertThat(properties.getProperty("%prod.quarkus.datasource.username")).isEqualTo("${DB_USER}");
         assertThat(properties.getProperty("%prod.quarkus.datasource.password")).isEqualTo("${DB_PASSWORD}");
+    }
+
+    @Test
+    void the_server_error_detail_is_off_in_every_profile_and_no_profile_turns_it_on() throws IOException {
+        // Given the shipped settings
+        Properties properties = settings();
+
+        // Then the unprofiled key is false, so every profile (production included) inherits it
+        assertThat(properties.getProperty(SERVER_ERROR_DETAIL)).isEqualTo("false");
+        // And no other key sets the pgjdbc property: not a %test. or %dev. rewrite, not a %prod. override
+        assertThat(properties.stringPropertyNames())
+                .filteredOn(name -> name.toLowerCase(Locale.ROOT).contains("logservererrordetail"))
+                .containsExactly(SERVER_ERROR_DETAIL);
     }
 }
