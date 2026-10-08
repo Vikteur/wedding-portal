@@ -40,6 +40,9 @@ class CiContractSpecTest {
     private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
     /** Shell keywords that may stand in front of a command, as in {@code if ./gradlew build; then}. */
     private static final Set<String> KEYWORDS = Set.of("if", "then", "elif", "else", "do", "while", "until", "!");
+    /** Commands that take the wrapper as an argument without running it. */
+    private static final Set<String> MENTIONS =
+            Set.of("echo", "printf", "chmod", "test", "[", "ls", "cat", "git", "COPY", "ADD");
     /** Wrappers that run the command after them, with the options of theirs that take a value as the next word. */
     private static final Map<String, Set<String>> WRAPPERS = Map.of(
             "timeout", Set.of("-s", "--signal", "-k", "--kill-after"),
@@ -458,11 +461,19 @@ class CiContractSpecTest {
         List<String> violations = new ArrayList<>();
         for (var job : workflow.path("jobs").properties()) {
             List<JsonNode> steps = Workflows.steps(workflow, job.getKey());
+            String where = file + " job " + job.getKey() + ": ";
+            for (JsonNode step : steps) {
+                for (List<String> words : commands(step.path("run").asText(""))) {
+                    if (namesTheWrapperUnreadably(words)) {
+                        violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper in a shape"
+                                + " this test cannot classify; extend CiContractSpecTest to read it");
+                    }
+                }
+            }
             int first = firstStartingStep(steps);
             if (first < 0) {
                 continue;
             }
-            String where = file + " job " + job.getKey() + ": ";
             List<JsonNode> before = steps.subList(0, first);
             int pinStep = pinStep(before);
             String pin = pinStep < 0 ? null : before.get(pinStep).path("id").asText();
@@ -514,6 +525,16 @@ class CiContractSpecTest {
             violations.add(where + "`" + command + "` passes " + spec + ", not " + path + "/" + SPEC_FILE
                     + ", the spec in the contract checkout");
         }
+    }
+
+    /**
+     * A command with a word that is the Gradle wrapper, neither run as one (see {@link #gradleArguments}) nor a known
+     * mention of it (chmod +x gradlew): the test cannot tell whether it starts the application.
+     */
+    private static boolean namesTheWrapperUnreadably(List<String> words) {
+        return words.stream().anyMatch(word -> GRADLE.matcher(word).matches())
+                && gradleArguments(words).isEmpty()
+                && argumentsOf(words, MENTIONS::contains).isEmpty();
     }
 
     private static int firstStartingStep(List<JsonNode> steps) {
