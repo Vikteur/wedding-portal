@@ -670,7 +670,8 @@ class CiContractSpecTest {
             List<JsonNode> before = steps.subList(0, first);
             int pinStep = pinStep(before);
             String pin = pinStep < 0 ? null : before.get(pinStep).path("id").asText();
-            String path = pin == null ? null : checkoutPath(before.subList(pinStep + 1, before.size()), pin);
+            JsonNode checkout = pin == null ? null : checkoutStep(before.subList(pinStep + 1, before.size()), pin);
+            String path = checkout == null ? null : checkout.path("with").path("path").asText().trim();
             if (pin == null) {
                 violations.add(where + "no step before the first one that starts the application reads the pin"
                         + " (contract-pin.sh gradle.properties)");
@@ -681,6 +682,14 @@ class CiContractSpecTest {
                         + " outputs");
             } else if (!insideTheWorkspace(path)) {
                 violations.add(where + "the contract is checked out to " + path + ", outside the workspace");
+            }
+            if (pin != null) {
+                conditionNotShared("the pin step", before.get(pinStep), steps.subList(first, steps.size()), where,
+                        violations);
+            }
+            if (checkout != null) {
+                conditionNotShared("the rekord-contract checkout", checkout, steps.subList(first, steps.size()), where,
+                        violations);
             }
             for (JsonNode step : steps.subList(first, steps.size())) {
                 for (List<String> words : commands(step.path("run").asText(""))) {
@@ -764,15 +773,33 @@ class CiContractSpecTest {
         return -1;
     }
 
-    /** The path the contract is checked out to at the ref the pin step outputs; null when no step does that. */
-    private static String checkoutPath(List<JsonNode> steps, String pinId) {
+    /**
+     * A pin or checkout step with an {@code if:} still counts as present, but it must be reported unless every step
+     * from the first one that starts the application on has the same condition: a build could run without it.
+     */
+    private static void conditionNotShared(String what, JsonNode step, List<JsonNode> fromTheFirstBuild, String where,
+            List<String> violations) {
+        String condition = step.path("if").asText("").trim();
+        boolean shared = fromTheFirstBuild.stream()
+                .filter(later -> commands(later.path("run").asText("")).stream()
+                        .anyMatch(CiContractSpecTest::startsTheApplication))
+                .allMatch(later -> later.path("if").asText("").trim().equals(condition));
+        if (!condition.isEmpty() && !shared) {
+            String name = step.path("name").asText(step.path("id").asText(step.path("uses").asText()));
+            violations.add(where + what + " `" + name + "` runs only if `" + condition + "`, a condition the steps"
+                    + " that start the application do not share");
+        }
+    }
+
+    /** The step that checks the contract out at the ref the pin step outputs, to a path of its own; null when none. */
+    private static JsonNode checkoutStep(List<JsonNode> steps, String pinId) {
         for (JsonNode step : steps) {
             JsonNode with = step.path("with");
             if (step.path("uses").asText("").startsWith("actions/checkout@")
                     && with.path("repository").asText("").endsWith("/rekord-contract")
                     && ("${{ steps." + pinId + ".outputs.ref }}").equals(with.path("ref").asText("").trim())
                     && !with.path("path").asText("").isBlank()) {
-                return with.path("path").asText().trim();
+                return step;
             }
         }
         return null;
