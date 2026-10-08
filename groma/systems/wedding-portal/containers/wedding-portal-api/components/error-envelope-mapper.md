@@ -14,10 +14,10 @@ groma:
       symbol: RedactedCause
   group: Errors
   technology: Java 25
-description: Writes every refusal as the rekord-api error envelope.
+description: Writes every refusal raised inside JAX-RS as the rekord-api error envelope.
 ---
 
-Turns each exception that leaves a resource into `{"detail":{"code","message"}}` with the status and `application/json` that `rekord-api` answers: the four error families (status from the error status table), sign-in and permission failures, validation failures, and any other throwable. Only a 500 is logged, once at ERROR, as a redacted copy of the cause that keeps class names and frames and drops every message, so personal data stays out of the log.
+Turns each exception that leaves a resource into `{"detail":{"code","message"}}` with the status and `application/json` that `rekord-api` answers: the four error families (status from the error status table), sign-in and permission failures, validation failures, and any other throwable. Three answers are not its own: the 413 for an oversized body (Vert.x answers it, with no body), the role-denied `io.quarkus.security.ForbiddenException` (no mapper names it, so the framework body stays until TASK-6.2), and a `WebApplicationException` that carries its own entity (the framework writes it as it is). Only a 500 is logged, once at ERROR, as a redacted copy of the cause that keeps class names and frames and drops every message, so personal data stays out of the log.
 
 ## Relationships
 
