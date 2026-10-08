@@ -4,6 +4,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -14,6 +15,12 @@ final class RouteGuard {
 
     static final String API_PACKAGE = "app.rekord.api";
     static final int FLOOR = 60;
+
+    private static final Set<String> ACCESS_ANNOTATIONS = Set.of(
+            "io.quarkus.security.Authenticated",
+            "jakarta.annotation.security.RolesAllowed",
+            "jakarta.annotation.security.PermitAll",
+            "jakarta.annotation.security.DenyAll");
 
     /** The public operations, each with the reason it needs no session. */
     static final Map<String, String> PUBLIC = publicOperations();
@@ -64,5 +71,81 @@ final class RouteGuard {
         Set<String> stale = new TreeSet<>(allowList);
         stale.removeAll(routes);
         return stale;
+    }
+
+    /** The fully qualified names of the concrete classes that implement an interface of {@code app.rekord.api}. */
+    static Set<String> implementations(JavaClasses classes) {
+        Set<String> names = new TreeSet<>();
+        for (JavaClass type : classes) {
+            if (isImplementation(type)) {
+                names.add(type.getName());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * The routes of generated interfaces outside the allow-list whose implementing method and implementing class both
+     * lack an access annotation, as {@code Api#method  (Resource)}. The annotations of the interface are never read.
+     */
+    static Set<String> unguarded(JavaClasses classes, Set<String> allowList) {
+        Set<String> unguarded = new TreeSet<>();
+        for (JavaClass type : classes) {
+            if (!isImplementation(type)) {
+                continue;
+            }
+            for (JavaClass api : type.getAllRawInterfaces()) {
+                if (!isApi(api)) {
+                    continue;
+                }
+                for (JavaMethod route : api.getMethods()) {
+                    String name = api.getSimpleName() + "#" + route.getName();
+                    if (!isRoute(route) || allowList.contains(name)) {
+                        continue;
+                    }
+                    boolean guarded = hasAccessAnnotation(type)
+                            || implementing(type, route).map(RouteGuard::hasAccessAnnotation).orElse(false);
+                    if (!guarded) {
+                        unguarded.add(name + "  (" + type.getSimpleName() + ")");
+                    }
+                }
+            }
+        }
+        return unguarded;
+    }
+
+    static void requireGuarded(JavaClasses classes, Set<String> allowList) {
+        Set<String> unguarded = unguarded(classes, allowList);
+        if (!unguarded.isEmpty()) {
+            throw new AssertionError("routes without @Authenticated, @RolesAllowed, @PermitAll or @DenyAll:\n  "
+                    + String.join("\n  ", unguarded));
+        }
+    }
+
+    private static boolean isApi(JavaClass type) {
+        return type.isInterface() && API_PACKAGE.equals(type.getPackageName());
+    }
+
+    private static boolean isImplementation(JavaClass type) {
+        return !type.isInterface()
+                && !type.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                && type.getAllRawInterfaces().stream().anyMatch(RouteGuard::isApi);
+    }
+
+    private static Optional<JavaMethod> implementing(JavaClass type, JavaMethod route) {
+        for (Optional<JavaClass> c = Optional.of(type); c.isPresent(); c = c.get().getRawSuperclass()) {
+            for (JavaMethod method : c.get().getMethods()) {
+                if (method.getName().equals(route.getName())
+                        && method.getRawParameterTypes().stream().map(JavaClass::getName).toList()
+                                .equals(route.getRawParameterTypes().stream().map(JavaClass::getName).toList())) {
+                    return Optional.of(method);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean hasAccessAnnotation(com.tngtech.archunit.core.domain.properties.HasAnnotations<?> target) {
+        return ACCESS_ANNOTATIONS.stream().anyMatch(target::isAnnotatedWith);
     }
 }
