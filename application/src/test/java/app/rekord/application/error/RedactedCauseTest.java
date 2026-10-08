@@ -89,4 +89,16 @@ class RedactedCauseTest {
     void a_cause_cycle_terminates() {
         assertThat(RedactedCause.of(ErrorEnvelopeProbeResource.chain())).isNotNull();
     }
+
+    @Test
+    void redacting_a_redacted_cause_answers_that_same_instance() {
+        // Given: the cause-cycle guard (TASK-5.7) throws a redacted copy, and the catch-all mapper redacts what it logs
+        RedactedCause once = RedactedCause.of(ErrorEnvelopeProbeResource.chain());
+
+        // When
+        RedactedCause twice = RedactedCause.of(once);
+
+        // Then: no second copy, so the chain, the frames and the suppressed exceptions stay those of the first
+        assertThat(twice).isSameAs(once);
+    }
 }

@@ -250,16 +250,39 @@ class ErrorEnvelopeMapperIT {
     @Test
     @Timeout(60)
     void an_exception_with_a_cyclic_cause_answers_the_500_fixture_and_logs_one_redacted_error() throws Exception {
-        // Given: sockets that give up, so a request the server never answers fails this test instead of hanging it
+        // When: the resource method throws top -> SQLException -> top
+        Response response = getWithinTwentySeconds(PROBE + "/cyclic-cause");
+
+        // Then: the cycle reached the catch-all, which answered and logged exactly as for an acyclic chain
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /**
+     * Every real resource is a class without a {@code @Path} of its own that implements a generated interface which
+     * has one, so the guard has to reach that shape too, not only a class annotated itself.
+     */
+    @Test
+    @Timeout(60)
+    void a_resource_that_implements_a_path_interface_gets_the_same_guard() throws Exception {
+        // When
+        Response response = getWithinTwentySeconds("/api/test-only/error-envelope-interface/cyclic-cause");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope-interface/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /** Sockets that give up, so a request the server never answers fails the test instead of hanging it. */
+    private static Response getWithinTwentySeconds(String path) throws Exception {
         RestAssuredConfig bounded = RestAssured.config()
                 .httpClient(HttpClientConfig.httpClientConfig()
                         .setParam("http.connection.timeout", 5_000)
                         .setParam("http.socket.timeout", 20_000));
-
-        // When: the resource method throws top -> SQLException -> top
-        Response response;
         try {
-            response = given().config(bounded).when().get(PROBE + "/cyclic-cause");
+            return given().config(bounded).when().get(path);
         } catch (Exception failure) {
             // REST Assured rethrows the client's checked exception without declaring it, so it is caught as Exception
             if (failure instanceof SocketTimeoutException) {
@@ -270,10 +293,9 @@ class ErrorEnvelopeMapperIT {
             }
             throw failure;
         }
+    }
 
-        // Then: the cycle reached the catch-all, which answered and logged exactly as for an acyclic chain
-        assertAnswersAsFixture(response, "error-unhandled-500");
-        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-cause");
+    private void assertRedactedCyclicTraceLogged() {
         String text = LogCapture.text(log.errors().get(0));
         assertThat(text)
                 .contains("java.lang.IllegalStateException")
