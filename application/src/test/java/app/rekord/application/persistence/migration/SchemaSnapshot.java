@@ -24,6 +24,8 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
 
     private static final String HISTORY = "flyway_schema_history";
     private static final int DEFAULT_TIME_PRECISION = 6;
+    // PostgreSQL 17 lists every NOT NULL as a CHECK named <oid>_<oid>_<n>_not_null; nullability lives on the column.
+    private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
 
     public static SchemaSnapshot empty() {
         return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
@@ -78,6 +80,20 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     }
 
     private static List<Constraint> constraints(Connection c) throws SQLException {
+        // information_schema keys a check clause and a referential rule by schema and name only, not by table
+        List<String> shared = strings(c, """
+                select constraint_name from information_schema.check_constraints
+                where constraint_schema = 'public' and constraint_name !~ '%s'
+                group by constraint_name having count(*) > 1
+                union
+                select constraint_name from information_schema.referential_constraints
+                where constraint_schema = 'public'
+                group by constraint_name having count(*) > 1
+                order by 1""".formatted(NOT_NULL));
+        if (!shared.isEmpty()) {
+            throw new IllegalStateException("constraint names " + shared + " are used more than once in schema public;"
+                    + " information_schema cannot tell their definitions apart, so give each a table-specific name");
+        }
         List<Constraint> result = new ArrayList<>();
         try (PreparedStatement s = c.prepareStatement("""
                 select tc.table_name, tc.constraint_name, tc.constraint_type,
@@ -103,8 +119,8 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
                   on t.table_schema = tc.table_schema and t.table_name = tc.table_name and t.table_type = 'BASE TABLE'
                 where tc.table_schema = 'public' and tc.table_name <> '%s'
                   and tc.constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
-                  and tc.constraint_name !~ '^[0-9]+_[0-9]+_[0-9]+_not_null$'
-                order by tc.table_name, tc.constraint_name""".formatted(HISTORY));
+                  and tc.constraint_name !~ '%s'
+                order by tc.table_name, tc.constraint_name""".formatted(HISTORY, NOT_NULL));
                 ResultSet r = s.executeQuery()) {
             while (r.next()) {
                 String type = r.getString("constraint_type");
