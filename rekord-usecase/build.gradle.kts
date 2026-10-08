@@ -7,6 +7,7 @@ dependencies {
     implementation(platform(libs.quarkus.bom))
     compileOnly(platform(libs.quarkus.bom))
     compileOnly("jakarta.enterprise:jakarta.enterprise.cdi-api")
+    compileOnly("jakarta.transaction:jakarta.transaction-api")
     api(project(":rekord-domain"))
     testImplementation(platform(libs.quarkus.bom))
     testImplementation("org.junit.jupiter:junit-jupiter")
