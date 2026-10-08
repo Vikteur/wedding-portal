@@ -11,6 +11,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class RouteGuardTest {
 
@@ -114,6 +116,141 @@ class RouteGuardTest {
 
         // Then exactly the two missing entries are named
         assertThat(stale).containsExactlyInAnyOrder("AuthApi#login", "AuthApi#logout");
+    }
+
+    private static final String FIXTURE_API = """
+            package app.rekord.api;
+
+            import jakarta.ws.rs.GET;
+            import jakarta.ws.rs.Path;
+
+            public interface FixtureApi {
+                @GET @Path("/open") void open();
+                @GET @Path("/closed") void closed();
+            }
+            """;
+
+    private static String implementation(String classAnnotation, String methodAnnotation) {
+        return """
+                package app.rekord.fixture;
+
+                import app.rekord.api.FixtureApi;
+
+                %s
+                public class UnguardedResource implements FixtureApi {
+                    %s
+                    @Override public void open() {}
+                    %s
+                    @Override public void closed() {}
+                }
+                """.formatted(classAnnotation, methodAnnotation, methodAnnotation);
+    }
+
+    @Test
+    void an_implementation_method_without_an_access_annotation_fails_and_is_named() {
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, implementation("", ""));
+
+        assertThat(RouteGuard.unguarded(fixtures, Set.of()))
+                .containsExactlyInAnyOrder(
+                        "FixtureApi#closed  (UnguardedResource)", "FixtureApi#open  (UnguardedResource)");
+        assertThatThrownBy(() -> RouteGuard.requireGuarded(fixtures, Set.of()))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("FixtureApi#closed  (UnguardedResource)");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "io.quarkus.security.Authenticated",
+                "jakarta.annotation.security.RolesAllowed(\"ADMIN\")",
+                "jakarta.annotation.security.PermitAll",
+                "jakarta.annotation.security.DenyAll"
+            })
+    void each_access_annotation_on_the_implementing_method_guards_it(String annotation) {
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, implementation("", "@" + annotation));
+
+        assertThat(RouteGuard.unguarded(fixtures, Set.of())).isEmpty();
+    }
+
+    @Test
+    void an_access_annotation_on_the_implementing_class_guards_its_methods() {
+        JavaClasses fixtures = FixtureCompiler.compile(
+                FIXTURE_API, implementation("@io.quarkus.security.Authenticated", ""));
+
+        assertThat(RouteGuard.unguarded(fixtures, Set.of())).isEmpty();
+    }
+
+    @Test
+    void an_access_annotation_on_the_generated_interface_is_not_counted() {
+        String annotatedApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                public interface FixtureApi {
+                    @io.quarkus.security.Authenticated @GET @Path("/open") void open();
+                    @jakarta.annotation.security.PermitAll @GET @Path("/closed") void closed();
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(annotatedApi, implementation("", ""));
+
+        assertThat(RouteGuard.unguarded(fixtures, Set.of()))
+                .containsExactlyInAnyOrder(
+                        "FixtureApi#closed  (UnguardedResource)", "FixtureApi#open  (UnguardedResource)");
+    }
+
+    @Test
+    void an_allow_listed_route_needs_no_annotation() {
+        JavaClasses fixtures = FixtureCompiler.compile(FIXTURE_API, implementation("", ""));
+
+        assertThat(RouteGuard.unguarded(fixtures, Set.of("FixtureApi#open")))
+                .containsExactly("FixtureApi#closed  (UnguardedResource)");
+    }
+
+    @Test
+    void a_class_implementing_no_generated_interface_is_not_scanned() {
+        String outsideApi = """
+                package app.rekord.elsewhere;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+
+                public interface OutsideApi {
+                    @GET @Path("/x") void x();
+                }
+                """;
+        String outsideImpl = """
+                package app.rekord.fixture;
+
+                public class OutsideResource implements app.rekord.elsewhere.OutsideApi {
+                    @Override public void x() {}
+                }
+                """;
+        String abstractImpl = """
+                package app.rekord.fixture;
+
+                public abstract class AbstractResource implements app.rekord.api.FixtureApi {}
+                """;
+        String subInterface = """
+                package app.rekord.fixture;
+
+                public interface SubApi extends app.rekord.api.FixtureApi {}
+                """;
+        JavaClasses fixtures =
+                FixtureCompiler.compile(FIXTURE_API, outsideApi, outsideImpl, abstractImpl, subInterface);
+
+        assertThat(RouteGuard.implementations(fixtures)).isEmpty();
+        assertThat(RouteGuard.unguarded(fixtures, Set.of())).isEmpty();
+    }
+
+    @Test
+    void every_production_implementation_of_a_generated_interface_is_guarded_or_public() {
+        JavaClasses production = ProductionClasses.importAll();
+
+        assertThat(RouteGuard.implementations(production))
+                .contains("app.rekord.adapter.web.health.HealthResource");
+        assertThat(RouteGuard.unguarded(production, RouteGuard.PUBLIC.keySet())).isEmpty();
     }
 
     private static Set<String> names(int count) {
