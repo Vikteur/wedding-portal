@@ -9,10 +9,11 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The test every versioned migration has: V&lt;version&gt;MigrationIT extends this class, names its version and
- * declares the schema shape {@link SchemaSnapshot} reads (tables, columns, constraints and the indexes that back no constraint of
- * {@code public}, and the names of other schemas) that the history up to and including that version leaves on an empty container. What
- * {@code SchemaSnapshot} cannot see, such as defaults, identity, sequences and views,
- * is not checked here: see its Javadoc, and test those separately.
+ * declares the schema shape {@link SchemaSnapshot} reads (tables, columns, constraints, column defaults and identity
+ * settings, the indexes that back no constraint of {@code public}, and the names of other schemas) that the history up
+ * to and including that version leaves on an empty container. What {@code SchemaSnapshot} cannot see, such as
+ * sequences, views, functions and extensions, is not checked here: see its Javadoc, and test those separately
+ * ({@code SchemaMigrationIT} does views, sequences and extensions).
  * Not discovered on its own (the name does not end in IT); {@code MigrationCoverageTest} fails the build for a V file
  * without such a subclass.
  */

@@ -10,12 +10,14 @@ import java.util.List;
 /**
  * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
  * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
- * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, plus the names of the other non-system schemas, and the indexes
- * that back no constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them.
- * {@code flyway_schema_history} is never part of it.
+ * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, the column defaults and identity settings, plus the names of the
+ * other non-system schemas, and the indexes that back no constraint of their own table (partial and expression
+ * indexes included) as {@code pg_index} shows them. {@code flyway_schema_history} is never part of it.
  * <p>
- * Not covered: column defaults, identity and sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign key
- * on-update, match and deferrability, and the content of other schemas.
+ * Defaults and identity are read from {@code information_schema.columns}: {@code column_default} as PostgreSQL renders
+ * it, and {@code identity_generation}. Not covered: generated columns (PostgreSQL leaves their {@code column_default}
+ * empty), sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign
+ * key on-update, match and deferrability, and the content of other schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
         List<Index> indexes, List<Default> defaults) {
