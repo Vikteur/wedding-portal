@@ -33,7 +33,8 @@ final class MigratedDatabase implements AutoCloseable {
             values ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000010',
                     '00000000-0000-0000-0000-000000000011', 'ADMIN', 'ACTIVE')""";
 
-    private static final String SEPARATOR = "";
+    // U+0001 (start of heading), written as an escape so that it can be seen; it cannot occur in the joined rows.
+    private static final String SEPARATOR = "\u0001";
 
     private final String key;
     private final String[] connection;
