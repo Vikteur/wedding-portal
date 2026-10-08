@@ -137,7 +137,9 @@ check "S1 gives the rejection reason" $(has 'the plan skips the migration test' 
 check "S1 names the run that adopted it" $(has 'Superseded by run dddddddd' "$root/s1.sec"; echo $?)
 check "S1 node timeline" $(has '- plan: completed (300s)' "$root/s1.sec"; echo $?)
 check "S1 earlier section kept" $(has '## Run eeeeeeee' "$root/s1.md"; echo $?)
-check "S1 pushed as a retro commit" $(origin_log s1 | head -1 | grep -q '^retro: TASK-7.1 .*run aaaaaaaa'; echo $?)
+# The subject is captured first: under pipefail, `git log | head -1 | grep` flakes when git's next write hits the
+# closed pipe (SIGPIPE, exit 141) after head has already exited (TASK-38, seen in CI).
+check "S1 pushed as a retro commit" $(grep -q '^retro: TASK-7.1 .*run aaaaaaaa' <<< "$(origin_log s1 | sed -n 1p)"; echo $?)
 check "S1 index regenerated" $(pushed s1 docs/retro/README.md | grep -qF '[TASK-7.1](TASK-7.1/lessons-learned.md) — last: Run aaaaaaaa'; echo $?)
 
 # S2. A run that did not stop (completed) is refused and nothing is written.
