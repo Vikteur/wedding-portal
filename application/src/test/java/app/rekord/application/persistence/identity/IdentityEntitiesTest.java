@@ -56,4 +56,18 @@ class IdentityEntitiesTest {
                 .isEqualTo(IdentityRows.userSession(1, org, otherId))
                 .isNotEqualTo(IdentityRows.userSession(2, org, a));
     }
+
+    @Test
+    void two_transient_entities_without_an_id_are_not_equal_to_each_other() {
+        // Given two new instances of each kind, none of which has an id yet
+        // Then no two of them are equal: a null id is not "the same id", or every new row would equal every other one
+        assertThat(new UserEntity()).isNotEqualTo(new UserEntity());
+        assertThat(new OrganizationEntity()).isNotEqualTo(new OrganizationEntity());
+        assertThat(new MembershipEntity()).isNotEqualTo(new MembershipEntity());
+        assertThat(new SessionEntity()).isNotEqualTo(new SessionEntity());
+
+        // And a transient entity is still equal to itself
+        UserEntity transientUser = new UserEntity();
+        assertThat(transientUser).isEqualTo(transientUser);
+    }
 }
