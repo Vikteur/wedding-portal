@@ -19,8 +19,8 @@ class BaselineMigrationTest {
     private static final Path MIGRATIONS =
             Path.of(System.getProperty("wedding.repoRoot")).resolve("application/src/main/resources/db/migration");
     private static final Path BASELINE = MIGRATIONS.resolve("V1__baseline.sql");
-    // The version syntax of MigrationCoverage: V1, V1.1 and V1_1 (Flyway reads an underscore as a dot).
-    private static final Pattern VERSIONED = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__[A-Za-z0-9_]+\\.sql");
+    // What MigrationCoverage accepts: V1, V1.1 and V1_1 (Flyway reads an underscore as a dot), any description.
+    private static final Pattern VERSIONED = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__.+[.]sql");
     private static final Pattern STATEMENT =
             Pattern.compile("\\b(create|alter|drop|insert)\\b|;", Pattern.CASE_INSENSITIVE);
 
