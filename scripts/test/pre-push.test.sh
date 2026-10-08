@@ -12,6 +12,13 @@ trap 'rm -rf "$tmp"' EXIT
 passed=0
 failed=0
 
+# The tests do not read the machine's git config (a global hooksPath or template would change what they see).
+export GIT_CONFIG_GLOBAL=/dev/null
+export GIT_CONFIG_NOSYSTEM=1
+
+# last_err is the stderr file of the most recent push or run; a failing check prints the end of it.
+last_err=""
+
 check() {
   local name="$1"
   shift
@@ -21,6 +28,10 @@ check() {
   else
     failed=$((failed + 1))
     echo "FAIL - $name"
+    if [ -n "$last_err" ] && [ -f "$last_err" ]; then
+      echo "       last stderr ($last_err):"
+      tail -n 15 "$last_err" | sed 's/^/       | /'
+    fi
   fi
 }
 
@@ -63,6 +74,7 @@ new_repo() {
 # push_from <work-dir> <branch> <check-exit-code> <groma-cli> <stderr-file>: commits, then pushes; returns git's status.
 push_from() {
   local work="$1" branch="$2" rc="$3" cli="$4" err="$5"
+  last_err="$err"
   echo "$rc" > "$STUB_RC_FILE"
   rm -f "$STUB_RAN_FILE"
   echo "$RANDOM$RANDOM" > "$work/change.txt"
