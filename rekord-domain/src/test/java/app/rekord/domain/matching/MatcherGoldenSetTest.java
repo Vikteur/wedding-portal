@@ -1,0 +1,167 @@
+package app.rekord.domain.matching;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import app.rekord.domain.matching.TrackMatcher.MatchResult;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The matcher's acceptance gate (TASK-24.4, UX-07): rekord-api's golden set, with the ticket's two changes, run
+ * against the golden library with its preferences and membership rows. {@link GoldenGate} compares every
+ * recorded field.
+ */
+class MatcherGoldenSetTest {
+
+    private static final List<Integer> UD19C = List.of(82, 85, 86, 88, 90, 100, 101, 107, 108, 109, 110, 111,
+            115, 122, 152, 155, 156, 161);
+
+    private static List<Integer> positionsOf(String family) {
+        JsonNode cases = GoldenGate.set().get("cases");
+        return IntStream.range(0, cases.size())
+                .filter(i -> cases.get(i).get("family").asText().equals(family)).boxed().toList();
+    }
+
+    @Test
+    void every_bucket_auto_pick_from_preference_and_candidate_count_equals_the_recorded_one() {
+        JsonNode cases = GoldenGate.set().get("cases");
+        List<MatchResult> answers = GoldenGate.answers();
+        assertThat(answers).hasSize(212);
+        for (int i = 0; i < cases.size(); i++) {
+            JsonNode expected = cases.get(i).get("expected");
+            MatchResult actual = answers.get(i);
+            String where = "case " + i + " (" + cases.get(i).get("family").asText() + ")";
+            assertThat(GoldenGate.contractBucket(actual.bucket())).as("%s bucket", where)
+                    .isEqualTo(expected.get("bucket").asText());
+            assertThat(actual.autoSelectedId()).as("%s auto_selected_id", where)
+                    .isEqualTo(expected.get("auto_selected_id").isNull() ? null
+                            : expected.get("auto_selected_id").asText());
+            assertThat(actual.fromPreference()).as("%s from_preference", where)
+                    .isEqualTo(expected.get("from_preference").asBoolean());
+            assertThat(actual.candidates()).as("%s candidate_count", where)
+                    .hasSize(expected.get("candidate_count").asInt());
+        }
+    }
+
+    @Test
+    void the_buckets_total_29_auto_180_ambiguous_3_unmatched() {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (MatchResult answer : GoldenGate.answers()) {
+            counts.merge(GoldenGate.contractBucket(answer.bucket()), 1, Integer::sum);
+        }
+        assertThat(counts).containsExactly(
+                Map.entry("ambiguous", 180), Map.entry("auto", 29), Map.entry("unmatched", 3));
+    }
+
+    @Test
+    void the_18_ud19c_cases_answer_ambiguous_with_no_pick_and_their_recorded_candidates() {
+        JsonNode cases = GoldenGate.set().get("cases");
+        List<MatchResult> answers = GoldenGate.answers();
+        assertThat(UD19C).hasSize(18);
+        for (int i : UD19C) {
+            MatchResult actual = answers.get(i);
+            assertThat(GoldenGate.contractBucket(actual.bucket())).as("case %d bucket", i).isEqualTo("ambiguous");
+            assertThat(actual.autoSelectedId()).as("case %d auto_selected_id", i).isNull();
+            assertThat(actual.fromPreference()).as("case %d from_preference", i).isFalse();
+            assertThat(actual.candidates().stream().map(c -> c.track().id()).toList())
+                    .as("case %d candidates", i)
+                    .isEqualTo(StreamSupport.stream(cases.get(i).at("/expected/candidates").spliterator(), false)
+                            .map(c -> c.get("track_id").asText()).toList());
+        }
+    }
+
+    @Test
+    void every_candidate_list_equals_the_recorded_one() {
+        // Ids in order, score, facets and null facets, delta, versions, remixer, playlists and input_version.
+        assertThat(GoldenGate.differences(GoldenGate.set())).isEmpty();
+    }
+
+    @Test
+    void the_thresholds_block_equals_the_matchers_constants() {
+        JsonNode thresholds = GoldenGate.set().get("thresholds");
+        Map<String, Double> literals = new TreeMap<>(Map.ofEntries(
+                Map.entry("REPORT_THRESHOLD", 0.45), Map.entry("STRONG_THRESHOLD", 0.60),
+                Map.entry("AUTO_SCORE", 0.82), Map.entry("AUTO_MARGIN", 0.10),
+                Map.entry("AUTO_MIN_VERSION", 0.90), Map.entry("AUTO_MIN_DURATION", 0.55),
+                Map.entry("MAX_CANDIDATES", 8.0), Map.entry("WEIGHT_TITLE", 0.40),
+                Map.entry("WEIGHT_ARTIST", 0.30), Map.entry("WEIGHT_COMBINED", 0.70),
+                Map.entry("WEIGHT_VERSION", 0.15), Map.entry("WEIGHT_DURATION", 0.15),
+                Map.entry("PLAYLIST_BONUS", 0.02), Map.entry("PLAYLIST_BONUS_CAP", 3.0)));
+        Map<String, Double> constants = new TreeMap<>(Map.ofEntries(
+                Map.entry("REPORT_THRESHOLD", Score.REPORT_THRESHOLD),
+                Map.entry("STRONG_THRESHOLD", Score.STRONG_THRESHOLD),
+                Map.entry("AUTO_SCORE", Score.AUTO_SCORE), Map.entry("AUTO_MARGIN", Score.AUTO_MARGIN),
+                Map.entry("AUTO_MIN_VERSION", Score.AUTO_MIN_VERSION),
+                Map.entry("AUTO_MIN_DURATION", Score.AUTO_MIN_DURATION),
+                Map.entry("MAX_CANDIDATES", (double) Score.MAX_CANDIDATES),
+                Map.entry("WEIGHT_TITLE", Score.WEIGHT_TITLE), Map.entry("WEIGHT_ARTIST", Score.WEIGHT_ARTIST),
+                Map.entry("WEIGHT_COMBINED", Score.WEIGHT_COMBINED),
+                Map.entry("WEIGHT_VERSION", Score.WEIGHT_VERSION),
+                Map.entry("WEIGHT_DURATION", Score.WEIGHT_DURATION),
+                Map.entry("PLAYLIST_BONUS", Score.PLAYLIST_BONUS),
+                Map.entry("PLAYLIST_BONUS_CAP", (double) Score.PLAYLIST_BONUS_CAP)));
+        assertThat(thresholds).hasSize(14);
+        Map<String, Double> recorded = new TreeMap<>();
+        thresholds.fields().forEachRemaining(e -> recorded.put(e.getKey(), e.getValue().asDouble()));
+        assertThat(recorded).isEqualTo(literals).isEqualTo(constants);
+    }
+
+    @Test
+    void the_9_preference_cases_pick_the_remembered_file_and_stay_ambiguous() {
+        JsonNode cases = GoldenGate.set().get("cases");
+        List<Integer> positions = positionsOf("preference");
+        assertThat(positions).hasSize(9);
+        for (int i : positions) {
+            MatchResult actual = GoldenGate.answers().get(i);
+            JsonNode expected = cases.get(i).get("expected");
+            assertThat(actual.fromPreference()).as("case %d from_preference", i).isTrue();
+            assertThat(actual.autoSelectedId()).as("case %d auto_selected_id", i)
+                    .isEqualTo(expected.get("auto_selected_id").asText());
+            assertThat(GoldenGate.contractBucket(actual.bucket())).as("case %d bucket", i)
+                    .isEqualTo(expected.get("bucket").asText());
+        }
+    }
+
+    @Test
+    void the_12_playlist_member_cases_keep_their_recorded_bucket() {
+        JsonNode cases = GoldenGate.set().get("cases");
+        List<Integer> positions = positionsOf("playlist_member");
+        assertThat(positions).hasSize(12);
+        for (int i : positions) {
+            assertThat(GoldenGate.contractBucket(GoldenGate.answers().get(i).bucket()))
+                    .as("case %d bucket", i).isEqualTo(cases.get(i).at("/expected/bucket").asText());
+        }
+    }
+
+    @Test
+    void a_copy_with_one_candidate_score_moved_by_0_001_fails_and_names_case_family_track_and_both_scores() {
+        JsonNode set = GoldenGate.set();
+        assertThat(GoldenGate.differences(set)).isEmpty();
+
+        JsonNode copy = set.deepCopy();
+        ObjectNode moved = null;
+        for (JsonNode candidate : copy.at("/cases/85/expected/candidates")) {
+            if (candidate.get("track_id").asText().equals("76a106fe8fe7")) {
+                moved = (ObjectNode) candidate;
+            }
+        }
+        assertThat(moved).isNotNull();
+        assertThat(moved.get("score").asDouble()).isEqualTo(0.9163);
+        moved.put("score", 0.9173);
+
+        assertThatThrownBy(() -> GoldenGate.assertNoDifferences(copy))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("case 85")
+                .hasMessageContaining("typo")
+                .hasMessageContaining("76a106fe8fe7")
+                .hasMessageContaining("expected 0.9173")
+                .hasMessageContaining("actual 0.9163");
+    }
+}
