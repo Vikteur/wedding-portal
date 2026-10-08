@@ -1,6 +1,6 @@
 ---
 type: C4 Component
-title: ApiApplication
+title: Application assembly
 status: stable
 groma:
   id: application-assembly
@@ -18,5 +18,8 @@ groma:
     - scanner: java
       file: rekord-usecase/src/main/java/app/rekord/usecase/shared/UseCaseModuleProbe.java
       symbol: UseCaseModuleProbe
-  group: REST API
+  technology: Quarkus, Jakarta REST
+description: Roots the REST API under /api and proves the library modules' beans are discovered.
 ---
+
+The JAX-RS `Application` puts every resource under `/api`, as the contract's `servers: /api` requires, while Quarkus' own `/q/*` endpoints stay at the root. The adapter, use-case and gateway modules each hold a placeholder bean that a test injects to prove their Jandex index makes their beans visible to the application; the placeholders go once those modules have real beans.
