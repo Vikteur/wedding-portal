@@ -10,12 +10,16 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import java.io.File;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
+import java.util.List;
 import java.util.jar.JarFile;
 import javax.sql.DataSource;
 import org.jboss.jandex.DotName;
@@ -90,11 +94,22 @@ class RowRollbackIT {
             assertThat(bean.getKind()).isEqualTo(InjectableBean.Kind.CLASS);
             assertThat(bean.getScope()).isEqualTo(ApplicationScoped.class);
 
-            // And its class comes from its module's tests jar, not from this module's build output
-            Path jar = Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI());
+            // And its class comes from its module's tests jar, not from a class directory of this build
+            // (the Quarkus class loader hides the origin, so the test classpath is read instead)
             String module = type == JdbcProbeRowAdapter.class ? "rekord-adapter" : "rekord-usecase";
-            assertThat(jar.getFileName().toString()).startsWith(module).endsWith("-tests.jar");
-            assertThat(jar.toString().replace('\', '/')).doesNotContain("application/build");
+            String classFile = type.getName().replace('.', '/') + ".class";
+            List<Path> entries = Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator))
+                    .map(Path::of)
+                    .toList();
+            assertThat(entries)
+                    .filteredOn(Files::isDirectory)
+                    .noneMatch(directory -> Files.exists(directory.resolve(classFile)));
+            List<Path> jars = entries.stream()
+                    .filter(e -> e.getFileName().toString().startsWith(module)
+                            && e.getFileName().toString().endsWith("-tests.jar"))
+                    .toList();
+            assertThat(jars).hasSize(1);
+            Path jar = jars.get(0);
 
             // And that jar holds a Jandex index that lists the class
             try (JarFile jarFile = new JarFile(jar.toFile())) {
