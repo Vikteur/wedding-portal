@@ -1,6 +1,6 @@
 # Agent instructions for wedding-portal
 
-This repo's tickets live in the Backlog.md backlog of the sibling `weddingapp` checkout (`../weddingapp`), not here. Run every `backlog` command against it: from `../weddingapp`, or with `BACKLOG_CWD=../weddingapp`. Groma's Backlog task links (below) therefore name files of this repo in a ticket of that one. The Groma architecture map lives here, under `groma/`.
+This repo's tickets live in the Backlog.md backlog of the sibling `weddingapp` checkout (`../weddingapp`), not here. Run every `backlog` command against it: from `../weddingapp`, or with `BACKLOG_CWD=../weddingapp`. Groma's Backlog task links (below) therefore name files of this repo in a ticket of that one. The Groma architecture map lives here, under `groma/`. Open it with `bash scripts/groma-web.sh` (not plain `groma web`): it attaches the weddingapp backlog, so the To Do and In Progress tickets that reference map elements or name changed files of this repo show on the map.
 
 <!-- groma:start -->
 ## Groma
