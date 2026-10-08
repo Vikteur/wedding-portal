@@ -2,6 +2,7 @@ package app.rekord.application.build;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -18,9 +19,13 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
@@ -32,6 +37,38 @@ import org.w3c.dom.Node;
  * <p>Both sides are read as structure: the pom as XML, wedding-portal's task from its own {@code openApiGenerate}
  * block only (never the rest of the build script), and the version through the version catalog. A side that cannot be
  * read fails the test, so a moved block or a new construct cannot make the comparison pass on nothing.
+ *
+ * <p>A setting that reaches the generator from a place the reader does not look would show no difference, so the
+ * reader refuses those places instead of skipping them (TASK-2.9). Every refusal names the construct and says the test
+ * does not read it. A construct that appears only in a comment is not a construct.
+ *
+ * <p>Refused on the hub side, in {@code smoke/pom.xml}:
+ * <ul>
+ *   <li>a {@code <parent>}: Maven merges the parent's plugin settings into the pom;</li>
+ *   <li>a {@code <profiles>} section: an active profile merges its plugin settings in;</li>
+ *   <li>a {@code <build><pluginManagement>} entry for {@code openapi-generator-maven-plugin}: Maven merges it into the
+ *       plugin's configuration;</li>
+ *   <li>as before: a plugin-level {@code <configuration>}, no or several generator plugins, no or several
+ *       {@code <execution>}s, a parameter with child elements, an option set twice, and a version property the pom
+ *       does not define.</li>
+ * </ul>
+ *
+ * <p>Refused on the portal side, in {@code rekord-adapter/build.gradle.kts}:
+ * <ul>
+ *   <li>the generator task reached outside the {@code openApiGenerate { }} block: a lookup of the task by name
+ *       ({@code tasks.named<GenerateTask>("openApiGenerate") { }}, {@code tasks.getByName}, {@code .configure { }}), a
+ *       reference to the {@code GenerateTask} type ({@code tasks.withType<GenerateTask>().configureEach { }}), the
+ *       accessor {@code tasks.openApiGenerate { }}, and {@code configOptions} or {@code generatorName} anywhere outside
+ *       the block, {@code afterEvaluate { }} included;</li>
+ *   <li>the generator plugin applied other than through {@code alias(libs.plugins.openapi.generator)}, because the
+ *       version compared is the one of that catalog entry: by plugin id ({@code id("org.openapi.generator") version
+ *       "..."}, {@code apply(plugin = ...)}), through a {@code buildscript} classpath entry, or not at all;</li>
+ *   <li>as before: no or several {@code openApiGenerate { }} blocks, a block without {@code configOptions = mapOf(},
+ *       a computed value, and an option set twice.</li>
+ * </ul>
+ *
+ * <p>Not refused: the source-root wiring {@code java.srcDir(tasks.named("openApiGenerate").map { ... })}, which names
+ * the task without configuring it.
  */
 class HubProbeParityTest {
 
@@ -42,6 +79,30 @@ class HubProbeParityTest {
     private static final List<String> HUB_ENVIRONMENT = List.of("inputSpec", "output");
 
     private static final List<String> PORTAL_ENVIRONMENT = List.of("inputSpec", "outputDir", "cleanupOutput");
+
+    private static final String BUILD_SCRIPT = "rekord-adapter/build.gradle.kts";
+    private static final String GENERATOR_ALIAS_SOURCE = "alias(libs.plugins.openapi.generator)";
+    private static final Pattern GENERATOR_ALIAS =
+            Pattern.compile("\\balias\\(\\s*libs\\.plugins\\.openapi\\.generator\\s*\\)");
+    /** {@code tasks.named("openApiGenerate").map {}} adds the output as a source root; it names the task, sets nothing. */
+    private static final Pattern SOURCE_ROOT_WIRING = Pattern.compile(
+            "\\btasks\\s*\\.\\s*named\\s*\\(\\s*\"openApiGenerate\"\\s*\\)\\s*\\.\\s*map\\s*\\{");
+    private static final Pattern GENERATOR_SETTING_NAME = Pattern.compile("\\b(?:configOptions|generatorName)\\b");
+
+    /** A construct this reader does not follow: what it looks like in the script, and what to call it in the message. */
+    private record Construct(Pattern pattern, String description) {}
+
+    /** Ways to reach the generator task or its settings other than the block, in the order they are looked for. */
+    private static final List<Construct> OUTSIDE_THE_BLOCK = List.of(
+            new Construct(Pattern.compile("\"openApiGenerate\""), "a lookup of the openApiGenerate task by name"),
+            new Construct(Pattern.compile("\\bGenerateTask\\b"), "a reference to the GenerateTask type"),
+            new Construct(Pattern.compile("\\bopenApiGenerate\\b"), "the openApiGenerate task accessor used outside its block"),
+            new Construct(GENERATOR_SETTING_NAME, "configOptions or generatorName outside the openApiGenerate block"));
+
+    /** Ways to apply the generator plugin that bypass the catalog entry the version is read from. */
+    private static final List<Construct> PLUGIN_APPLIED_ELSEWHERE = List.of(
+            new Construct(Pattern.compile("\"" + Pattern.quote(OPENAPI_GENERATOR_PLUGIN_ID) + "\""), "its plugin id"),
+            new Construct(Pattern.compile("openapi-generator-gradle-plugin"), "a buildscript classpath entry"));
 
     /** The generation settings of one side: the generator version, its plain parameters and its configOptions. */
     record Settings(String version, Map<String, String> parameters, Map<String, String> configOptions) {}
@@ -269,6 +330,21 @@ class HubProbeParityTest {
         String pluginLevelConfiguration = HUB_POM.replace("<executions>", "<configuration><generatorName>x</generatorName></configuration><executions>");
         String complexParameter = HUB_POM.replace("<generatorName>", "<typeMappings><typeMapping>a=b</typeMapping></typeMappings><generatorName>");
         String optionTwice = HUB_POM.replace("<dateLibrary>java8</dateLibrary>", "<dateLibrary>java8</dateLibrary><dateLibrary>joda</dateLibrary>");
+        // Maven merges these into the plugin's configuration, and this reader does not follow them (TASK-2.9 AC #1)
+        String withParent = HUB_POM.replace(
+                "<properties>",
+                "<parent><groupId>g</groupId><artifactId>p</artifactId><version>1</version></parent><properties>");
+        String withProfiles = HUB_POM.replace(
+                "</build>",
+                "</build><profiles><profile><id>legacy</id><activation><activeByDefault>true</activeByDefault></activation>"
+                        + "<build><plugins><plugin><artifactId>" + HUB_PLUGIN + "</artifactId><executions><execution>"
+                        + "<configuration><configOptions><dateLibrary>legacy</dateLibrary></configOptions></configuration>"
+                        + "</execution></executions></plugin></plugins></build></profile></profiles>");
+        String withPluginManagement = HUB_POM.replace(
+                "<build>",
+                "<build><pluginManagement><plugins><plugin><groupId>org.openapitools</groupId><artifactId>" + HUB_PLUGIN
+                        + "</artifactId><configuration><configOptions><useTags>false</useTags></configOptions></configuration>"
+                        + "</plugin></plugins></pluginManagement>");
 
         // When / Then
         assertThatThrownBy(() -> hubSettings(twoExecutions))
@@ -289,6 +365,178 @@ class HubProbeParityTest {
         assertThatThrownBy(() -> hubSettings(optionTwice))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("sets dateLibrary twice");
+        // one report for all three, so a reader that misses one still shows the others
+        assertSoftly(softly -> {
+            softly.assertThatThrownBy(() -> hubSettings(withParent))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("<parent>")
+                    .hasMessageContaining("does not read");
+            softly.assertThatThrownBy(() -> hubSettings(withProfiles))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("<profiles>")
+                    .hasMessageContaining("does not read");
+            softly.assertThatThrownBy(() -> hubSettings(withPluginManagement))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("<pluginManagement>")
+                    .hasMessageContaining(HUB_PLUGIN)
+                    .hasMessageContaining("does not read");
+        });
+    }
+
+    @Test
+    void a_pom_construct_that_does_not_reach_the_generator_or_sits_in_a_comment_is_not_refused() {
+        // Given: pluginManagement for another plugin does not touch the generator; a comment is not an element
+        String otherPluginManaged = HUB_POM.replace(
+                "<build>",
+                "<build><pluginManagement><plugins><plugin><artifactId>maven-compiler-plugin</artifactId>"
+                        + "<configuration><release>25</release></configuration></plugin></plugins></pluginManagement>");
+        String onlyInComments = HUB_POM.replace(
+                "<properties>",
+                "<!-- <parent><artifactId>p</artifactId></parent> <profiles><profile/></profiles> "
+                        + "<pluginManagement>" + HUB_PLUGIN + "</pluginManagement> --><properties>");
+
+        // When / Then
+        assertThat(hubSettings(otherPluginManaged)).isEqualTo(hubSettings(HUB_POM));
+        assertThat(hubSettings(onlyInComments)).isEqualTo(hubSettings(HUB_POM));
+    }
+
+    // ---- the portal side: what the openApiGenerate reader does not read (TASK-2.9 AC #2 to #4) ---------------------
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("generatorSettingsOutsideTheBlock")
+    void a_build_script_that_configures_the_generator_outside_the_openApiGenerate_block_fails_loudly(
+            String form, String construct, String named) {
+        // Given
+        String script = PORTAL_SCRIPT + "\n" + construct;
+
+        // When / Then
+        assertThatThrownBy(() -> portalSettings(script, CATALOG))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(named)
+                .hasMessageContaining("does not read");
+    }
+
+    static Stream<Arguments> generatorSettingsOutsideTheBlock() {
+        return Stream.of(
+                Arguments.of("tasks.named<GenerateTask>(\"openApiGenerate\") { ... }", """
+                        tasks.named<GenerateTask>("openApiGenerate") {
+                            configOptions.put("useTags", "false")
+                        }
+                        """, "tasks.named<GenerateTask>(\"openApiGenerate\")"),
+                Arguments.of("tasks.withType<GenerateTask>().configureEach { ... }", """
+                        tasks.withType<GenerateTask>().configureEach {
+                            configOptions.put("useTags", "false")
+                        }
+                        """, "tasks.withType<GenerateTask>()"),
+                Arguments.of("tasks.openApiGenerate { ... }", """
+                        tasks.openApiGenerate {
+                            configOptions.put("useTags", "false")
+                        }
+                        """, "tasks.openApiGenerate"),
+                Arguments.of("configOptions inside afterEvaluate", """
+                        afterEvaluate {
+                            extensions.getByType<OpenApiGeneratorGenerateExtension>().configOptions.put("useTags", "false")
+                        }
+                        """, "afterEvaluate"),
+                Arguments.of("generatorName inside afterEvaluate", """
+                        project.afterEvaluate {
+                            extensions.getByType<OpenApiGeneratorGenerateExtension>().generatorName.set("jaxrs-cxf")
+                        }
+                        """, "afterEvaluate"),
+                Arguments.of("tasks.named(\"openApiGenerate\") { ... } without the type", """
+                        tasks.named("openApiGenerate") {
+                            doFirst { println("x") }
+                        }
+                        """, "tasks.named(\"openApiGenerate\")"),
+                Arguments.of("tasks.named(\"openApiGenerate\").configure { ... }", """
+                        tasks.named("openApiGenerate").configure {
+                            doFirst { println("x") }
+                        }
+                        """, "tasks.named(\"openApiGenerate\").configure"),
+                Arguments.of("tasks.getByName<GenerateTask>(\"openApiGenerate\") { ... }", """
+                        tasks.getByName<GenerateTask>("openApiGenerate") {
+                            doFirst { println("x") }
+                        }
+                        """, "tasks.getByName<GenerateTask>(\"openApiGenerate\")"),
+                Arguments.of("the GenerateTask import", """
+                        import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
+                        """, "import org.openapitools.generator.gradle.plugin.tasks.GenerateTask"),
+                Arguments.of("configOptions outside the block", """
+                        extensions.getByType<OpenApiGeneratorGenerateExtension>().configOptions.put("useTags", "false")
+                        """, "extensions.getByType<OpenApiGeneratorGenerateExtension>().configOptions"));
+    }
+
+    @Test
+    void the_source_root_wiring_that_names_the_task_without_configuring_it_is_not_refused() {
+        // Given: the wiring as rekord-adapter/build.gradle.kts has it
+        String wiring = "java.srcDir(tasks.named(\"openApiGenerate\").map { layout.buildDirectory.dir(\"generated/openapi/src/gen/java\") })";
+        String script = PORTAL_SCRIPT.replace("java.srcDir(\"generated\")", wiring);
+
+        // When
+        Settings portal = portalSettings(script, CATALOG);
+
+        // Then
+        assertThat(script).contains(wiring);
+        assertThat(differences(hubSettings(HUB_POM), portal)).isEmpty();
+    }
+
+    @Test
+    void a_construct_that_appears_only_in_a_comment_is_not_refused() {
+        // Given
+        String script = PORTAL_SCRIPT
+                + """
+
+                // tasks.named<GenerateTask>("openApiGenerate") { configOptions.put("useTags", "false") }
+                // id("org.openapi.generator") version "7.26.0"
+                /* tasks.withType<GenerateTask>().configureEach { generatorName.set("jaxrs-cxf") }
+                   tasks.openApiGenerate { }
+                   afterEvaluate { configOptions.put("useTags", "false") }
+                   buildscript { dependencies { classpath("org.openapitools:openapi-generator-gradle-plugin:7.26.0") } } */
+                """;
+
+        // When / Then
+        assertThat(differences(hubSettings(HUB_POM), portalSettings(script, CATALOG))).isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("pluginsNotAppliedByTheCatalogAlias")
+    void a_generator_plugin_not_applied_through_the_catalog_alias_fails_loudly(String how, String script, String named) {
+        // When / Then
+        assertThatThrownBy(() -> portalSettings(script, CATALOG))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(named)
+                .hasMessageContaining("alias(libs.plugins.openapi.generator)");
+    }
+
+    static Stream<Arguments> pluginsNotAppliedByTheCatalogAlias() {
+        String alias = "alias(libs.plugins.openapi.generator)";
+        return Stream.of(
+                Arguments.of(
+                        "id(...) version ...",
+                        PORTAL_SCRIPT.replace(alias, "id(\"org.openapi.generator\") version \"7.26.0\""),
+                        "id(\"org.openapi.generator\") version \"7.26.0\""),
+                Arguments.of(
+                        "id(...) without a version",
+                        PORTAL_SCRIPT.replace(alias, "id(\"org.openapi.generator\")"),
+                        "id(\"org.openapi.generator\")"),
+                Arguments.of(
+                        "apply(plugin = ...)",
+                        PORTAL_SCRIPT.replace(alias, "") + "\napply(plugin = \"org.openapi.generator\")\n",
+                        "apply(plugin = \"org.openapi.generator\")"),
+                Arguments.of(
+                        "a buildscript classpath entry",
+                        """
+                        buildscript {
+                            dependencies {
+                                classpath("org.openapitools:openapi-generator-gradle-plugin:7.26.0")
+                            }
+                        }
+                        """ + PORTAL_SCRIPT,
+                        "buildscript classpath"),
+                Arguments.of(
+                        "no application at all",
+                        PORTAL_SCRIPT.replace("    " + alias + "\n", ""),
+                        "does not apply org.openapi.generator"));
     }
 
     // ---- the files under test -------------------------------------------------------------------------------------
@@ -311,6 +559,7 @@ class HubProbeParityTest {
 
     static Settings hubSettings(String pomXml) {
         Element project = parse(pomXml);
+        refuseWhatMavenMergesIntoThePlugin(project);
         Map<String, String> properties = new HashMap<>();
         for (Element property : children(single(project, "properties", "<project>"), null)) {
             properties.put(property.getLocalName(), text(property));
@@ -352,6 +601,34 @@ class HubProbeParityTest {
             put(configOptions, option.getLocalName(), text(option));
         }
         return new Settings(version, parameters, configOptions);
+    }
+
+    /**
+     * Maven merges the configuration of the same plugin from a parent POM, from an active profile and from
+     * {@code build/pluginManagement} into the pom's own; this reader looks at the pom's own plugin entry only.
+     */
+    private static void refuseWhatMavenMergesIntoThePlugin(Element project) {
+        if (!children(project, "parent").isEmpty()) {
+            throw unreadable("smoke/pom.xml has a <parent>, which this test does not read; Maven merges the parent's "
+                    + HUB_PLUGIN + " settings into the pom, so keep every generator setting in the pom itself");
+        }
+        if (!children(project, "profiles").isEmpty()) {
+            throw unreadable("smoke/pom.xml has a <profiles> section, which this test does not read; an active profile "
+                    + "merges its " + HUB_PLUGIN + " settings into the pom, so keep every generator setting out of profiles");
+        }
+        for (Element build : children(project, "build")) {
+            for (Element management : children(build, "pluginManagement")) {
+                for (Element plugins : children(management, "plugins")) {
+                    for (Element plugin : children(plugins, "plugin")) {
+                        if (children(plugin, "artifactId").stream().anyMatch(id -> HUB_PLUGIN.equals(text(id)))) {
+                            throw unreadable("smoke/pom.xml has a <pluginManagement> entry for " + HUB_PLUGIN
+                                    + ", which this test does not read; Maven merges it into the plugin's configuration, "
+                                    + "so keep the settings in the plugin's one <execution>");
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static Element parse(String xml) {
@@ -407,7 +684,11 @@ class HubProbeParityTest {
     // ---- the wedding-portal side: openApiGenerate in rekord-adapter/build.gradle.kts and the catalog -----------------
 
     static Settings portalSettings(String buildScript, String catalog) {
-        String block = openApiGenerateBlock(buildScript);
+        String code = withoutComments(buildScript);
+        Block generate = openApiGenerateBlock(code);
+        refuseGeneratorSettingsOutsideTheBlock(generate.outside());
+        requireTheGeneratorPluginThroughItsCatalogAlias(code);
+        String block = generate.body();
 
         Matcher options = Pattern.compile("(?m)^[ \\t]*configOptions[ \\t]*=[ \\t]*mapOf\\(").matcher(block);
         if (!options.find()) {
@@ -440,17 +721,76 @@ class HubProbeParityTest {
         return new Settings(portalVersion(catalog), parameters, configOptions);
     }
 
-    /** The text between the braces of the one {@code openApiGenerate { ... }} block, and nothing else of the script. */
-    private static String openApiGenerateBlock(String script) {
+    /** The one {@code openApiGenerate { ... }} block of a script: the text between its braces, and the rest of the script. */
+    private record Block(String body, String outside) {}
+
+    private static Block openApiGenerateBlock(String script) {
         Matcher start = Pattern.compile("(?m)^[ \\t]*openApiGenerate[ \\t]*\\{").matcher(script);
         if (!start.find()) {
-            throw unreadable("no `openApiGenerate {` block in rekord-adapter/build.gradle.kts; if it moved, point this test at it");
+            throw unreadable("no `openApiGenerate {` block in " + BUILD_SCRIPT + "; if it moved, point this test at it");
         }
+        int head = start.start();
         int open = start.end() - 1;
         if (start.find()) {
-            throw unreadable("more than one `openApiGenerate {` block in rekord-adapter/build.gradle.kts");
+            throw unreadable("more than one `openApiGenerate {` block in " + BUILD_SCRIPT);
         }
-        return script.substring(open + 1, matching(script, open, '{', '}'));
+        int close = matching(script, open, '{', '}');
+        return new Block(script.substring(open + 1, close), script.substring(0, head) + script.substring(close + 1));
+    }
+
+    /**
+     * The rest of the script must not reach the generator: this reader sees the {@code openApiGenerate { }} block only,
+     * so a task lookup, the task type, the accessor or a setting name outside it is refused. The source-root wiring
+     * {@code tasks.named("openApiGenerate").map { ... }} names the task and sets nothing, so it is the one exception.
+     */
+    private static void refuseGeneratorSettingsOutsideTheBlock(String outside) {
+        String rest = SOURCE_ROOT_WIRING.matcher(outside).replaceAll("{");
+        Matcher afterEvaluate = Pattern.compile("\\bafterEvaluate\\b").matcher(rest);
+        while (afterEvaluate.find()) {
+            int open = rest.indexOf('{', afterEvaluate.end());
+            if (open >= 0 && GENERATOR_SETTING_NAME.matcher(rest.substring(open, matching(rest, open, '{', '}'))).find()) {
+                throw outsideTheBlock("an afterEvaluate block that sets configOptions or generatorName", rest, afterEvaluate.start());
+            }
+        }
+        for (Construct construct : OUTSIDE_THE_BLOCK) {
+            Matcher found = construct.pattern().matcher(rest);
+            if (found.find()) {
+                throw outsideTheBlock(construct.description(), rest, found.start());
+            }
+        }
+    }
+
+    /**
+     * The version compared is the one of the catalog entry the alias names, so the plugin must come in through that
+     * alias: an id with its own version, an {@code apply}, or a buildscript classpath entry would run another version.
+     */
+    private static void requireTheGeneratorPluginThroughItsCatalogAlias(String code) {
+        for (Construct application : PLUGIN_APPLIED_ELSEWHERE) {
+            Matcher found = application.pattern().matcher(code);
+            if (found.find()) {
+                throw unreadable(BUILD_SCRIPT + " applies " + OPENAPI_GENERATOR_PLUGIN_ID + " through " + application.description()
+                        + " (`" + lineAt(code, found.start()) + "`), not through " + GENERATOR_ALIAS_SOURCE
+                        + "; this test takes the generator version from the catalog entry of that alias, so another way "
+                        + "in could run a version it does not compare");
+            }
+        }
+        if (!GENERATOR_ALIAS.matcher(code).find()) {
+            throw unreadable(BUILD_SCRIPT + " does not apply " + OPENAPI_GENERATOR_PLUGIN_ID + " through " + GENERATOR_ALIAS_SOURCE
+                    + ", the catalog entry this test takes the generator version from");
+        }
+    }
+
+    private static IllegalStateException outsideTheBlock(String what, String code, int at) {
+        return unreadable(BUILD_SCRIPT + " has " + what + " (`" + lineAt(code, at) + "`), which this test does not read; "
+                + "keep every generator setting in the openApiGenerate { } block, or extend this test to read it");
+    }
+
+    /** The line of {@code text} that holds {@code index}, trimmed and cut at 120 characters. */
+    private static String lineAt(String text, int index) {
+        int from = text.lastIndexOf('\n', index) + 1;
+        int to = text.indexOf('\n', index);
+        String line = text.substring(from, to < 0 ? text.length() : to).trim();
+        return line.length() > 120 ? line.substring(0, 120) + "..." : line;
     }
 
     /** The index of the bracket that closes the one at {@code open}, skipping strings and comments. */
@@ -472,7 +812,7 @@ class HubProbeParityTest {
                 return i;
             }
         }
-        throw unreadable("a `" + opening + "` in the openApiGenerate block is never closed");
+        throw unreadable("a `" + opening + "` in " + BUILD_SCRIPT + " is never closed");
     }
 
     private static int endOfString(String text, int quote) {
@@ -483,7 +823,7 @@ class HubProbeParityTest {
                 return i;
             }
         }
-        throw unreadable("a string in the openApiGenerate block is never closed");
+        throw unreadable("a string in " + BUILD_SCRIPT + " is never closed");
     }
 
     private static String withoutComments(String text) {
