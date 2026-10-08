@@ -124,6 +124,29 @@ class MigrationCoverageTest {
         assertThat(REPO_ROOT.resolve("application/src/test/resources/db/migration")).doesNotExist();
     }
 
+    @Test
+    void no_source_folder_but_the_application_main_resources_holds_a_db_migration_folder() {
+        // Given the real repository, whose modules all reach classpath:db/migration
+        // When / Then only the folder the gate reads holds migrations
+        assertThat(MigrationCoverage.strayMigrationFolders(REPO_ROOT)).isEmpty();
+    }
+
+    @Test
+    void a_db_migration_folder_in_another_module_or_source_set_is_reported(@TempDir Path root) throws IOException {
+        // Given the gated folder, two stray ones, and build output that is not a source folder
+        for (String folder : List.of(
+                "application/src/main/resources/db/migration",
+                "rekord-adapter/src/main/resources/db/migration",
+                "application/src/test/resources/db/migration",
+                "application/build/resources/main/db/migration")) {
+            Files.createDirectories(root.resolve(folder));
+        }
+
+        // When / Then only the stray source folders are reported
+        assertThat(MigrationCoverage.strayMigrationFolders(root)).containsExactly(
+                "application/src/test/resources/db/migration", "rekord-adapter/src/main/resources/db/migration");
+    }
+
     private static Optional<Class<?>> loadByName(String version) {
         try {
             return Optional.of(Class.forName(MigrationCoverage.testClassName(version)));
