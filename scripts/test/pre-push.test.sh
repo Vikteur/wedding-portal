@@ -159,5 +159,46 @@ check "the remote branch is unchanged after the rejected worktree push" \
   test "$(remote_ref "$r" feature)" = "$feature_before"
 check "the worktree rejection names groma scan" grep -q 'groma scan' "$tmp/wt-fail.err"
 
+# --- (g) a push that only deletes remote branches carries no code, so it is not checked; a push that also updates one is
+r="$(new_repo delete)"
+git -C "$r/work" push -q origin main:refs/heads/old-a main:refs/heads/old-b main:refs/heads/old-c main:refs/heads/old-d
+bash "$r/work/scripts/install-hooks.sh" >/dev/null
+echo 1 > "$STUB_RC_FILE"
+rm -f "$STUB_RAN_FILE"
+(cd "$r/work" && GROMA="$stub_bin/groma" git push origin --delete old-a old-b 2> "$tmp/delete.err")
+delete_rc=$?
+check "a delete-only push succeeds although the check would fail" test "$delete_rc" -eq 0
+check "the check did not run on a delete-only push" test ! -e "$STUB_RAN_FILE"
+check "the deleted branches are gone from the remote" \
+  test "$(remote_ref "$r" old-a) $(remote_ref "$r" old-b)" = "none none"
+(cd "$r/work" && GROMA="groma-cli-that-is-not-installed" git push origin --delete old-c 2> "$tmp/delete-nocli.err")
+check "a delete-only push needs no groma CLI" test $? -eq 0
+main_before="$(remote_ref "$r" main)"
+echo "$RANDOM$RANDOM" > "$r/work/change.txt"
+git -C "$r/work" add change.txt
+git -C "$r/work" commit -q -m "change"
+rm -f "$STUB_RAN_FILE"
+(cd "$r/work" && GROMA="$stub_bin/groma" git push origin :refs/heads/old-d HEAD:refs/heads/main 2> "$tmp/mixed.err")
+mixed_rc=$?
+check "a push that deletes one branch and updates another is checked and rejected" test "$mixed_rc" -ne 0
+check "the check ran on the mixed push" test -f "$STUB_RAN_FILE"
+check "neither ref changed after the rejected mixed push" \
+  test "$(remote_ref "$r" main) $(remote_ref "$r" old-d)" = "$main_before $(git -C "$r/work" rev-parse main~1)"
+
+# --- (h) a rejection names uncommitted changes outside groma/, which the check scans along with the commits
+check "a rejection from a clean tree does not mention uncommitted changes" \
+  bash -c '! grep -q "uncommitted changes" "$1"' _ "$tmp/fail.err"
+r="$(new_repo dirty)"
+bash "$r/work/scripts/install-hooks.sh" >/dev/null
+mkdir -p "$r/work/groma"
+echo "half-curated" > "$r/work/groma/element.md"
+push_from "$r/work" main 1 "$stub_bin/groma" "$tmp/dirty-groma.err"
+check "a rejection with only groma/ uncommitted does not mention other uncommitted changes" \
+  bash -c '! grep -q "uncommitted changes: commit or stash" "$1"' _ "$tmp/dirty-groma.err"
+echo "scratch" > "$r/work/Scratch.java"
+push_from "$r/work" main 1 "$stub_bin/groma" "$tmp/dirty-src.err"
+check "a rejection with uncommitted source says to commit or stash it first" \
+  grep -q 'uncommitted changes: commit or stash them first' "$tmp/dirty-src.err"
+
 echo "pre-push tests: $passed passed, $failed failed"
 [[ "$failed" -eq 0 ]]
