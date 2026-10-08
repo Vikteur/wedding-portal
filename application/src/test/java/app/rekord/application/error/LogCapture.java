@@ -9,7 +9,11 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
-/** Test helper: a handler on the root logger that keeps every record, at any level, from any logger. */
+/**
+ * Test helper: a handler on the root logger that keeps every record any logger emits. The handler accepts all levels,
+ * but records below a logger's enabled level (INFO by default) are dropped before they reach it; DEBUG capture is
+ * TASK-6.5.
+ */
 final class LogCapture extends Handler {
 
     private final List<LogRecord> records = new CopyOnWriteArrayList<>();
@@ -38,7 +42,7 @@ final class LogCapture extends Handler {
                 .toList();
     }
 
-    /** Records written by the envelope mapper's own logger, at any level. */
+    /** Records written by the envelope mapper's own logger that reached the handler (INFO and above by default). */
     List<LogRecord> fromMapper() {
         return records.stream()
                 .filter(r -> ErrorEnvelopeMapper.class.getName().equals(r.getLoggerName()))
