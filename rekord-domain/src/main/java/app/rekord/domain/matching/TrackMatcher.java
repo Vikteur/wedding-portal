@@ -29,7 +29,7 @@ public final class TrackMatcher {
     /** One file, scored against a query, with the reasoning left visible. */
     public record ScoredCandidate(LibraryIndex.Track track, double score,
                                   Map<String, Double> parts, Versions.TitleParts version,
-                                  Double durationDeltaSec) {
+                                  Double durationDeltaSec, List<String> playlists) {
     }
 
     public record MatchResult(MatchQuery input, Versions.TitleParts inputVersion, Bucket bucket,
@@ -40,18 +40,30 @@ public final class TrackMatcher {
     }
 
     public static MatchResult matchOne(MatchQuery query, LibraryIndex index) {
+        return matchOne(query, index, Map.of());
+    }
+
+    /**
+     * @param playlistsByTrackId a track id to the names of the imported playlists holding that file, in order;
+     *                           a missing id, or a null map, means no playlist
+     */
+    public static MatchResult matchOne(MatchQuery query, LibraryIndex index,
+                                       Map<String, List<String>> playlistsByTrackId) {
         QueryText text = QueryText.of(query.artist(), query.title());
 
         List<ScoredCandidate> scored = new ArrayList<>();
         for (LibraryIndex.IndexedTrack candidate : index.candidates(text.tokens(), text.allNorm())) {
-            ScoredCandidate result = score(text, query.durationSec(), candidate);
+            ScoredCandidate result = score(text, query.durationSec(), candidate,
+                    playlistsByTrackId == null ? List.of()
+                            : playlistsByTrackId.getOrDefault(candidate.track().id(), List.of()));
             if (result.score() >= Score.REPORT_THRESHOLD) {
                 scored.add(result);
             }
         }
 
-        // A stable sort: equal scores keep the order retrieval gave them.
-        scored.sort(Comparator.comparingDouble(ScoredCandidate::score).reversed());
+        // A stable sort: equal ranks keep the order retrieval gave them. The playlist nudge orders only.
+        scored.sort(Comparator.comparingDouble((ScoredCandidate c) -> Score.ranked(c.score(), c.playlists()))
+                .reversed());
         if (scored.size() > Score.MAX_CANDIDATES) {
             scored = new ArrayList<>(scored.subList(0, Score.MAX_CANDIDATES));
         }
@@ -61,7 +73,8 @@ public final class TrackMatcher {
     }
 
     private static ScoredCandidate score(QueryText query, Double queryDuration,
-                                         LibraryIndex.IndexedTrack candidate) {
+                                         LibraryIndex.IndexedTrack candidate,
+                                         List<String> playlists) {
         Map<String, Double> facets = new LinkedHashMap<>();
         if (candidate.artistNorm() == null) {
             // A filename-only file: artist and title live in one undifferentiated string, so compare
@@ -76,7 +89,8 @@ public final class TrackMatcher {
         facets.put("duration", Score.durationScore(queryDuration, candidate.track().durationSec()));
 
         return new ScoredCandidate(candidate.track(), round(Score.combine(facets, WEIGHTS), 4),
-                facets, candidate.parts(), durationDelta(queryDuration, candidate.track().durationSec()));
+                facets, candidate.parts(), durationDelta(queryDuration, candidate.track().durationSec()),
+                List.copyOf(playlists));
     }
 
     private record Bucketed(Bucket bucket, String autoSelectedId) {
@@ -89,7 +103,9 @@ public final class TrackMatcher {
         ScoredCandidate best = scored.getFirst();
         if (best.score() >= Score.AUTO_SCORE) {
             boolean marginOk = scored.size() == 1
-                    || best.score() - scored.get(1).score() >= Score.AUTO_MARGIN;
+                    || best.score() - scored.get(1).score() >= Score.AUTO_MARGIN
+                    // a lone playlist member leading a field of files in no playlist
+                    || (!best.playlists().isEmpty() && scored.get(1).playlists().isEmpty());
 
             Double versionPart = best.parts().get("version");
             double version = versionPart == null ? 0.0 : versionPart;

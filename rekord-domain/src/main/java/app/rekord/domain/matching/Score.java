@@ -1,6 +1,7 @@
 package app.rekord.domain.matching;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -15,7 +16,8 @@ import java.util.Set;
  *
  * <p>Buckets: {@code auto} needs a high, well-separated, version-compatible
  * best candidate; anything merely plausible becomes {@code ambiguous} and the
- * DJ picks; the rest is {@code unmatched}.
+ * DJ picks; the rest is {@code unmatched}. A small playlist nudge ({@link #ranked})
+ * orders candidates but never changes a score: the bucket reads the raw scores.
  */
 public final class Score {
 
@@ -31,6 +33,10 @@ public final class Score {
     /** Roughly within 22 seconds. */
     public static final double AUTO_MIN_DURATION = 0.55;
     public static final int MAX_CANDIDATES = 8;
+    /** Added to a candidate's ordering key per imported playlist it is in. */
+    public static final double PLAYLIST_BONUS = 0.02;
+    /** Playlists beyond this many add nothing. */
+    public static final int PLAYLIST_BONUS_CAP = 3;
 
     public static final double WEIGHT_TITLE = 0.40;
     public static final double WEIGHT_ARTIST = 0.30;
@@ -48,6 +54,11 @@ public final class Score {
     private static final double REMASTER_FACTOR = 0.90;
 
     private Score() {
+    }
+
+    /** The ordering key: the score plus a small nudge per playlist. It never replaces the score. */
+    public static double ranked(double score, List<String> playlists) {
+        return score + PLAYLIST_BONUS * Math.min(playlists.size(), PLAYLIST_BONUS_CAP);
     }
 
     /**
