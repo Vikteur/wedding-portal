@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 class CiWorkflowTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
+    private static final Pattern REGISTRY_COMMAND = Pattern.compile("docker (image )?push|docker login|--push\\b");
+    private static final Pattern REGISTRY_ACTION = Pattern.compile("^docker/(login-action|build-push-action)@");
 
     @Test
     void every_action_in_every_workflow_is_pinned_by_a_40_character_commit_sha() throws IOException {
@@ -150,17 +152,285 @@ class CiWorkflowTest {
     }
 
     @Test
-    void ci_builds_the_image_and_runs_the_image_check() throws IOException {
+    void image_job_builds_checks_and_then_pushes_the_sha_and_latest_tags() throws IOException {
         // Given
         JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
-        String text = Workflows.steps(ci, "image").stream()
-                .map(step -> step.path("run").asText())
-                .reduce("", (a, b) -> a + "\n" + b);
+        var steps = Workflows.steps(ci, "image");
+
+        // When
+        int build = indexOfStep(steps, step -> step.path("run").asText().contains("docker build"));
+        int check = indexOfStep(steps, step -> step.path("run").asText().contains("image-check.sh"));
+        int tags = indexOfStep(steps, step -> "image-tags".equals(step.path("id").asText()));
+        int signIn = indexOfStep(steps, step -> step.path("run").asText().contains("docker login ghcr.io"));
+        int push = indexOfStep(steps, step -> step.path("run").asText().contains("docker push"));
+
+        // Then
+        assertThat(build).as("docker build").isNotNegative().isLessThan(check);
+        assertThat(check).as("image check").isLessThan(tags);
+        assertThat(tags).as("image tags").isLessThan(signIn);
+        assertThat(signIn).as("sign-in").isLessThan(push);
+        assertThat(steps.get(tags).path("name").asText()).isEqualTo("Image tags");
+        assertThat(steps.get(tags).path("run").asText().trim())
+                .isEqualTo("bash .github/scripts/image-tags.sh \"${{ github.repository }}\" \"${{ github.sha }}\"");
+        var commands = steps.get(push).path("run").asText().lines().map(String::trim).filter(l -> !l.isEmpty()).toList();
+        assertThat(commands)
+                .containsExactly(
+                        "docker tag wedding-portal:ci \"${{ steps.image-tags.outputs.sha }}\"",
+                        "docker tag wedding-portal:ci \"${{ steps.image-tags.outputs.latest }}\"",
+                        "docker push \"${{ steps.image-tags.outputs.sha }}\"",
+                        "docker push \"${{ steps.image-tags.outputs.latest }}\"");
+        assertThat(texts(ci.path("jobs").path("image").path("needs"))).containsExactly("build");
+    }
+
+    @Test
+    void nothing_pushes_outside_the_image_job_on_main() throws IOException {
+        // Given
+        var workflows = Workflows.files(REPO_ROOT);
 
         // When / Then
-        assertThat(text).contains("docker build", "image-check.sh");
-        assertThat(text).doesNotContain("docker push").doesNotContain("docker login");
-        assertThat(texts(ci.path("jobs").path("image").path("needs"))).containsExactly("build");
+        for (Path file : workflows) {
+            assertThat(registryStepsOutsideTheImageJob(file.getFileName().toString(), Workflows.read(file)))
+                    .as("push or sign-in steps outside the image job in %s", file)
+                    .isEmpty();
+        }
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        assertThat(ci.path("jobs").path("image").path("if").asText())
+                .isEqualTo("github.event_name == 'push' && github.ref == 'refs/heads/main'");
+        assertThat(pushGateViolations(ci)).isEmpty();
+        assertThat(Workflows.steps(ci, "image").stream().filter(step -> step.path("run").asText().contains("docker push")))
+                .hasSize(1);
+    }
+
+    @Test
+    void a_push_by_action_or_by_another_docker_command_outside_the_image_job_is_found() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  release:
+                    steps:
+                      - name: Plain push
+                        run: docker push x
+                      - name: Image push
+                        run: docker image push x
+                      - name: Buildx push
+                        run: docker buildx build --push -t x .
+                      - name: Login action
+                        uses: docker/login-action@0123456789abcdef0123456789abcdef01234567
+                      - name: Build-push action
+                        uses: docker/build-push-action@0123456789abcdef0123456789abcdef01234567
+                      - name: Build only
+                        run: docker build -t x .
+                  image:
+                    steps:
+                      - name: Push image
+                        run: docker push x
+                """);
+
+        // When
+        var found = registryStepsOutsideTheImageJob("ci.yml", workflow);
+
+        // Then
+        assertThat(found)
+                .containsExactly(
+                        "release: Plain push",
+                        "release: Image push",
+                        "release: Buildx push",
+                        "release: Login action",
+                        "release: Build-push action");
+        assertThat(registryStepsOutsideTheImageJob("other.yml", workflow)).contains("image: Push image");
+    }
+
+    /** Every step, as {@code job: step}, that signs in to a registry or pushes an image, outside {@code ci.yml}'s image job. */
+    private static List<String> registryStepsOutsideTheImageJob(String fileName, JsonNode workflow) {
+        List<String> found = new ArrayList<>();
+        workflow.path("jobs").fields().forEachRemaining(job -> {
+            boolean isImageJobOfCi = "ci.yml".equals(fileName) && "image".equals(job.getKey());
+            job.getValue().path("steps").forEach(step -> {
+                boolean registry = REGISTRY_COMMAND.matcher(step.path("run").asText()).find()
+                        || REGISTRY_ACTION.matcher(step.path("uses").asText()).find();
+                if (!isImageJobOfCi && registry) {
+                    found.add(job.getKey() + ": " + step.path("name").asText());
+                }
+            });
+        });
+        return found;
+    }
+
+    @Test
+    void a_job_if_with_always_or_a_push_step_with_continue_on_error_would_let_a_red_build_push() throws IOException {
+        // Given
+        JsonNode alwaysJob = Workflows.parse("""
+                jobs:
+                  image:
+                    if: always() && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Image tags
+                        id: image-tags
+                        run: echo tags
+                      - name: Sign in
+                        run: docker login ghcr.io
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode lenientPush = Workflows.parse("""
+                jobs:
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Image tags
+                        id: image-tags
+                        run: echo tags
+                      - name: Sign in
+                        run: docker login ghcr.io
+                      - name: Push image
+                        continue-on-error: true
+                        run: docker push x
+                """);
+        JsonNode strict = Workflows.parse("""
+                jobs:
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Image tags
+                        id: image-tags
+                        run: echo tags
+                      - name: Sign in
+                        run: docker login ghcr.io
+                      - name: Push image
+                        run: docker push x
+                      - name: Sign out
+                        if: always()
+                        run: docker logout ghcr.io
+                """);
+
+        // When / Then
+        assertThat(pushGateViolations(alwaysJob)).isNotEmpty();
+        assertThat(pushGateViolations(lenientPush)).containsExactly("Push image");
+        assertThat(pushGateViolations(strict)).isEmpty();
+    }
+
+    @Test
+    void a_lenient_image_check_or_test_step_would_let_an_unchecked_or_red_build_push() throws IOException {
+        // Given
+        JsonNode lenientCheck = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        continue-on-error: true
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode skippedCheck = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        if: github.event_name == 'pull_request'
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode lenientTests = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        continue-on-error: true
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode lenientBuildJob = Workflows.parse("""
+                jobs:
+                  build:
+                    continue-on-error: true
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Push image
+                        run: docker push x
+                """);
+
+        // When / Then
+        assertThat(pushGateViolations(lenientCheck)).containsExactly("Check image");
+        assertThat(pushGateViolations(skippedCheck)).containsExactly("Check image");
+        assertThat(pushGateViolations(lenientTests)).containsExactly("build: Build and test");
+        assertThat(pushGateViolations(lenientBuildJob)).containsExactly("build job continue-on-error");
+    }
+
+    /**
+     * What would let the image job push after a red build or a failed image check: a loose job if, continue-on-error
+     * on either job or on a build step, or an if or continue-on-error on any image step up to the last push.
+     */
+    private static List<String> pushGateViolations(JsonNode workflow) {
+        List<String> violations = new ArrayList<>();
+        JsonNode build = workflow.path("jobs").path("build");
+        if (build.has("continue-on-error")) {
+            violations.add("build job continue-on-error");
+        }
+        build.path("steps").forEach(step -> {
+            if (step.has("continue-on-error")) {
+                violations.add("build: " + step.path("name").asText());
+            }
+        });
+        JsonNode image = workflow.path("jobs").path("image");
+        String condition = image.path("if").asText().trim();
+        if (condition.contains("always()") || condition.contains("failure()") || condition.contains("cancelled()")) {
+            violations.add("job if: " + condition);
+        }
+        if (image.has("continue-on-error")) {
+            violations.add("job continue-on-error");
+        }
+        var steps = Workflows.steps(workflow, "image");
+        int lastPush = -1;
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i).path("run").asText().contains("docker push")) {
+                lastPush = i;
+            }
+        }
+        for (JsonNode step : steps.subList(0, lastPush + 1)) {
+            if (step.has("if") || step.has("continue-on-error")) {
+                violations.add(step.path("name").asText());
+            }
+        }
+        return violations;
     }
 
     @Test
@@ -224,18 +494,70 @@ class CiWorkflowTest {
     }
 
     @Test
-    void no_workflow_falls_back_to_the_workflows_own_token() throws IOException {
+    void the_workflows_own_token_is_used_only_to_sign_in_to_the_registry() throws IOException {
         // Given
         var workflows = Workflows.files(REPO_ROOT);
         Pattern fallback = Pattern.compile("\\$\\{\\{[^}]*\\|\\|[^}]*}}");
+        int occurrences = 0;
 
-        // When / Then
+        // When
         assertThat(workflows).isNotEmpty();
         for (Path file : workflows) {
             String text = Files.readString(file);
-            assertThat(text).as("%s", file).doesNotContain("GITHUB_TOKEN").doesNotContain("github.token");
+            assertThat(text).as("%s", file).doesNotContain("GITHUB_TOKEN");
             assertThat(fallback.matcher(text).find()).as("a || fallback in %s", file).isFalse();
+            occurrences += text.split("github\\.token", -1).length - 1;
         }
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "image");
+        int signIn = indexOfStep(steps, step -> step.path("run").asText().contains("docker login ghcr.io"));
+
+        // Then
+        assertThat(occurrences).as("github.token references across all workflows").isEqualTo(1);
+        assertThat(signIn).as("the sign-in step in the image job").isNotNegative();
+        JsonNode step = steps.get(signIn);
+        assertThat(step.path("env").size()).isEqualTo(1);
+        String variable = step.path("env").fieldNames().next();
+        assertThat(step.path("env").path(variable).asText()).isEqualTo("${{ github.token }}");
+        String run = step.path("run").asText();
+        assertThat(run).contains("--password-stdin", "$" + variable);
+        assertThat(run).doesNotContain("github.token").doesNotContain("secrets.");
+        assertThat(run).doesNotContain(" -p ").doesNotContain("--password ");
+    }
+
+    @Test
+    void only_the_image_job_may_write_packages() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        // When / Then
+        assertThat(fields(ci.path("permissions"))).containsExactly("contents=read");
+        assertThat(fields(ci.path("jobs").path("image").path("permissions")))
+                .containsExactlyInAnyOrder("contents=read", "packages=write");
+        ci.path("jobs").fields().forEachRemaining(job -> {
+            if (!"image".equals(job.getKey())) {
+                assertThat(job.getValue().has("permissions"))
+                        .as("permissions of job %s", job.getKey())
+                        .isFalse();
+            }
+        });
+    }
+
+    @Test
+    void the_registry_sign_in_comes_after_the_image_check_and_is_signed_out_always() throws IOException {
+        // Given
+        var steps = Workflows.steps(Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml")), "image");
+
+        // When
+        int check = indexOfStep(steps, step -> step.path("run").asText().contains("image-check.sh"));
+        int signIn = indexOfStep(steps, step -> step.path("run").asText().contains("docker login ghcr.io"));
+        JsonNode last = steps.get(steps.size() - 1);
+
+        // Then
+        assertThat(check).as("the image check").isNotNegative();
+        assertThat(signIn).as("the sign-in").isGreaterThan(check);
+        assertThat(last.path("run").asText().trim()).isEqualTo("docker logout ghcr.io");
+        assertThat(last.path("if").asText().trim()).isEqualTo("always()");
     }
 
     @Test
@@ -412,6 +734,12 @@ class CiWorkflowTest {
         // Then
         assertThat(running.stream().map(step -> step.path("name").asText()))
                 .containsExactly("Check out rekord-contract");
+    }
+
+    private static List<String> fields(JsonNode node) {
+        List<String> fields = new ArrayList<>();
+        node.fields().forEachRemaining(field -> fields.add(field.getKey() + "=" + field.getValue().asText()));
+        return fields;
     }
 
     private static List<String> texts(JsonNode node) {
