@@ -81,4 +81,10 @@ public class ErrorEnvelopeProbeResource {
     public void inviteAccept(@Valid @NotNull InviteAccept body) {
         // reaching here means validation did not run
     }
+
+    @GET
+    @Path("/web-application-exception")
+    public String webApplicationException() {
+        throw new jakarta.ws.rs.WebApplicationException(409);
+    }
 }

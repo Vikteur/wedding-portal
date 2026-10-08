@@ -93,4 +93,15 @@ class ErrorEnvelopeMapperIT {
         assertThat(body.at("/detail/message").asText())
                 .isIn(parts[0] + "; " + parts[1], parts[1] + "; " + parts[0]);
     }
+
+    @Test
+    void an_unmapped_web_application_exception_answers_exactly_what_rekord_api_answers() throws Exception {
+        assertAnswersAsFixture(
+                given().when().get(PROBE + "/web-application-exception"), "error-unmapped-409");
+    }
+
+    @Test
+    void a_post_to_a_get_only_route_answers_exactly_what_rekord_api_answers() throws Exception {
+        assertAnswersAsFixture(given().when().post("/api/health"), "error-method-not-allowed-405");
+    }
 }

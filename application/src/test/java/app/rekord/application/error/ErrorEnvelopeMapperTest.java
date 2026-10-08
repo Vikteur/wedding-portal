@@ -185,4 +185,22 @@ class ErrorEnvelopeMapperTest {
         assertThat(response.getEntity().getDetail().getMessage())
                 .isEqualTo("password size must be between 8 and 2147483647");
     }
+
+    @Test
+    void a_web_application_exception_below_500_keeps_its_status_with_code_unknown() {
+        assertEnvelope(
+                mapper.onThrowable(new jakarta.ws.rs.WebApplicationException(409)),
+                409,
+                "UNKNOWN",
+                "That request could not be handled.");
+    }
+
+    @Test
+    void the_frameworks_405_keeps_its_status_with_code_unknown() {
+        assertEnvelope(
+                mapper.onThrowable(new jakarta.ws.rs.NotAllowedException("GET")),
+                405,
+                "UNKNOWN",
+                "That request could not be handled.");
+    }
 }
