@@ -203,4 +203,29 @@ class ErrorEnvelopeMapperTest {
                 "UNKNOWN",
                 "That request could not be handled.");
     }
+
+    @Test
+    void a_pair_without_a_table_row_answers_500_unknown() {
+        var e = new RejectedException(RejectedException.Kind.VALIDATION, ErrorCode.NO_WEDDING, "no row");
+
+        assertEnvelope(mapper.onRekordException(e), 500, "UNKNOWN", "Something went wrong at our end.");
+    }
+
+    @Test
+    void any_other_throwable_answers_500_unknown_without_its_message() {
+        assertEnvelope(
+                mapper.onThrowable(ErrorEnvelopeProbeResource.chain()),
+                500,
+                "UNKNOWN",
+                "Something went wrong at our end.");
+    }
+
+    @Test
+    void a_web_application_exception_of_500_or_more_answers_500_unknown() {
+        assertEnvelope(
+                mapper.onThrowable(new jakarta.ws.rs.ServiceUnavailableException()),
+                500,
+                "UNKNOWN",
+                "Something went wrong at our end.");
+    }
 }

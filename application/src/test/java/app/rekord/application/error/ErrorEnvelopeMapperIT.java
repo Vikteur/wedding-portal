@@ -11,10 +11,13 @@ import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @QuarkusTest
 @TestProfile(ResourceTestProfile.class)
@@ -22,6 +25,18 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ErrorEnvelopeMapperIT {
 
     private static final String PROBE = "/api/test-only/error-envelope";
+
+    private final LogCapture log = new LogCapture();
+
+    @BeforeEach
+    void startCapture() {
+        log.start();
+    }
+
+    @AfterEach
+    void stopCapture() {
+        log.stop();
+    }
 
     private static void assertAnswersAsFixture(Response response, String fixtureName) throws Exception {
         JsonNode fixture;
@@ -103,5 +118,90 @@ class ErrorEnvelopeMapperIT {
     @Test
     void a_post_to_a_get_only_route_answers_exactly_what_rekord_api_answers() throws Exception {
         assertAnswersAsFixture(given().when().post("/api/health"), "error-method-not-allowed-405");
+    }
+
+    // --- the catch-all: 500 UNKNOWN, one redacted ERROR line (STOP crypto-logging) ---
+
+    private void assertLoggedOnceRedacted(String path) {
+        assertThat(log.errors()).as("ERROR records across all loggers").hasSize(1);
+        var record = log.errors().get(0);
+        assertThat(record.getLoggerName()).isEqualTo(ErrorEnvelopeMapper.class.getName());
+        assertThat(record.getMessage()).isEqualTo("Unhandled exception");
+        assertThat(record.getParameters()).isNullOrEmpty();
+        assertThat(record.getThrown()).isNotNull();
+        for (var captured : log.records()) {
+            String text = LogCapture.text(captured);
+            for (String sentinel : ErrorEnvelopeProbeResource.SENTINELS) {
+                assertThat(text).as("record text").doesNotContain(sentinel);
+            }
+            assertThat(text).doesNotContain(path);
+        }
+    }
+
+    @Test
+    void an_unhandled_exception_answers_the_500_fixture_and_logs_one_redacted_error() throws Exception {
+        // When
+        Response response = given().when().get(PROBE + "/unhandled");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/unhandled");
+        String text = LogCapture.text(log.errors().get(0));
+        assertThat(text)
+                .contains("java.lang.IllegalStateException")
+                .contains("Caused by: java.sql.SQLException")
+                .contains("ErrorEnvelopeProbeResource");
+    }
+
+    @Test
+    void a_web_application_exception_of_503_answers_the_500_fixture_and_logs_once() throws Exception {
+        Response response = given().when().get(PROBE + "/service-unavailable");
+
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/service-unavailable");
+    }
+
+    @Test
+    void a_family_error_without_a_table_row_answers_the_500_fixture_and_logs_once() throws Exception {
+        Response response = given().when().get(PROBE + "/pair-without-row");
+
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/pair-without-row");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/test-only/error-envelope/family/not-found",
+                "/test-only/error-envelope/family/rejected",
+                "/test-only/error-envelope/family/not-permitted",
+                "/test-only/error-envelope/family/upstream-unavailable",
+                "/test-only/error-envelope/auth-failed",
+                "/test-only/error-envelope/unauthorized",
+                "/test-only/error-envelope/forbidden",
+                "/test-only/error-envelope/web-application-exception",
+                "/test-only/error-envelope/uuid/not-a-uuid",
+                "/no-such-route"
+            })
+    void a_refusal_below_500_writes_no_log_record_from_the_mapper(String path) {
+        given().when().get("/api" + path).then().extract().asByteArray();
+
+        assertThat(log.fromMapper()).isEmpty();
+        assertThat(log.errors()).isEmpty();
+    }
+
+    @Test
+    void a_405_and_a_422_write_no_log_record_from_the_mapper() {
+        given().when().post("/api/health").then().extract().asByteArray();
+        given().contentType("application/json")
+                .body("{\"display_name\":\"\",\"password\":\"short\"}")
+                .when()
+                .post(PROBE + "/invite-accept")
+                .then()
+                .extract()
+                .asByteArray();
+
+        assertThat(log.fromMapper()).isEmpty();
+        assertThat(log.errors()).isEmpty();
     }
 }
