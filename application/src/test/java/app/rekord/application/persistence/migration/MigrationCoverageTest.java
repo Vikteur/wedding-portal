@@ -1,6 +1,7 @@
 package app.rekord.application.persistence.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,12 +44,12 @@ class MigrationCoverageTest {
         // When
         List<String> untested = MigrationCoverage.untested(dir, MigrationCoverageTest::loadByName);
 
-        // Then
-        assertThat(untested).containsExactly("99");
+        // Then the entry says which class is missing
+        assertThat(untested).containsExactly("99: V99MigrationIT does not exist");
     }
 
     @Test
-    void a_test_that_declares_another_version_is_abstract_or_is_disabled_is_reported(@TempDir Path dir)
+    void a_test_that_declares_another_version_is_abstract_or_is_disabled_is_reported_with_its_reason(@TempDir Path dir)
             throws IOException {
         // Given four versions whose test classes are a good one, a wrong-version one, an abstract one and a disabled one
         for (String v : List.of("1", "2", "3", "4")) {
@@ -60,13 +61,16 @@ class MigrationCoverageTest {
         // When
         List<String> untested = MigrationCoverage.untested(dir, v -> Optional.ofNullable(tests.get(v)));
 
-        // Then only the good one counts as tested
-        assertThat(untested).containsExactly("2", "3", "4");
+        // Then only the good one counts as tested, and each other entry names its class and what is wrong with it
+        assertThat(untested).containsExactly(
+                "2: WrongVersion declares version \"5\" instead of \"2\"",
+                "3: AbstractCheck is abstract",
+                "4: DisabledCheck is @Disabled");
     }
 
     @Test
-    void a_test_that_overrides_the_inherited_check_or_runs_only_under_a_condition_is_reported(@TempDir Path dir)
-            throws IOException {
+    void a_test_that_overrides_the_inherited_check_or_runs_only_under_a_condition_is_reported_with_its_reason(
+            @TempDir Path dir) throws IOException {
         // Given two versions whose test classes replace the inherited check or skip it under a JUnit condition
         for (String v : List.of("5", "6")) {
             Files.writeString(dir.resolve("V" + v + "__x.sql"), "select 1;\n");
@@ -76,8 +80,35 @@ class MigrationCoverageTest {
         // When
         List<String> untested = MigrationCoverage.untested(dir, v -> Optional.ofNullable(tests.get(v)));
 
-        // Then neither counts as tested
-        assertThat(untested).containsExactly("5", "6");
+        // Then neither counts as tested, and each entry says why
+        assertThat(untested).containsExactly(
+                "5: OverridingCheck overrides the inherited check",
+                "6: ConditionalCheck carries @EnabledIfSystemProperty, a JUnit condition that can skip the check");
+    }
+
+    @Test
+    void a_class_that_is_not_a_migration_schema_check_is_reported_with_its_reason(@TempDir Path dir) throws IOException {
+        // Given a version whose class is named for it but does not extend MigrationSchemaCheck
+        Files.writeString(dir.resolve("V7__x.sql"), "select 1;\n");
+
+        // When
+        List<String> untested = MigrationCoverage.untested(dir, v -> Optional.of(NotACheck.class));
+
+        // Then
+        assertThat(untested).containsExactly("7: NotACheck does not extend MigrationSchemaCheck");
+    }
+
+    @Test
+    void a_test_class_whose_constructor_throws_fails_the_gate_with_the_cause(@TempDir Path dir) throws IOException {
+        // Given a version whose test class cannot be instantiated
+        Files.writeString(dir.resolve("V8__x.sql"), "select 1;\n");
+
+        // When / Then the gate does not call it untested: it surfaces the constructor's own exception
+        assertThatThrownBy(() -> MigrationCoverage.untested(dir, v -> Optional.of(ThrowingConstructor.class)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ThrowingConstructor")
+                .hasCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("constructor failed on purpose");
     }
 
     @Test
@@ -188,6 +219,24 @@ class MigrationCoverageTest {
         @Override
         protected String version() {
             return "1";
+        }
+
+        @Override
+        protected SchemaSnapshot expected() {
+            return SchemaSnapshot.empty();
+        }
+    }
+
+    private static final class NotACheck {}
+
+    private static final class ThrowingConstructor extends MigrationSchemaCheck {
+        ThrowingConstructor() {
+            throw new IllegalArgumentException("constructor failed on purpose");
+        }
+
+        @Override
+        protected String version() {
+            return "8";
         }
 
         @Override

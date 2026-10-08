@@ -2,7 +2,9 @@ package app.rekord.application.persistence.migration;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URISyntaxException;
@@ -57,9 +59,14 @@ final class MigrationCoverage {
         return PACKAGE + ".V" + version.replace('.', '_') + "MigrationIT";
     }
 
-    /** The versions without a concrete, enabled test class of the right version. */
+    /**
+     * The versions without a concrete, enabled test class of the right version, each with the reason, such as
+     * {@code "2: V2MigrationIT is @Disabled"}.
+     */
     static List<String> untested(Path folder, Function<String, Optional<Class<?>>> lookup) {
-        return versions(folder).stream().filter(v -> !isTested(v, lookup.apply(v))).toList();
+        return versions(folder).stream()
+                .flatMap(v -> problem(v, lookup.apply(v)).stream())
+                .toList();
     }
 
     /** The {@code V*MigrationIT} classes of the package whose version has no V file. */
@@ -136,31 +143,63 @@ final class MigrationCoverage {
         }
     }
 
-    private static boolean isTested(String version, Optional<Class<?>> candidate) {
+    /**
+     * Why the candidate does not count as the test of the version, as {@code "<version>: <class> <reason>"}, or empty when
+     * it does. A class that cannot be instantiated is not "untested" but broken: its own exception is rethrown.
+     */
+    private static Optional<String> problem(String version, Optional<Class<?>> candidate) {
         if (candidate.isEmpty()) {
-            return false;
+            return Optional.of(version + ": " + expectedName(version) + " does not exist");
         }
         Class<?> type = candidate.get();
-        if (!MigrationSchemaCheck.class.isAssignableFrom(type)
-                || Modifier.isAbstract(type.getModifiers())
-                || type.isAnnotationPresent(Disabled.class)
-                || hasExecutionCondition(type)
-                || overridesTheCheck(type)) {
-            return false;
+        String prefix = version + ": " + type.getSimpleName();
+        if (!MigrationSchemaCheck.class.isAssignableFrom(type)) {
+            return Optional.of(prefix + " does not extend MigrationSchemaCheck");
         }
+        if (Modifier.isAbstract(type.getModifiers())) {
+            return Optional.of(prefix + " is abstract");
+        }
+        if (type.isAnnotationPresent(Disabled.class)) {
+            return Optional.of(prefix + " is @Disabled");
+        }
+        Optional<String> condition = executionCondition(type);
+        if (condition.isPresent()) {
+            return Optional.of(prefix + " carries @" + condition.get() + ", a JUnit condition that can skip the check");
+        }
+        if (overridesTheCheck(type)) {
+            return Optional.of(prefix + " overrides the inherited check");
+        }
+        String declared = declaredVersion(type);
+        if (!version.equals(declared)) {
+            return Optional.of(prefix + " declares version \"" + declared + "\" instead of \"" + version + "\"");
+        }
+        return Optional.empty();
+    }
+
+    private static String expectedName(String version) {
+        String name = testClassName(version);
+        return name.substring(name.lastIndexOf('.') + 1);
+    }
+
+    private static String declaredVersion(Class<?> type) {
         try {
             Constructor<?> constructor = type.getDeclaredConstructor();
             constructor.setAccessible(true);
-            return version.equals(((MigrationSchemaCheck) constructor.newInstance()).version());
+            return ((MigrationSchemaCheck) constructor.newInstance()).version();
+        } catch (InvocationTargetException e) {
+            throw new IllegalStateException(type.getSimpleName() + " throws from its constructor", e.getCause());
         } catch (ReflectiveOperationException e) {
-            return false;
+            throw new IllegalStateException(type.getSimpleName() + " cannot be instantiated to read its version()", e);
         }
     }
 
-    /** A JUnit condition such as {@code @EnabledIfSystemProperty} could skip the check. */
-    private static boolean hasExecutionCondition(Class<?> type) {
+    /** A JUnit condition such as {@code @EnabledIfSystemProperty} could skip the check; the simple name of the first one. */
+    private static Optional<String> executionCondition(Class<?> type) {
         return Arrays.stream(type.getAnnotations())
-                .anyMatch(a -> a.annotationType().getPackageName().equals(Disabled.class.getPackageName() + ".condition"));
+                .map(Annotation::annotationType)
+                .filter(a -> a.getPackageName().equals(Disabled.class.getPackageName() + ".condition"))
+                .map(Class::getSimpleName)
+                .findFirst();
     }
 
     /** A subclass that redeclares the inherited test replaces it, with or without {@code @Test}. */
