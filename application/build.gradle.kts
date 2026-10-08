@@ -17,6 +17,7 @@ dependencies {
     implementation("io.quarkus:quarkus-flyway-postgresql")
     implementation("io.quarkus:quarkus-hibernate-orm")
     implementation("io.quarkus:quarkus-narayana-jta")
+    implementation("io.quarkus.security:quarkus-security")
 
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-junit-internal")
