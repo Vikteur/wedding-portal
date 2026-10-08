@@ -42,7 +42,7 @@ tasks.test {
     // Anchored like .gitignore, so the test package named `build` stays an input. fileTree also drops Gradle's default
     // excludes, among them .gitignore and .gitattributes, which the build tests read: those are named on their own.
     inputs.files(fileTree(rootDir) {
-        exclude(".git", ".git/**", ".gradle/**", ".kotlin/**", ".idea/**", "**/*.iml",
+        exclude(".git", ".git/**", "**/.gradle/**", "**/.kotlin/**", "**/.idea/**", "**/*.iml",
             "build/**", "*/build/**", "out/**", "*/out/**", "contract/**")
     }, rootProject.files(".gitignore", ".gitattributes")).withPropertyName("repoFiles").withPathSensitivity(PathSensitivity.RELATIVE)
     // The checkout contract.spec points into: the spec and the hub's smoke/pom.xml (HubProbeParityTest).
