@@ -109,7 +109,9 @@ expected_body="$(jq -r .body "$repo_root/application/src/test/resources/fixtures
 expect "GET /api/health body" "$expected_body" "$(cat "$workdir/body")"
 
 echo "Check: flyway ran in the started image"
-expect "successful flyway_schema_history rows" "1" \
+# One successful history row per versioned migration of the repo, so the next V file does not break this check.
+migrations="$(find "$repo_root/application/src/main/resources/db/migration" -maxdepth 1 -name 'V*__*.sql' | wc -l | tr -d ' ')"
+expect "successful flyway_schema_history rows" "$migrations" \
   "$(docker exec "$db_container" psql -U "$db_user" -d "$db_name" -tAc \
     'select count(*) from flyway_schema_history where success')"
 

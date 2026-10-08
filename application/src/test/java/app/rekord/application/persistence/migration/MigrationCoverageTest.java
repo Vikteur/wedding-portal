@@ -124,6 +124,29 @@ class MigrationCoverageTest {
     }
 
     @Test
+    void the_version_of_a_file_name_is_what_the_gate_reads_from_it_and_nothing_for_a_name_it_refuses() {
+        // Given names the gate accepts, with a hyphen, a space, a dot or an underscore in the version or description
+        Map<String, String> accepted = Map.of(
+                "V1__baseline.sql", "1",
+                "V3__add-x.sql", "3",
+                "V3__add x.sql", "3",
+                "V3__a.b.sql", "3",
+                "V1_1__x.sql", "1.1",
+                "V1.2__x.sql", "1.2",
+                "V10_2_3__x.sql", "10.2.3");
+
+        // When / Then the version comes back with dots, as Flyway reads it
+        accepted.forEach((name, version) ->
+                assertThat(MigrationCoverage.versionOf(name)).as(name).contains(version));
+
+        // And names that Flyway would not run as versioned migrations have none
+        for (String name : List.of("V3_x.sql", "R__x.sql", "V__x.sql", "V1__x.txt", "V1__.sql", "v1__x.sql",
+                "V1_1_x.sql", "notes.txt")) {
+            assertThat(MigrationCoverage.versionOf(name)).as(name).isEmpty();
+        }
+    }
+
+    @Test
     void a_file_that_is_not_a_versioned_migration_is_reported(@TempDir Path dir) throws IOException {
         // Given one good file and three that Flyway would not run as versioned migrations
         Files.writeString(dir.resolve("V1__baseline.sql"), "-- baseline\n");

@@ -30,9 +30,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Matches the versioned migrations of a folder with their {@code V<version>MigrationIT} classes. Dots and underscores in a
  * version are the same to Flyway, so {@code V1_1__a.sql} and {@code V1.1__a.sql} are both version {@code 1.1}, tested by
- * {@code V1_1MigrationIT}.
+ * {@code V1_1MigrationIT}. {@link #versionOf} is the one place that says what a versioned migration file name is; any
+ * other test that has to agree with the gate calls it instead of copying the pattern.
  */
-final class MigrationCoverage {
+public final class MigrationCoverage {
 
     private static final Pattern MIGRATION_FILE = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__.+[.]sql");
     private static final Pattern TEST_CLASS = Pattern.compile("V([0-9]+(?:_[0-9]+)*)MigrationIT");
@@ -49,11 +50,20 @@ final class MigrationCoverage {
      */
     static List<String> versions(Path folder) {
         return files(folder).stream()
-                .map(MIGRATION_FILE::matcher)
-                .filter(Matcher::matches)
-                .map(m -> m.group(1).replace('_', '.'))
+                .map(MigrationCoverage::versionOf)
+                .flatMap(Optional::stream)
                 .sorted(Comparator.comparing(MigrationVersion::fromVersion))
                 .toList();
+    }
+
+    /**
+     * The version of a versioned migration file name, with dots (so {@code V1_1__x.sql} and {@code V1.1__x.sql} are
+     * both {@code 1.1}), or empty when the name is no versioned migration: {@code V<version>__<description>.sql}, any
+     * description.
+     */
+    public static Optional<String> versionOf(String fileName) {
+        Matcher m = MIGRATION_FILE.matcher(fileName);
+        return m.matches() ? Optional.of(m.group(1).replace('_', '.')) : Optional.empty();
     }
 
     static String testClassName(String version) {
