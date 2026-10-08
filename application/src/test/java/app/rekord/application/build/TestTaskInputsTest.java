@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +12,7 @@ import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 class TestTaskInputsTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
+    private static final long GIT_TIMEOUT_SECONDS = 30;
     private static final Pattern EXCLUDE_ARGUMENTS = Pattern.compile("\\bexclude\\s*\\(([^)]*)\\)");
     private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"]*)\"");
     private static final Pattern NAMED_FILES = Pattern.compile("rootProject\\.files\\(([^)]*)\\)");
@@ -362,13 +365,40 @@ class TestTaskInputsTest {
         return trackedFiles(REPO_ROOT);
     }
 
+    /**
+     * The paths {@code git ls-files} lists in the directory. A git that fails or hangs fails the test, never skips
+     * it, and the failure carries git's own stderr, the command and the directory.
+     */
     private static List<String> trackedFiles(Path directory) throws Exception {
-        Process process = new ProcessBuilder("git", "ls-files", "-z")
-                .directory(directory.toFile())
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start();
-        String output = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor()).isZero();
+        String command = "git ls-files -z in " + directory;
+        // Output goes to files, so a git that hangs cannot block the read of its output
+        Path stdout = Files.createTempFile("ls-files", ".out");
+        Path stderr = Files.createTempFile("ls-files", ".err");
+        String output;
+        try {
+            ProcessBuilder builder = new ProcessBuilder("git", "ls-files", "-z")
+                    .directory(directory.toFile())
+                    .redirectOutput(stdout.toFile())
+                    .redirectError(stderr.toFile());
+            // An English message, and no repository found above the directory
+            builder.environment().put("LC_ALL", "C");
+            if (directory.toAbsolutePath().getParent() != null) {
+                builder.environment().put("GIT_CEILING_DIRECTORIES", directory.toAbsolutePath().getParent().toString());
+            }
+            Process process = builder.start();
+            boolean finished = process.waitFor(GIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+            }
+            assertThat(finished).as("%s finished within %d seconds", command, GIT_TIMEOUT_SECONDS).isTrue();
+            String errors = new String(Files.readAllBytes(stderr), StandardCharsets.UTF_8).strip();
+            assertThat(process.exitValue()).as("%s failed: %s", command, errors).isZero();
+            output = new String(Files.readAllBytes(stdout), StandardCharsets.UTF_8);
+        } finally {
+            Files.deleteIfExists(stdout);
+            Files.deleteIfExists(stderr);
+        }
         List<String> files = new ArrayList<>();
         for (String path : output.split("\0")) {
             if (!path.isEmpty()) {
