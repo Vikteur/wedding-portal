@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import app.rekord.adapter.web.health.HealthResource;
 import app.rekord.adapter.web.health.SamePackageHelperFixture;
+import app.rekord.architecture.FixtureCompiler;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
@@ -65,6 +66,29 @@ class HealthResourceDependenciesTest {
         assertThat(result.hasViolation()).isTrue();
         String details = String.join("\n", result.getFailureReport().getDetails());
         assertThat(details).contains(SamePackageHelperFixture.DatabaseHelper.class.getName());
+    }
+
+    @Test
+    void the_rule_refuses_a_reflective_lookup_through_a_java_lang_subpackage() {
+        // Given a resource that looks a datasource up by name through java.lang.invoke
+        JavaClasses classes = FixtureCompiler.compile(
+                """
+                package app.rekord.adapter.web.health;
+                public class ResourceWithAReflectiveLookup {
+                    Object lookup() throws Exception {
+                        return java.lang.invoke.MethodHandles.lookup().findClass("javax.sql.DataSource");
+                    }
+                }
+                """);
+
+        // When
+        EvaluationResult result =
+                onlyTheContractAndCdi("app.rekord.adapter.web.health.ResourceWithAReflectiveLookup").evaluate(classes);
+
+        // Then
+        assertThat(result.hasViolation()).isTrue();
+        String details = String.join("\n", result.getFailureReport().getDetails());
+        assertThat(details).contains("java.lang.invoke.MethodHandles");
     }
 
     /** Never a bean (no scope annotation): it only gives the rule something to refuse. */
