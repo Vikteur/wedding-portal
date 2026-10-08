@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.List;
@@ -289,6 +290,23 @@ class MatcherGoldenSetTest {
 
         // When the copy is compared, then only the count line is reported
         assertThat(GoldenGate.differences(copy)).containsExactly("cases: expected 211 actual 212");
+    }
+
+    @Test
+    void a_case_the_matcher_cannot_run_is_named_by_position_family_and_query() {
+        // Given a case whose query has no title, so the run throws
+        ObjectNode broken = JsonNodeFactory.instance.objectNode();
+        broken.put("family", "typo");
+        broken.putObject("query").put("artist", "Some Artist");
+
+        // When it is run as case 7
+        // Then the failure is an AssertionError that names the case and keeps the cause
+        assertThatThrownBy(() -> GoldenGate.matchCase(7, broken, new LibraryIndex(List.of()), Map.of(), Map.of()))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageStartingWith("case 7 (typo) ")
+                .hasMessageContaining("Some Artist")
+                .hasMessageEndingWith(": the matcher threw")
+                .hasCauseInstanceOf(NullPointerException.class);
     }
 
     @Test

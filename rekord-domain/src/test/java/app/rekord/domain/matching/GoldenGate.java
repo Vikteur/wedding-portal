@@ -76,13 +76,24 @@ final class GoldenGate {
             List<MatchResult> results = new ArrayList<>();
             int position = 0;
             for (JsonNode c : SET.get("cases")) {
-                JsonNode q = c.get("query");
-                results.add(TrackMatcher.matchOne(new MatchQuery(position++, text(q.get("artist")),
-                        q.get("title").asText(), number(q.get("duration_sec"))), index, membership, preferences));
+                results.add(matchCase(position++, c, index, membership, preferences));
             }
             answers = List.copyOf(results);
         }
         return answers;
+    }
+
+    /** One case through the matcher; a crash is rethrown naming the position, family and query. */
+    static MatchResult matchCase(int position, JsonNode c, LibraryIndex index,
+                                 Map<String, List<String>> membership, Map<String, String> preferences) {
+        JsonNode q = c.get("query");
+        try {
+            return TrackMatcher.matchOne(new MatchQuery(position, text(q.get("artist")),
+                    q.get("title").asText(), number(q.get("duration_sec"))), index, membership, preferences);
+        } catch (RuntimeException e) {
+            throw new AssertionError("case " + position + " (" + c.path("family").asText() + ") "
+                    + text(q.path("artist")) + " / " + text(q.path("title")) + ": the matcher threw", e);
+        }
     }
 
     /**
