@@ -10,10 +10,10 @@ groma:
       file: rekord-domain/src/main/java/app/rekord/domain/matching/LibraryIndex.java
   group: Track matching
   technology: Java 25
-description: Finds candidate files for a query in one DJ library through an inverted token index.
+description: Removed by TASK-47; no code.
 ---
 
-Built from a library's tracks in library order, it precomputes each track's normalised text and title parts and indexes their tokens. A candidate shares two query tokens or one token that is rare in the library; candidates come most hits first, capped at 300. When no file qualifies, a fuzzy fallback scans the whole library and keeps the closest few. Ties are broken by library position, so the order the tracks are loaded in matters.
+**Code removed by TASK-47 (2026-10-09).** The files listed under Code no longer exist: the product code was removed to start over. groma 0.6.6 cannot remove a component that holds scanned relationship rows, so this entry stays until a newer groma can remove it. Do not treat it as existing code.
 
 ## Relationships
 

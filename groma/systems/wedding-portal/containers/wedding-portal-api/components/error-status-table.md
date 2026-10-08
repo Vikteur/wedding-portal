@@ -10,10 +10,10 @@ groma:
       file: application/src/main/java/app/rekord/application/error/ErrorStatusTable.java
   group: Errors
   technology: Java 25
-description: Maps each error code and family to its HTTP status.
+description: Removed by TASK-47; no code.
 ---
 
-The only place where a domain error becomes an HTTP status, with the statuses `rekord-api` answers today (404, 400 to 429, 401/403, 502/503). A code can map to different statuses in different families. Building the table refuses a duplicate pair, and every new error code needs its row here. The error envelope mapper looks each family error up here to write its answer; a pair without a row answers 500.
+**Code removed by TASK-47 (2026-10-09).** The files listed under Code no longer exist: the product code was removed to start over. groma 0.6.6 cannot remove a component that holds scanned relationship rows, so this entry stays until a newer groma can remove it. Do not treat it as existing code.
 
 ## Relationships
 
