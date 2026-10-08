@@ -11,15 +11,25 @@ import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import java.util.stream.Collectors;
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
 /** Every refusal leaves as {@code {"detail":{"code","message"}}}, byte for byte as rekord-api writes it. */
 public class ErrorEnvelopeMapper {
 
+    private static final Logger LOG = Logger.getLogger(ErrorEnvelopeMapper.class);
+
     @ServerExceptionMapper
     public RestResponse<Error> onRekordException(RekordException e) {
-        return envelope(ErrorStatusTable.statusOf(e), e.code().name(), e.getMessage());
+        int status;
+        try {
+            status = ErrorStatusTable.statusOf(e);
+        } catch (IllegalArgumentException noRow) {
+            // A (code, family) pair without a row is a programming error: answered as any other unhandled failure.
+            return unhandled(e);
+        }
+        return envelope(status, e.code().name(), e.getMessage());
     }
 
     @ServerExceptionMapper
@@ -63,6 +73,12 @@ public class ErrorEnvelopeMapper {
         if (e instanceof WebApplicationException w && w.getResponse() != null && w.getResponse().getStatus() < 500) {
             return envelope(w.getResponse().getStatus(), "UNKNOWN", "That request could not be handled.");
         }
+        return unhandled(e);
+    }
+
+    /** Logs a redacted copy of the cause (class names and frames, no messages), once, and answers 500. */
+    private static RestResponse<Error> unhandled(Throwable e) {
+        LOG.error("Unhandled exception", RedactedCause.of(e));
         return envelope(500, "UNKNOWN", "Something went wrong at our end.");
     }
 

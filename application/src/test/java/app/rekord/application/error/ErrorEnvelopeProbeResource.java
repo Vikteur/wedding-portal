@@ -102,11 +102,18 @@ public class ErrorEnvelopeProbeResource {
 
     /** An exception whose messages, cause, suppressed exception and cause cycle all carry the sentinels. */
     static IllegalStateException chain() {
+        return chain(true);
+    }
+
+    /** The cycle is left out when the framework itself has to walk the chain: it loops on a cause cycle. */
+    static IllegalStateException chain(boolean withCycle) {
         SQLException sql = new SQLException(
                 "ERROR: duplicate key Key (email)=(member@example.com) +12025550100 Testa Persona 4821-7735 pw-test-0001");
         IllegalStateException top = new IllegalStateException(
                 "insert into wedding_member (email, token) values ('member@example.com', 'tok-example-123')", sql);
-        sql.initCause(top);
+        if (withCycle) {
+            sql.initCause(top);
+        }
         top.addSuppressed(new IllegalArgumentException("suppressed member@example.com tok-example-123 pw-test-0001"));
         return top;
     }
@@ -114,7 +121,7 @@ public class ErrorEnvelopeProbeResource {
     @GET
     @Path("/unhandled")
     public String unhandled() {
-        throw chain();
+        throw chain(false);
     }
 
     @GET
