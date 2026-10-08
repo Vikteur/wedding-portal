@@ -147,7 +147,7 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 
 - **Supersedes** the TASK-24.3 bullet that left remembered choices unported. The step (BR-MX-18, `Matcher.java:92-124` in rekord-api) now lives in `TrackMatcher.matchOne` as a fourth argument, a map from `Signature.signatureId(artist, title)` to a file id; the two- and three-argument forms and a null map mean no choice. The golden gate proved the gap: the 9 `preference` cases could not pass without it. The owner approved building it here (option A).
 - A choice whose file is in the index goes first (scored and inserted when scoring did not list it, the list re-capped at 8), becomes `autoSelectedId` and sets `MatchResult.fromPreference`. The bucket is left as scoring set it, so UD-19.c is evaluated on scoring's leader before the choice is applied.
-- TASK-25.2 keeps the storage, the `rememberPreference` endpoint, reading choices per match and the wiring.
+- TASK-25.2 (P3-E05-T02) keeps the storage, the `rememberPreference` endpoint, reading choices per match and the wiring.
 
 ## 2026-10-08 — TASK-24.4 golden-set acceptance gate
 
@@ -155,3 +155,4 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - `GoldenGate.differences` returns one line per difference, naming the case position, family, query, candidate track id and both values; `assertNoDifferences` throws with all of them.
 - Deviations from rekord-api's recorded files: `source.database` is `/music/golden-src.db` (UD-19.m3, RISK-15), and the 18 UD-19.c cases and the summary block expect ambiguous with no pick. Both are the only edits to the recorded values.
 - The gate found one port gap: the remembered-choice step (see the TASK-24.4 remembered-choice entry above), built in the same ticket with the owner's approval.
+- Narrower reading of the golden set's auto cases: 20 of its 29 auto cases (8, 15, 20, 78, 89, 127, 130, 131, 133, 136, 141, 145, 146, 200, 202, 203, 205, 206, 209, 211) are identical multi-artist credits. They auto-pick by ADR-03's string equality, which is the owner-confirmed reading; a credit that differs in form ("A, B" vs "A & B") stays with the DJ. TASK-24.7 may revisit this.
