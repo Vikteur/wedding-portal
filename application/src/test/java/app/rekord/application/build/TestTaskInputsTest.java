@@ -9,8 +9,10 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class TestTaskInputsTest {
@@ -161,7 +163,6 @@ class TestTaskInputsTest {
         // Then outputs of the build and tool state are dropped, so a run does not make the next one stale
         assertThat(excludes).isNotEmpty();
         assertThat(List.of(
-                        "application/build/test-results/test/TEST-x.xml",
                         "rekord-adapter/build/generated/openapi/x.java",
                         "build/reports/problems/problems-report.html",
                         ".gradle/x",
@@ -171,11 +172,61 @@ class TestTaskInputsTest {
                         ".kotlin/x",
                         "application.iml",
                         "out/x",
-                        "logging/out/x",
                         "contract/dist/openapi.yaml"))
                 .allSatisfy(path -> assertThat(isExcluded(excludes, path))
                         .as("%s is excluded", path)
                         .isTrue());
+    }
+
+    @Test
+    void every_gitignore_rule_is_excluded_from_the_test_task_inputs() throws IOException {
+        // Given the excludes of the repository tree input, and for each .gitignore rule a path it ignores:
+        // at the root, and for a rule that is not anchored also one module deep
+        List<String> excludes = excludes(repoFilesDeclaration(testTaskBlock()));
+        String module = GradleSettings.includedModules(REPO_ROOT).iterator().next();
+        List<String> probes = new ArrayList<>();
+        for (String rule : gitignoreRules()) {
+            String probe = probePath(rule);
+            probes.add(probe);
+            if (!isAnchored(rule)) {
+                probes.add(module + "/" + probe);
+            }
+        }
+
+        // When the excludes meet every probe
+        List<String> kept = probes.stream().filter(path -> !isExcluded(excludes, path)).toList();
+
+        // Then git ignores each path, so the test task does not take it as an input: no output of a run is an input
+        assertThat(probes).isNotEmpty();
+        assertThat(kept).as("paths .gitignore ignores that are still inputs").isEmpty();
+    }
+
+    @Test
+    void build_outputs_of_every_included_module_are_excluded_from_the_test_task_inputs() throws IOException {
+        // Given the excludes of the repository tree input and the modules settings.gradle.kts includes
+        List<String> excludes = excludes(repoFilesDeclaration(testTaskBlock()));
+        Set<String> modules = GradleSettings.includedModules(REPO_ROOT);
+
+        // When the build and out directory of each module meet the excludes
+        List<String> kept = modules.stream()
+                .map(TestTaskInputsTest::moduleDirectory)
+                .flatMap(directory -> Stream.of(directory + "/build/x", directory + "/out/x"))
+                .filter(path -> !isExcluded(excludes, path))
+                .toList();
+
+        // Then none is an input, however the module is named: a module added later is covered, or this fails
+        assertThat(modules).isNotEmpty();
+        assertThat(kept).isEmpty();
+    }
+
+    @Test
+    void a_nested_module_would_leave_its_build_outputs_as_inputs() {
+        // Given the anchored build excludes and a module directory two levels down
+        List<String> excludes = List.of("build/**", "*/build/**", "out/**", "*/out/**");
+
+        // Then its build output is not excluded, so the module check above is not vacuous
+        assertThat(moduleDirectory(":libs:newmod")).isEqualTo("libs/newmod");
+        assertThat(isExcluded(excludes, "libs/newmod/build/x")).isFalse();
     }
 
     @Test
@@ -232,6 +283,41 @@ class TestTaskInputsTest {
         assertThat(start).as("a contractSpec input declaration").isNotNegative();
         int end = block.indexOf(".optional()", start);
         return block.substring(start, end < 0 ? block.length() : end + ".optional()".length());
+    }
+
+    /** The non-negated rules of .gitignore; a shape the probe builder cannot read is refused (TASK-2.4 ADR-05). */
+    private static List<String> gitignoreRules() throws IOException {
+        List<String> rules = new ArrayList<>();
+        for (String line : Files.readAllLines(REPO_ROOT.resolve(".gitignore"))) {
+            String rule = line.strip();
+            if (rule.isEmpty() || rule.startsWith("#") || rule.startsWith("!")) {
+                continue;
+            }
+            assertThat(rule)
+                    .as("a .gitignore rule the probe builder can read: no **, [ ] or escapes")
+                    .doesNotContain("**", "[", "\\");
+            rules.add(rule);
+        }
+        return rules;
+    }
+
+    /** A rule is anchored to the .gitignore's directory when it has a / other than a trailing one. */
+    private static boolean isAnchored(String rule) {
+        return (rule.endsWith("/") ? rule.substring(0, rule.length() - 1) : rule).contains("/");
+    }
+
+    /** A path the rule ignores: wildcards become a letter, and below a directory rule a file is added. */
+    private static String probePath(String rule) {
+        boolean directory = rule.endsWith("/");
+        String path = rule.substring(rule.startsWith("/") ? 1 : 0, directory ? rule.length() - 1 : rule.length())
+                .replace('*', 'x')
+                .replace('?', 'x');
+        return directory ? path + "/x" : path;
+    }
+
+    /** The directory of a module as settings.gradle.kts names it: {@code :libs:newmod} is {@code libs/newmod}. */
+    private static String moduleDirectory(String module) {
+        return module.replaceFirst("^:", "").replace(':', '/');
     }
 
     private static List<String> trackedFiles() throws Exception {
