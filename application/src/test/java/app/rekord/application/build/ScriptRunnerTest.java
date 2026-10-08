@@ -200,7 +200,7 @@ class ScriptRunnerTest {
     @Test
     void a_script_that_never_exits_is_killed_and_the_failure_names_the_script_and_the_timeout() {
         // Given
-        script("hang.sh", "sleep 600\n");
+        script("hang.sh", "sleep 30\n");
         var runner = ScriptRunner.in(tmp).timeout(Duration.ofSeconds(2));
 
         // When / Then
@@ -214,7 +214,7 @@ class ScriptRunnerTest {
     @Test
     void the_timeout_failure_carries_what_the_script_had_printed() {
         // Given
-        script("chatty.sh", "echo said-on-stdout\necho said-on-stderr >&2\nsleep 600\n");
+        script("chatty.sh", "echo said-on-stdout\necho said-on-stderr >&2\nsleep 30\n");
         var runner = ScriptRunner.in(tmp).timeout(Duration.ofSeconds(3));
 
         // When / Then
