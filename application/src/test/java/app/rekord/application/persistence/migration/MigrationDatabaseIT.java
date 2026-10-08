@@ -8,25 +8,40 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class MigrationDatabaseIT {
 
     private static final String FIXTURES = "classpath:migration-fixtures";
+    // Long enough that an uptime read in seconds instead of milliseconds falls below the lower bound
+    private static final long SETTLE_MILLIS = 100;
 
     @Test
     void starts_an_empty_postgres_17_alpine_container_that_is_not_reused() throws Exception {
-        // Given a migration database
+        // Given a migration database, timed on the JVM clock from just before its container is started
+        long beforeStart = System.nanoTime();
         try (MigrationDatabase database = new MigrationDatabase();
                 Connection c = database.connection()) {
+            long ready = System.nanoTime();
+            Thread.sleep(SETTLE_MILLIS);
 
             // When its server is asked
+            long beforeUptime = System.nanoTime();
+            long uptimeMillis = FreshDatabase.serverUptimeMillis(c);
+            long afterUptime = System.nanoTime();
             String versionNum = scalar(c, "show server_version_num");
             String version = scalar(c, "select version()");
             String history = scalar(c, "select count(*) from information_schema.tables where table_name = 'flyway_schema_history'");
 
-            // Then it is a container of this run, PostgreSQL 17 on alpine, and nothing is in it
-            assertThat(database.container().isShouldBeReused()).isFalse();
+            // Then it was started by this test: up for at least the time since the container was ready, and no longer
+            // than the time since just before it was started (a reused container would be older), in milliseconds
+            assertThat(uptimeMillis)
+                    .as("server uptime in ms")
+                    .isGreaterThanOrEqualTo(TimeUnit.NANOSECONDS.toMillis(beforeUptime - ready))
+                    .isLessThanOrEqualTo(TimeUnit.NANOSECONDS.toMillis(afterUptime - beforeStart));
+
+            // And it is PostgreSQL 17 on alpine, with nothing in it
             assertThat(versionNum).startsWith("17");
             assertThat(version).contains("musl");
             assertThat(database.snapshot()).isEqualTo(SchemaSnapshot.empty());
