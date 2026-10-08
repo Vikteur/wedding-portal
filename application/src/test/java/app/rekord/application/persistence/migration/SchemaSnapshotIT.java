@@ -180,6 +180,103 @@ class SchemaSnapshotIT {
         }
     }
 
+    private static final String TAGGED = """
+            create table tagged (code text not null, gone_at timestamp with time zone, label text);
+            create unique index ux_tagged_code on tagged (lower(code)) where gone_at is null;
+            create index ix_tagged_label on tagged (label);
+            """;
+
+    private static final SchemaSnapshot.Index UX_TAGGED_CODE = new SchemaSnapshot.Index("tagged", "ux_tagged_code",
+            "CREATE UNIQUE INDEX ux_tagged_code ON public.tagged USING btree (lower(code)) WHERE (gone_at IS NULL)");
+    private static final SchemaSnapshot.Index IX_TAGGED_LABEL = new SchemaSnapshot.Index("tagged", "ix_tagged_label",
+            "CREATE INDEX ix_tagged_label ON public.tagged USING btree (label)");
+
+    @Test
+    void lists_an_index_that_is_no_constraint_with_its_table_name_and_definition() throws SQLException {
+        // Given a partial expression unique index and a plain index
+        try (Connection c = freshDatabase()) {
+            execute(c, TAGGED);
+
+            // When the schema is read
+            SchemaSnapshot snapshot = SchemaSnapshot.read(c);
+
+            // Then both are listed, ordered by table and name, with PostgreSQL's pg_get_indexdef text
+            assertThat(snapshot.indexes()).containsExactly(IX_TAGGED_LABEL, UX_TAGGED_CODE);
+        }
+    }
+
+    @Test
+    void an_index_that_backs_a_primary_key_or_unique_constraint_is_not_listed() throws SQLException {
+        // Given the parent and child fixture: primary keys and a unique constraint only
+        try (Connection c = freshDatabase()) {
+            execute(c, PARENT_AND_CHILD);
+            assertThat(SchemaSnapshot.read(c).indexes()).isEmpty();
+
+            // And a foreign key that references a column backed by a plain unique index
+            execute(c, """
+                    create table target (code text not null);
+                    create unique index ux_target_code on target (code);
+                    create table pointer (target_code text references target (code));
+                    """);
+
+            // When the schema is read, then that index is still listed: no constraint of its own table hides it
+            assertThat(SchemaSnapshot.read(c).indexes()).containsExactly(new SchemaSnapshot.Index("target",
+                    "ux_target_code", "CREATE UNIQUE INDEX ux_target_code ON public.target USING btree (code)"));
+        }
+    }
+
+    @Test
+    void a_dropped_index_or_a_changed_predicate_expression_or_uniqueness_makes_the_snapshot_differ()
+            throws SQLException {
+        // Given the declared schema with its indexes
+        SchemaSnapshot declared;
+        try (Connection c = freshDatabase()) {
+            execute(c, TAGGED);
+            declared = SchemaSnapshot.read(c);
+        }
+        assertThat(declared.indexes()).hasSize(2);
+
+        // When an index is dropped, or its predicate, expression or uniqueness differs, then the snapshot is not equal
+        for (String change : List.of(
+                "drop index ix_tagged_label",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (lower(code))",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (code) where gone_at is null",
+                "drop index ix_tagged_label; create unique index ix_tagged_label on tagged (label)")) {
+            try (Connection c = freshDatabase()) {
+                execute(c, TAGGED);
+                execute(c, change);
+                assertThat(SchemaSnapshot.read(c)).as(change).isNotEqualTo(declared);
+            }
+        }
+    }
+
+    @Test
+    void an_index_of_the_history_table_or_of_another_schema_is_not_listed() throws SQLException {
+        // Given an index on the Flyway history table and an index in a schema of its own
+        try (Connection c = freshDatabase()) {
+            execute(c, """
+                    create table flyway_schema_history (installed_rank integer primary key, success boolean);
+                    create index flyway_schema_history_s_idx on flyway_schema_history (success);
+                    create schema audit;
+                    create table audit.entries (note text);
+                    create index ix_entries_note on audit.entries (note);
+                    """);
+
+            // When the schema is read, then neither is listed
+            assertThat(SchemaSnapshot.read(c).indexes()).isEmpty();
+        }
+    }
+
+    @Test
+    void the_four_argument_snapshot_declares_no_index() {
+        // Given a snapshot built with the four components that predate indexes
+        SchemaSnapshot snapshot = new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
+
+        // Then it declares no index, and equals the empty snapshot
+        assertThat(snapshot.indexes()).isEmpty();
+        assertThat(SchemaSnapshot.empty()).isEqualTo(snapshot);
+    }
+
     private static SchemaSnapshot declared() {
         return new SchemaSnapshot(
                 List.of(),
