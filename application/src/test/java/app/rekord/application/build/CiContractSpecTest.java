@@ -24,6 +24,11 @@ import org.junit.jupiter.api.Test;
  * "Starts the application" is every Gradle run that is not a diagnostic (test, integrationTest, build, check,
  * quarkusBuild, ...) and every image build, whose Dockerfile is read for the Gradle lines it runs.
  *
+ * <p>Fails closed, as {@code HubProbeParityTest} does: a shape the test can read is checked, and any other shape that
+ * could start the application (a command that names the wrapper in a form it cannot classify, an image build from
+ * another context, a {@code uses:} action or reusable workflow it does not know, a pin or checkout step whose
+ * {@code if:} the build steps do not share) is reported with a request to extend the test. It never passes silently.
+ *
  * <p>Complements {@code ContractSpecWiringTest}, which pins the exact lines of {@code ci.yml}; this reads every
  * workflow by job, derives the expected spec path from the checkout step instead of repeating it, and proves on
  * fixtures that each way of leaving the spec out is found.
