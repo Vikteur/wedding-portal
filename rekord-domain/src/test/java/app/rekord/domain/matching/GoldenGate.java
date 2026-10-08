@@ -175,7 +175,8 @@ final class GoldenGate {
     }
 
     private static void close(List<String> out, String head, String field, double expected, double actual) {
-        if (Math.abs(expected - actual) > TOLERANCE) {
+        // Written as "not within" so a NaN on either side is a difference.
+        if (!(Math.abs(expected - actual) <= TOLERANCE)) {
             out.add(head + field + " expected " + expected + " actual " + actual);
         }
     }
