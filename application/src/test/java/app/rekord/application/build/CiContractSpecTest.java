@@ -39,6 +39,8 @@ class CiContractSpecTest {
 
     private static final String SPEC_FILE = "dist/openapi.yaml";
     private static final String SPEC_PROPERTY = "-Pcontract.spec=";
+    /** What every refusal ends with: a shape the test does not read is reported, never passed. */
+    private static final String EXTEND = "extend CiContractSpecTest to read it";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
     private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
     private static final Pattern EXEC_RUN =
@@ -104,7 +106,6 @@ class CiContractSpecTest {
             + " outputs";
 
     private static final String ON_PUSH = "github.event_name == 'push'";
-    private static final String EXTEND = "extend CiContractSpecTest to read it";
 
     @Test
     void every_ci_job_that_starts_the_application_checks_out_the_pinned_contract_and_passes_its_spec()
@@ -723,13 +724,13 @@ class CiContractSpecTest {
             List<JsonNode> steps = Workflows.steps(workflow, job.getKey());
             String where = file + " job " + job.getKey() + ": ";
             if (job.getValue().has("uses")) {
-                violations.add(where + "`uses: " + job.getValue().path("uses").asText() + "` builds through a reusable"
-                        + " workflow this test does not read");
+                violations.add(where + "`uses: " + job.getValue().path("uses").asText() + "` is a reusable workflow"
+                        + " this test does not read; " + EXTEND);
             }
             for (JsonNode step : steps) {
                 if (step.has("uses") && !isKnownSetupAction(step)) {
-                    violations.add(where + "`uses: " + step.path("uses").asText() + "` builds through an action this"
-                            + " test does not read; extend CiContractSpecTest to read it");
+                    violations.add(where + "`uses: " + step.path("uses").asText() + "` is an action this test does not"
+                            + " know; add it to SETUP_ACTIONS or " + EXTEND);
                 }
                 for (List<String> words : commands(step.path("run").asText(""))) {
                     refuseUnreadable(where, words, violations);
@@ -763,6 +764,7 @@ class CiContractSpecTest {
                 conditionNotShared("the rekord-contract checkout", checkout, steps.subList(first, steps.size()), where,
                         violations);
             }
+            boolean dockerfileRead = false;
             for (JsonNode step : steps.subList(first, steps.size())) {
                 for (List<String> words : commands(step.path("run").asText(""))) {
                     var gradle = gradleArguments(words);
@@ -770,8 +772,9 @@ class CiContractSpecTest {
                         checkSpec(where, wrapperWord(words, gradle.get()), gradle.get(), path, violations);
                     } else if (buildsImage(words) && namesAnotherDockerfile(words)) {
                         violations.add(where + "`" + String.join(" ", words)
-                                + "` builds from a Dockerfile this test does not read");
-                    } else if (buildsImage(words)) {
+                                + "` builds from a Dockerfile this test does not read; " + EXTEND);
+                    } else if (buildsImage(words) && !dockerfileRead) {
+                        dockerfileRead = true;
                         for (List<String> line : commands(dockerfile)) {
                             var arguments = gradleArguments(line).filter(a -> !startedTasks(a).isEmpty());
                             arguments.ifPresent(
@@ -812,8 +815,8 @@ class CiContractSpecTest {
 
     private static void refuseUnreadable(String where, List<String> words, List<String> violations) {
         if (namesTheWrapperUnreadably(words)) {
-            violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper in a shape this test"
-                    + " cannot classify; extend CiContractSpecTest to read it");
+            violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper or `gradle` in a shape"
+                    + " this test cannot classify; " + EXTEND);
         }
     }
 
