@@ -5,9 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,29 +69,12 @@ class ImageTagsTest {
         assertThat(script).doesNotContain("token", "TOKEN", "docker login", "secrets");
     }
 
-    private record Result(int exit, String stderr, String output) {}
+    /** What the script reported: its exit code, its standard error and the GITHUB_OUTPUT file it wrote the tags to. */
+    private record Outcome(int exit, String stderr, String output) {}
 
-    private Result run(String repository, String sha) throws Exception {
+    private Outcome run(String repository, String sha) throws Exception {
         Path out = Files.writeString(tmp.resolve("github-output"), "");
-        var command = new ArrayList<String>();
-        command.add(bashExecutable());
-        command.addAll(List.of(SCRIPT, repository, sha));
-        var builder = new ProcessBuilder(command).directory(REPO_ROOT.toFile());
-        builder.environment().keySet().removeIf(key -> key.startsWith("GITHUB_"));
-        builder.environment().put("GITHUB_OUTPUT", out.toString());
-        Path err = Files.createTempFile(tmp, "stderr", ".txt");
-        builder.redirectError(err.toFile()).redirectOutput(ProcessBuilder.Redirect.DISCARD);
-        int exit = builder.start().waitFor();
-        return new Result(exit, Files.readString(err), Files.readString(out));
-    }
-
-    private static String bashExecutable() {
-        Path gitBash = Path.of("C:\\Program Files\\Git\\bin\\bash.exe");
-        if (Files.exists(gitBash)) {
-            return gitBash.toString();
-        }
-        Assumptions.assumeFalse(
-                System.getProperty("os.name").toLowerCase().contains("win"), "no Git Bash available on Windows");
-        return "bash";
+        var result = ScriptRunner.in(REPO_ROOT).with("GITHUB_OUTPUT", out.toString()).run(SCRIPT, repository, sha);
+        return new Outcome(result.exit(), result.stderr(), Files.readString(out));
     }
 }

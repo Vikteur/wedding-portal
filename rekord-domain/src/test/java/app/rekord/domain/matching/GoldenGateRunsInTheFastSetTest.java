@@ -25,7 +25,7 @@ class GoldenGateRunsInTheFastSetTest {
     private static final Path GATE_SOURCE = Path.of("src/test/java/app/rekord/domain/matching/GoldenGate.java");
 
     private static final List<Class<?>> GATE = List.of(MatcherGoldenSetTest.class, GoldenFixturesTest.class,
-            GoldenGateRunsInTheFastSetTest.class);
+            GoldenGateRunsInTheFastSetTest.class, GoldenGateFixtureLoadingTest.class);
 
     @Test
     void no_gate_class_name_ends_in_IT_and_no_gate_class_or_test_is_disabled_or_tagged() {

@@ -25,8 +25,9 @@ import java.util.UUID;
  * Test-only. The family, auth-failed, forbidden, web-application-exception and uuid probes replay what rekord-api's
  * probe threw, with the oracle's messages; invite-accept replays the oracle's invalid request body, and unauthorized
  * throws the exception behind the oracle's anonymous 401. The role-denied probe has no oracle: the framework answers
- * it. The unhandled, service-unavailable, internal-server-error and pair-without-row probes throw sentinel chains
- * (or sentinel messages), to prove none of them reaches a log record.
+ * it. The unhandled, service-unavailable, internal-server-error, pair-without-row and cyclic-cause probes throw
+ * sentinel chains (or sentinel messages), and cyclic-from-interceptor has an interceptor throw one, to prove none of
+ * them reaches a log record.
  */
 @Path("/test-only/error-envelope")
 @Produces(MediaType.APPLICATION_JSON)
@@ -118,7 +119,17 @@ public class ErrorEnvelopeProbeResource {
         return chain(true);
     }
 
-    /** The cycle is left out when the framework itself has to walk the chain: it loops on a cause cycle. */
+    /**
+     * With {@code withCycle}, the SQLException's cause is the top exception again. Proven in TASK-5.7: Quarkus REST
+     * 3.39.1 does not survive that. After the mapper has answered, {@code RuntimeExceptionMapper.mapException} calls
+     * {@code logBlockingErrorIfRequired}, then {@code isBlockingProblem}, then {@code isKnownProblem}
+     * ({@code RuntimeExceptionMapper.java:187}), which follows {@code getCause()} in {@code while (e != null)} with no
+     * visited set: the worker thread spins at full CPU and no response is written. Only a chain thrown from a resource
+     * method is now safe, because {@code AcyclicCauseInterceptor} rethrows a redacted, acyclic copy of it; the
+     * {@code /cyclic-cause} probe and {@code ErrorEnvelopeMapperIT} hold that. A cycle raised anywhere else (a filter,
+     * a body reader, a parameter conversion) would still hang the thread, and {@code chain(false)} stays the safe
+     * input for a probe that is not about the guard. See docs/memory.md, section TASK-5.7.
+     */
     static IllegalStateException chain(boolean withCycle) {
         SQLException sql = new SQLException(
                 "ERROR: duplicate key Key (email)=(member@example.com) +12025550100 Testa Persona 4821-7735 pw-test-0001");
@@ -156,5 +167,23 @@ public class ErrorEnvelopeProbeResource {
     public String pairWithoutRow() {
         throw new RejectedException(
                 RejectedException.Kind.VALIDATION, ErrorCode.NO_WEDDING, "no row for member@example.com tok-example-123");
+    }
+
+    /** The sentinel chain with its cause cycle (TASK-5.7): only the interceptor keeps Quarkus REST from looping on it. */
+    @GET
+    @Path("/cyclic-cause")
+    public String cyclicCause() {
+        throw chain(true);
+    }
+
+    /**
+     * The same chain, thrown by another interceptor before this body runs (TASK-5.7): the guard keeps Quarkus REST from
+     * looping on it only while it is the outermost interceptor of the method.
+     */
+    @ThrowsCyclicChain
+    @GET
+    @Path("/cyclic-from-interceptor")
+    public String cyclicFromInterceptor() {
+        return "not reached: CyclicChainInterceptor throws first";
     }
 }
