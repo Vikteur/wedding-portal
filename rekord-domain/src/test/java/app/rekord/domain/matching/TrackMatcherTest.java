@@ -113,6 +113,7 @@ class TrackMatcherTest {
                 java.util.Map.entry("version", 1.0), java.util.Map.entry("duration", 1.0));
     }
 
+    // AC #4 and AC #7
     @Test
     void without_a_duration_only_an_exact_version_is_auto() {
         MatchResult exact = match(null, daftPunk("f", "One More Time", 322.0));
@@ -126,6 +127,7 @@ class TrackMatcherTest {
         assertThat(extended.autoSelectedId()).isNull();
     }
 
+    // AC #4
     @Test
     void another_version_is_never_auto() {
         MatchResult result = match(320.0, daftPunk("f", "One More Time (Kygo Remix)", 320.0));
@@ -135,6 +137,7 @@ class TrackMatcherTest {
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
     }
 
+    // AC #7
     @Test
     void a_far_duration_is_never_auto() {
         MatchResult result = match(320.0, daftPunk("f", "One More Time", 380.0));
@@ -144,6 +147,7 @@ class TrackMatcherTest {
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
     }
 
+    // AC #7
     @Test
     void candidates_are_ordered_by_score_and_a_clear_leader_is_auto() {
         // Retrieval lists b first (same hit count, later file); the score puts a first.
@@ -166,6 +170,7 @@ class TrackMatcherTest {
         assertThat(result.autoSelectedId()).isNull();
     }
 
+    // AC #11
     @Test
     void nine_identical_files_list_8_and_are_ambiguous() {
         Track[] tracks = new Track[9];
@@ -179,6 +184,7 @@ class TrackMatcherTest {
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
     }
 
+    // AC #6
     @Test
     void a_listed_candidate_under_060_leaves_the_song_unmatched() {
         MatchResult listed = match(320.0, new Track("o", "Other Band", "One More Night", 200.0));
@@ -189,6 +195,8 @@ class TrackMatcherTest {
         assertThat(listed.bucket()).isEqualTo(Bucket.UNMATCHED);
         assertThat(dropped.candidates()).isEmpty();
         assertThat(dropped.bucket()).isEqualTo(Bucket.UNMATCHED);
+        assertThat(dropped.input().artist()).isEqualTo("Daft Punk");
+        assertThat(dropped.input().title()).isEqualTo("One More Time");
     }
 
     @Test
