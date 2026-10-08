@@ -27,6 +27,11 @@ class ContractPinTest {
      * checkout (hub commit bee8ce6; the smoke/pom.xml of v0.1.0 predates it).
      */
     private static final String FIRST_TAG_WITH_THE_HUB_PROBE = "v0.2.0";
+    /**
+     * TASK-7.1: the first tag with the role model, the ADMIN role, the roles arrays and setMemberRoles (hub PR #4,
+     * commit 2082b1e). The floor above stays: it records a different reason and is still true.
+     */
+    private static final String FIRST_TAG_WITH_THE_ROLE_MODEL = "v1.0.0";
     private static final String PIN_REF = "${{ steps.contract-pin.outputs.ref }}";
     private static final String PIN = ".github/scripts/contract-pin.sh";
     private static final String MERGE_CHECK = ".github/scripts/contract-pin-merge-check.sh";
@@ -66,6 +71,20 @@ class ContractPinTest {
 
         // Then
         assertThat(order).as("%s against %s", pin, FIRST_TAG_WITH_THE_HUB_PROBE).isNotNegative();
+    }
+
+    @Test
+    void the_pin_is_not_below_v1_0_0_the_first_tag_with_the_role_model() throws IOException {
+        // Given: the contract tests of RoleModelContractTest read ADMIN, roles and setMemberRoles from the pin
+        String pin = pinnedValue();
+        Assumptions.assumeTrue(
+                TAG.matcher(pin).matches(), "a branch pin names no version; the merge check refuses it anyway");
+
+        // When
+        int order = compareVersions(pin, FIRST_TAG_WITH_THE_ROLE_MODEL);
+
+        // Then
+        assertThat(order).as("%s against %s", pin, FIRST_TAG_WITH_THE_ROLE_MODEL).isNotNegative();
     }
 
     @Test

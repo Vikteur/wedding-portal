@@ -5,7 +5,7 @@ groma:
   id: liveness-check
 ---
 
-The container runtime asks the running API whether it is alive; the health endpoint answers {"ok":true} without a session and without checking the database. This is the only request path the API serves today.
+The container runtime asks the running API whether it is alive; the health endpoint answers {"ok":true} without a session and without checking the database. Health is the only /api operation served today; readiness, which does check the database, is /q/health/ready, outside /api.
 
 ## Steps
 
