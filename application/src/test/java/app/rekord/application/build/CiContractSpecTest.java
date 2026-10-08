@@ -42,13 +42,26 @@ class CiContractSpecTest {
     /** What every refusal ends with: a shape the test does not read is reported, never passed. */
     private static final String EXTEND = "extend CiContractSpecTest to read it";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
-    private static final Pattern EXEC_RUN =
-            Pattern.compile("^(\\s*RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])\\s*$", Pattern.MULTILINE);
+    /** A Dockerfile RUN in exec form; instructions are case-insensitive. */
+    private static final Pattern EXEC_RUN = Pattern.compile(
+            "^(\\s*RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])\\s*$", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
-    private static final Pattern GRADLE = Pattern.compile("(.*[/\\\\])?gradlew(\\.bat)?|gradle");
-    /** What may stand in front of the wrapper without making it a mere argument. */
-    private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
+    /** Where one command ends: not the {@code &} of {@code 2>&1}, {@code >&2} or {@code &>}. */
+    private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||(?<![<>])&(?!>)|[;|]|\\R");
+    /** A word that is the Gradle wrapper or gradle, bare or under a path. */
+    private static final Pattern GRADLE = Pattern.compile("(.*[/\\\\])?(gradlew|gradle)(\\.bat)?");
+    /**
+     * The wrapper or gradle inside a longer word, as in {@code (gradle}, {@code $(gradle} or {@code [./gradlew,}: not
+     * the tail of a name ({@code services.gradle}, {@code setup-gradle}) or the head of one ({@code gradle.properties},
+     * {@code gradle-wrapper}, {@code gradle/libs}). Used only to refuse, never to read a command.
+     */
+    private static final Pattern GRADLE_IN_WORD =
+            Pattern.compile("(?<![\\w.\\-:])(?:gradlew(?:\\.bat)?|gradle)(?![\\w.\\-/:])");
+    /**
+     * What may stand in front of the wrapper without making it a mere argument. RUN, the Dockerfile instruction, is
+     * also one in any case (see {@link #isPrefix}).
+     */
+    private static final Set<String> PREFIXES = Set.of("exec", "sudo", "time", "nohup", "env", "bash", "sh");
     /** Shell keywords that may stand in front of a command, as in {@code if ./gradlew build; then}. */
     private static final Set<String> KEYWORDS = Set.of("if", "then", "elif", "else", "do", "while", "until", "!");
     /**
@@ -299,6 +312,20 @@ class CiContractSpecTest {
             assertThat(violations(build(run(script)))).as(script)
                     .containsExactly("ci.yml job build: `" + script + "` names the Gradle wrapper or `gradle` in a"
                             + " shape this test cannot classify; " + EXTEND);
+        }
+    }
+
+    @Test
+    void a_name_that_only_contains_gradle_is_not_refused() throws IOException {
+        // Given: gradle as the head or the tail of a longer name is not the command, whatever stands next to it
+        var scripts = List.of(
+                "rm -rf ~/.gradle", "docker pull ci-gradle", "chown build:gradle /out", "cp gradle.properties /tmp/",
+                "unzip gradle-8.5-bin.zip", "mkdir -p gradle/wrapper", "chown gradle:build /out",
+                "rm -f mygradle gradles");
+
+        // When / Then
+        for (String script : scripts) {
+            assertThat(violations(build(run(script)))).as(script).isEmpty();
         }
     }
 
@@ -1054,12 +1081,12 @@ class CiContractSpecTest {
                 violations.add(where + "the contract is checked out to " + path + ", outside the workspace");
             }
             if (pin != null) {
-                conditionNotShared("the pin step", before.get(pinStep), steps.subList(first, steps.size()), where,
+                mustRunBeforeTheBuild("the pin step", before.get(pinStep), steps.subList(first, steps.size()), where,
                         violations);
             }
             if (checkout != null) {
-                conditionNotShared("the rekord-contract checkout", checkout, steps.subList(first, steps.size()), where,
-                        violations);
+                mustRunBeforeTheBuild("the rekord-contract checkout", checkout, steps.subList(first, steps.size()),
+                        where, violations);
             }
             boolean dockerfileRead = false;
             for (JsonNode step : steps.subList(first, steps.size())) {
@@ -1126,7 +1153,7 @@ class CiContractSpecTest {
      * mention of it (chmod +x gradlew): the test cannot tell whether it starts the application.
      */
     private static boolean namesTheWrapperUnreadably(List<String> words) {
-        return words.stream().anyMatch(word -> GRADLE.matcher(word).matches())
+        return words.stream().anyMatch(word -> GRADLE.matcher(word).matches() || GRADLE_IN_WORD.matcher(word).find())
                 && gradleArguments(words).isEmpty()
                 && argumentsOf(words, MENTIONS::contains).isEmpty();
     }
@@ -1169,10 +1196,28 @@ class CiContractSpecTest {
                         .anyMatch(CiContractSpecTest::startsTheApplication))
                 .allMatch(later -> later.path("if").asText("").trim().equals(condition));
         if (!condition.isEmpty() && !shared) {
-            String name = step.path("name").asText(step.path("id").asText(step.path("uses").asText()));
-            violations.add(where + what + " `" + name + "` runs only if `" + condition + "`, a condition the steps"
-                    + " that start the application do not share");
+            violations.add(where + what + " `" + nameOf(step) + "` runs only if `" + condition + "`, a condition the"
+                    + " steps that start the application do not share");
         }
+    }
+
+    /** A step with {@code continue-on-error} other than {@code false}: if it fails, the job and the build go on. */
+    private static void failureIgnored(String what, JsonNode step, String where, List<String> violations) {
+        if (!step.path("continue-on-error").asText("false").trim().equals("false")) {
+            violations.add(where + what + " `" + nameOf(step) + "` sets continue-on-error, so the build goes on when"
+                    + " it fails");
+        }
+    }
+
+    private static String nameOf(JsonNode step) {
+        return step.path("name").asText(step.path("id").asText(step.path("uses").asText()));
+    }
+
+    /** The pin step and the checkout must not be skippable or ignorable while a build runs: both are reported. */
+    private static void mustRunBeforeTheBuild(String what, JsonNode step, List<JsonNode> fromTheFirstBuild,
+            String where, List<String> violations) {
+        conditionNotShared(what, step, fromTheFirstBuild, where, violations);
+        failureIgnored(what, step, where, violations);
     }
 
     /** The step that checks the contract out at the ref the pin step outputs, to a path of its own; null when none. */
@@ -1293,12 +1338,15 @@ class CiContractSpecTest {
                 i++;
             } else if (duration && DURATION.matcher(word).matches()) {
                 duration = false;
-            } else if (!PREFIXES.contains(word) && !KEYWORDS.contains(word) && !word.startsWith("-")
-                    && !word.contains("=")) {
+            } else if (!isPrefix(word) && !KEYWORDS.contains(word) && !word.startsWith("-") && !word.contains("=")) {
                 return Optional.empty();
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean isPrefix(String word) {
+        return PREFIXES.contains(word) || word.equalsIgnoreCase("RUN");
     }
 
     /**
