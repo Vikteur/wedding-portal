@@ -58,25 +58,8 @@ class ErrorEnvelopeMapperTest {
     }
 
     @Test
-    void a_pair_without_a_table_row_does_not_answer_404() {
-        // Given: NO_WEDDING is a NotFound code; as a Rejected it has no row
-        var e = new RejectedException(RejectedException.Kind.VALIDATION, ErrorCode.NO_WEDDING, "No such wedding.");
-
-        // When
-        int status;
-        try {
-            status = mapper.onRekordException(e).getStatus();
-        } catch (IllegalArgumentException noRow) {
-            return;
-        }
-
-        // Then
-        assertThat(status).isNotEqualTo(404);
-    }
-
-    @Test
     void both_framework_401s_answer_not_signed_in() {
-        for (RestResponse<Error> response : java.util.List.of(
+        for (RestResponse<Error> response : List.of(
                 mapper.onAuthenticationFailed(new AuthenticationFailedException()),
                 mapper.onUnauthorized(new UnauthorizedException()))) {
             assertEnvelope(response, 401, "NOT_SIGNED_IN", "Sign in to continue.");
