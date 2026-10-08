@@ -47,7 +47,12 @@ public class ErrorEnvelopeMapper {
         return envelope(403, "FORBIDDEN", "This is not yours to open.");
     }
 
-    /** Unknown route, unconvertible path parameter, or someone else's wedding: the same answer, so ids can't be probed. */
+    /**
+     * The framework's 404 ({@code jakarta.ws.rs.NotFoundException}): an unknown route or an unconvertible path
+     * parameter. A domain "not found" is the {@code RekordException} family and answers through
+     * {@link #onRekordException}; a wedding that exists but is someone else's must be refused there with the same code
+     * and message as a missing one, so ids can't be probed.
+     */
     @ServerExceptionMapper
     public RestResponse<Error> onNotFound(NotFoundException e) {
         return envelope(404, "NO_WEDDING", "There is nothing here.");
