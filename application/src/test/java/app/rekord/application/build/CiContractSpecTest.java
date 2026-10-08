@@ -262,6 +262,47 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_gradle_installation_run_by_its_path_is_checked() throws IOException {
+        // Given: a path in front of gradle is as good as one in front of the wrapper
+        JsonNode workflow = build(PIN, CHECKOUT, run("/opt/gradle/bin/gradle build"));
+
+        // When / Then
+        assertThat(jobsStartingTheApplication("ci.yml", workflow)).containsExactly("ci.yml: build");
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `/opt/gradle/bin/gradle build` does not pass -Pcontract.spec");
+        assertThat(violations(build(PIN, CHECKOUT, run("/opt/gradle/bin/gradle build " + SPEC)))).isEmpty();
+    }
+
+    @Test
+    void a_single_ampersand_separates_commands() throws IOException {
+        // Given: && and the redirections 2>&1 and &> are not separators, so those commands are read whole
+        JsonNode background = build(PIN, CHECKOUT, run("echo start & ./gradlew build"));
+        JsonNode merged = build(PIN, CHECKOUT, run("./gradlew build 2>&1"));
+        JsonNode both = build(PIN, CHECKOUT, run("./gradlew build &> build.log"));
+
+        // When / Then
+        assertThat(violations(background))
+                .containsExactly("ci.yml job build: `./gradlew build` does not pass -Pcontract.spec");
+        assertThat(violations(merged))
+                .containsExactly("ci.yml job build: `./gradlew build 2>&1` does not pass -Pcontract.spec");
+        assertThat(violations(both))
+                .containsExactly("ci.yml job build: `./gradlew build &> build.log` does not pass -Pcontract.spec");
+    }
+
+    @Test
+    void a_gradle_run_glued_to_punctuation_is_refused_not_passed() throws IOException {
+        // Given: no word of these is the wrapper or gradle, but one ends in it
+        var scripts = List.of("(gradle build)", "out=$(gradle build)", "`gradle build`");
+
+        // When / Then: in a job that starts nothing else, so the refusal does not depend on a starting step
+        for (String script : scripts) {
+            assertThat(violations(build(run(script)))).as(script)
+                    .containsExactly("ci.yml job build: `" + script + "` names the Gradle wrapper or `gradle` in a"
+                            + " shape this test cannot classify; " + EXTEND);
+        }
+    }
+
+    @Test
     void a_spec_in_a_sibling_directory_instead_of_the_checkout_is_found() throws IOException {
         // Given
         String sibling = "-Pcontract.spec=../rekord-contract/dist/openapi.yaml";
@@ -565,6 +606,32 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_lowercase_run_instruction_is_checked_in_exec_and_in_shell_form() throws IOException {
+        // Given: Dockerfile instructions are case-insensitive
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String exec = "FROM x\nrun [\"./gradlew\", \"build\"]\n";
+        String shell = "FROM x\nrun ./gradlew build\n";
+
+        // When / Then
+        for (String dockerfile : List.of(exec, shell)) {
+            assertThat(violations("ci.yml", workflow, dockerfile)).as(dockerfile)
+                    .containsExactly("ci.yml job build: Dockerfile `./gradlew build` does not pass -Pcontract.spec");
+        }
+    }
+
+    @Test
+    void a_dockerfile_exec_form_that_is_not_json_is_refused_not_passed() throws IOException {
+        // Given: Docker reads brackets that are not a JSON array as the shell form, and this test cannot tell what runs
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = "FROM x\nRUN [./gradlew, build]\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `RUN [./gradlew, build]` names the Gradle wrapper or"
+                        + " `gradle` in a shape this test cannot classify; " + EXTEND);
+    }
+
+    @Test
     void a_spec_inside_a_dockerfile_comment_is_not_passed() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
@@ -822,6 +889,25 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_pin_or_checkout_step_whose_failure_the_job_ignores_is_found() throws IOException {
+        // Given: the build would run without the pin or the checkout the step failed to make
+        String namedCheckout = "{name: 'Check out rekord-contract', " + CHECKOUT.substring(1);
+        String expression = "'${{ matrix.experimental }}'";
+
+        // When / Then
+        for (String value : List.of("true", expression)) {
+            assertThat(violations(build(ignoringFailure(value, PIN), CHECKOUT, run(BUILD)))).as("pin " + value)
+                    .containsExactly("ci.yml job build: " + ignoresFailure("the pin step `contract-pin`"));
+            assertThat(violations(build(PIN, ignoringFailure(value, namedCheckout), run(BUILD))))
+                    .as("checkout " + value)
+                    .containsExactly("ci.yml job build: "
+                            + ignoresFailure("the rekord-contract checkout `Check out rekord-contract`"));
+        }
+        assertThat(violations(build(ignoringFailure("false", PIN), ignoringFailure("false", CHECKOUT), run(BUILD))))
+                .isEmpty();
+    }
+
+    @Test
     void a_conditional_pin_and_checkout_shared_by_the_step_that_starts_the_application_pass() throws IOException {
         // Given
         JsonNode workflow = build(conditionalPin(ON_PUSH), conditionalCheckout(ON_PUSH), when(ON_PUSH, run(BUILD)));
@@ -889,6 +975,14 @@ class CiContractSpecTest {
 
     private static String conditionalCheckout(String condition) {
         return "{name: 'Check out rekord-contract', " + when(condition, CHECKOUT).substring(1);
+    }
+
+    private static String ignoringFailure(String value, String step) {
+        return "{continue-on-error: " + value + ", " + step.substring(1);
+    }
+
+    private static String ignoresFailure(String step) {
+        return step + " sets continue-on-error, so the build goes on when it fails";
     }
 
     private static String notShared(String step, String condition) {
