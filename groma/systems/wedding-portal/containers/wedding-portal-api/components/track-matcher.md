@@ -9,12 +9,6 @@ groma:
     - scanner: java
       file: rekord-domain/src/main/java/app/rekord/domain/matching/TrackMatcher.java
     - scanner: java
-      file: rekord-domain/src/main/java/app/rekord/domain/matching/MatchQuery.java
-      symbol: MatchQuery
-    - scanner: java
-      file: rekord-domain/src/main/java/app/rekord/domain/matching/Bucket.java
-      symbol: Bucket
-    - scanner: java
       file: rekord-domain/src/main/java/app/rekord/domain/matching/QueryText.java
       symbol: QueryText
   group: Track matching

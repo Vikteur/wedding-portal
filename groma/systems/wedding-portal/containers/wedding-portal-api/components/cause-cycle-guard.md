@@ -9,14 +9,6 @@ groma:
     - scanner: java
       file: application/src/main/java/app/rekord/application/error/AcyclicCauseInterceptor.java
       symbol: AcyclicCauseInterceptor
-    - scanner: java
-      file: application/src/main/java/app/rekord/application/error/AcyclicCause.java
-      symbol: AcyclicCause
-    - scanner: java
-      file: application/src/main/java/app/rekord/application/error/BindAcyclicCauseToResources.java
-      symbol: BindAcyclicCauseToResources
-    - scanner: java
-      file: application/src/main/java/app/rekord/application/error/AcyclicCauseBindings.java
   group: Errors
   technology: CDI interceptor, CDI build compatible extension
 description: Keeps an exception whose cause chain loops back from hanging Quarkus REST.
