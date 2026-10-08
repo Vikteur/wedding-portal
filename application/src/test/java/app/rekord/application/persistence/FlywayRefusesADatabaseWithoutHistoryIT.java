@@ -22,6 +22,7 @@ class FlywayRefusesADatabaseWithoutHistoryIT {
             .overrideConfigKey("quarkus.datasource.username", DB.username())
             .overrideConfigKey("quarkus.datasource.password", DB.password())
             .withApplicationRoot(jar -> jar.addPackages(true, "app.rekord.adapter")
+                    .addPackages(true, "app.rekord.application.config", "app.rekord.application.security")
                     .addAsResource("application.properties")
                     .addAsResource("db/migration/V1__baseline.sql"))
             .assertException(e -> {

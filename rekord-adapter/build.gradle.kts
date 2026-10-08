@@ -9,6 +9,7 @@ dependencies {
     compileOnly(platform(libs.quarkus.bom))
     compileOnly("jakarta.enterprise:jakarta.enterprise.cdi-api")
     compileOnly("jakarta.persistence:jakarta.persistence-api")
+    compileOnly("org.hibernate.orm:hibernate-core")
     // The APIs the generated sources import; versions come from the BOM.
     api("jakarta.ws.rs:jakarta.ws.rs-api")
     api("jakarta.validation:jakarta.validation-api")
