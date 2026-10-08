@@ -210,6 +210,8 @@ class CiContractSpecTest {
                 List.of("timeout -s KILL 30m ./gradlew build", "./gradlew build"),
                 List.of("xvfb-run ./gradlew test", "./gradlew test"),
                 List.of("xvfb-run -a ./gradlew test", "./gradlew test"),
+                List.of("timeout -k 5 30m ./gradlew build", "./gradlew build"),
+                List.of("timeout --kill-after 5 30m ./gradlew build", "./gradlew build"),
                 List.of("nice ./gradlew build", "./gradlew build"),
                 List.of("nice -n 10 ./gradlew build", "./gradlew build"),
                 List.of("if ./gradlew build; then echo ok; fi", "./gradlew build"),
@@ -221,7 +223,8 @@ class CiContractSpecTest {
                 List.of("for m in a b; do ./gradlew build; done", "./gradlew build"),
                 List.of("! ./gradlew check", "./gradlew check"),
                 List.of(".\\gradlew.bat build", ".\\gradlew.bat build"),
-                List.of("gradlew.bat build", "gradlew.bat build"));
+                List.of("gradlew.bat build", "gradlew.bat build"),
+                List.of("GRADLE_OPTS=-Xmx2g ./gradlew build", "./gradlew build"));
 
         // When / Then
         for (var shape : shapes) {
@@ -326,6 +329,24 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_checkout_of_another_repository_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT.replace("Vikteur/rekord-contract", "Vikteur/other"), run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    @Test
+    void a_pin_step_without_an_id_is_found() throws IOException {
+        // Given: no id, so no later step can name its output
+        JsonNode workflow = build(PIN.replace("id: contract-pin, ", ""), CHECKOUT, run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_PIN, NO_CHECKOUT);
+    }
+
+    @Test
     void a_checkout_after_the_step_that_starts_the_application_is_found() throws IOException {
         // Given
         JsonNode workflow = build(run(BUILD), PIN, CHECKOUT);
@@ -345,15 +366,19 @@ class CiContractSpecTest {
 
     @Test
     void a_checkout_path_outside_the_workspace_is_found() throws IOException {
-        // Given
-        JsonNode workflow = build(
-                PIN,
-                CHECKOUT.replace("path: contract", "path: ../contract"),
-                run("./gradlew build -Pcontract.spec=../contract/dist/openapi.yaml"));
+        // Given: a parent directory, an absolute path on either system, and the workspace itself
+        var paths = List.of("../contract", "/tmp/contract", "C:/contract", ".");
 
         // When / Then
-        assertThat(violations(workflow))
-                .containsExactly("ci.yml job build: the contract is checked out to ../contract, outside the workspace");
+        for (String path : paths) {
+            JsonNode workflow = build(
+                    PIN,
+                    CHECKOUT.replace("path: contract", "path: '" + path + "'"),
+                    run("./gradlew build -Pcontract.spec=" + path + "/dist/openapi.yaml"));
+            assertThat(violations(workflow)).as(path)
+                    .containsExactly("ci.yml job build: the contract is checked out to " + path
+                            + ", outside the workspace");
+        }
     }
 
     @Test
@@ -417,6 +442,9 @@ class CiContractSpecTest {
                 "# ./gradlew build",
                 "sudo chmod +x gradlew",
                 "ls -l gradlew",
+                "cat gradlew",
+                "printf %s ./gradlew",
+                "[ -x gradlew ]",
                 "git update-index --chmod=+x gradlew");
 
         // When / Then
@@ -509,6 +537,16 @@ class CiContractSpecTest {
                 .containsExactly("ci.yml job build: Dockerfile `./gradlew --no-daemon build` does not pass"
                         + " -Pcontract.spec");
         assertThat(violations("ci.yml", workflow, dockerfile.replace("build\"", "build " + SPEC + "\""))).isEmpty();
+    }
+
+    @Test
+    void a_dockerfile_that_only_copies_or_adds_the_wrapper_has_no_violation() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = DOCKERFILE + "ADD gradlew /tmp/\nCOPY gradlew /tmp/\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile)).isEmpty();
     }
 
     @Test
@@ -711,6 +749,8 @@ class CiContractSpecTest {
                 List.of("{uses: 'docker/bake-action@v5'}", "docker/bake-action@v5"),
                 List.of("{uses: 'gradle/gradle-build-action@v2', with: {arguments: build}}",
                         "gradle/gradle-build-action@v2"),
+                List.of("{uses: 'gradle/actions/setup-gradle@v4', with: {arguments: build}}",
+                        "gradle/actions/setup-gradle@v4"),
                 List.of("{uses: ./.github/actions/build}", "./.github/actions/build"),
                 List.of("{uses: 'docker://gradle:9'}", "docker://gradle:9"),
                 List.of("{uses: 'some-org/some-action@v1'}", "some-org/some-action@v1"));
@@ -799,6 +839,20 @@ class CiContractSpecTest {
                         "ci.yml job build: " + notShared("the pin step `contract-pin`", ON_PUSH),
                         "ci.yml job build: "
                                 + notShared("the rekord-contract checkout `Check out rekord-contract`", ON_PUSH));
+    }
+
+    @Test
+    void a_later_step_that_does_not_start_the_application_need_not_share_the_condition() throws IOException {
+        // Given: only the steps that start the application are compared, and their conditions as trimmed text
+        JsonNode workflow = build(
+                conditionalPin(ON_PUSH + " "),
+                conditionalCheckout(ON_PUSH + " "),
+                when(" " + ON_PUSH, run(BUILD)),
+                run("./gradlew -q help --task test"),
+                run("echo done"));
+
+        // When / Then
+        assertThat(violations(workflow)).isEmpty();
     }
 
     @Test
