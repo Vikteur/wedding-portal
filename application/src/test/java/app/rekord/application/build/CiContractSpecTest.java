@@ -72,6 +72,19 @@ class CiContractSpecTest {
             "-t", "--tag", "--build-arg", "--target", "--platform", "--label", "--secret", "--ssh", "--cache-from",
             "--cache-to", "-o", "--output", "--network", "--progress", "--iidfile", "--metadata-file",
             "--build-context", "--add-host", "--shm-size", "--ulimit", "--builder");
+    /**
+     * Options that docker, docker compose and docker buildx take in front of their subcommand, with their value as the
+     * next word (--opt=value is one word). Not exhaustive: an option missing here, with the flags below, is refused,
+     * because its value might be taken for the subcommand.
+     */
+    private static final Set<String> DOCKER_VALUE_OPTIONS = Set.of(
+            "-H", "--host", "-c", "--context", "--config", "-l", "--log-level", "--tlscacert", "--tlscert", "--tlskey",
+            "-f", "--file", "-p", "--project-name", "--profile", "--env-file", "--project-directory", "--builder");
+    /** Options in front of the docker subcommand that take no value. */
+    private static final Set<String> DOCKER_FLAGS =
+            Set.of("-D", "--debug", "--tls", "--tlsverify", "--dry-run", "--version", "-v", "--help");
+    /** Subcommands that take another subcommand after them. */
+    private static final Set<String> DOCKER_GROUPS = Set.of("compose", "buildx", "image", "builder");
     /** Tasks that only report. A bare word after one is another task Gradle runs (help build builds). */
     private static final Set<String> DIAGNOSTIC_TASKS = Set.of(
             "help", "tasks", "projects", "properties", "dependencies", "dependencyInsight", "buildEnvironment",
@@ -951,6 +964,10 @@ class CiContractSpecTest {
             violations.add(where + "`" + String.join(" ", words) + "` names the Gradle wrapper or `gradle` in a shape"
                     + " this test cannot classify; " + EXTEND);
         }
+        if (passesAnUnreadableDockerOption(words)) {
+            violations.add(where + "`" + String.join(" ", words) + "` passes an option this test cannot read before"
+                    + " the docker subcommand; " + EXTEND);
+        }
     }
 
     /**
@@ -1154,26 +1171,80 @@ class CiContractSpecTest {
     }
 
     /**
-     * An image build that does not read the Dockerfile at the repository root: another one with -f, bake, or a docker
-     * build whose context is not exactly one positional word, {@code .} or {@code ./}.
+     * A docker command cut at its leaf subcommand: {@code docker buildx --debug build -t x .} has the subcommands
+     * [buildx, build] and the rest [-t, x, .].
      */
-    private static boolean namesAnotherDockerfile(List<String> words) {
-        return words.contains("-f")
-                || words.contains("--file")
-                || words.stream().anyMatch(word -> word.startsWith("--file="))
-                || argumentsOf(words, "docker"::equals).map(CiContractSpecTest::buildsFromAnotherContext).orElse(false);
+    private record DockerCommand(List<String> subcommands, List<String> rest) {
     }
 
-    private static boolean buildsFromAnotherContext(List<String> arguments) {
-        List<String> subcommands = arguments.stream().takeWhile(word -> !word.startsWith("-")).limit(3).toList();
-        if (subcommands.contains("bake")) {
+    /**
+     * What follows {@code docker}, cut at its leaf subcommand (compose up, buildx build); empty when an option the
+     * test does not know stands in front of the leaf, because its value might be taken for the subcommand.
+     */
+    private static Optional<DockerCommand> dockerCommand(List<String> arguments) {
+        List<String> subcommands = new ArrayList<>();
+        for (int i = 0; i < arguments.size(); i++) {
+            String word = arguments.get(i);
+            if (DOCKER_VALUE_OPTIONS.contains(word)) {
+                i++;
+            } else if (DOCKER_FLAGS.contains(word) || (word.startsWith("--") && word.contains("="))) {
+                continue;
+            } else if (word.startsWith("-")) {
+                return Optional.empty();
+            } else {
+                subcommands.add(word);
+                if (!DOCKER_GROUPS.contains(word)) {
+                    return Optional.of(new DockerCommand(subcommands, arguments.subList(i + 1, arguments.size())));
+                }
+            }
+        }
+        return Optional.of(new DockerCommand(subcommands, List.of()));
+    }
+
+    /** The docker command the words run, when it is one and the test reads the options in front of its subcommand. */
+    private static Optional<DockerCommand> docker(List<String> words) {
+        return argumentsOf(words, "docker"::equals).flatMap(CiContractSpecTest::dockerCommand);
+    }
+
+    /** A docker command with an option in front of its subcommand that the test does not know. */
+    private static boolean passesAnUnreadableDockerOption(List<String> words) {
+        return argumentsOf(words, "docker"::equals).map(arguments -> dockerCommand(arguments).isEmpty()).orElse(false);
+    }
+
+    /**
+     * An image build: {@code docker [image|buildx|builder] build}, {@code docker [buildx] bake},
+     * {@code docker compose build|up|run}.
+     */
+    private static boolean buildsImage(List<String> words) {
+        return docker(words)
+                .map(DockerCommand::subcommands)
+                .map(subcommands -> subcommands.contains("build") || subcommands.contains("bake")
+                        || (subcommands.contains("compose")
+                                && (subcommands.contains("up") || subcommands.contains("run"))))
+                .orElse(false);
+    }
+
+    /**
+     * An image build that does not read the Dockerfile at the repository root: another one with -f (or -f<file>),
+     * bake, compose (its file names the Dockerfile), or a docker build whose context is not exactly one positional
+     * word, {@code .} or {@code ./}.
+     */
+    private static boolean namesAnotherDockerfile(List<String> words) {
+        return words.stream().anyMatch(word -> word.equals("--file") || word.startsWith("--file=")
+                        || (word.startsWith("-f") && !word.startsWith("--")))
+                || docker(words).map(CiContractSpecTest::buildsFromAnotherContext).orElse(false);
+    }
+
+    private static boolean buildsFromAnotherContext(DockerCommand docker) {
+        List<String> subcommands = docker.subcommands();
+        if (subcommands.contains("bake") || subcommands.contains("compose")) {
             return true;
         }
         if (!subcommands.contains("build")) {
             return false;
         }
         List<String> positional = new ArrayList<>();
-        List<String> options = arguments.subList(arguments.indexOf("build") + 1, arguments.size());
+        List<String> options = docker.rest();
         for (int i = 0; i < options.size(); i++) {
             String word = options.get(i);
             if (BUILD_VALUE_OPTIONS.contains(word)) {
@@ -1183,15 +1254,5 @@ class CiContractSpecTest {
             }
         }
         return !(positional.size() == 1 && (positional.get(0).equals(".") || positional.get(0).equals("./")));
-    }
-
-    /** An image build: {@code docker [image|buildx|builder] build}, {@code docker compose up|run}. */
-    private static boolean buildsImage(List<String> words) {
-        return argumentsOf(words, "docker"::equals)
-                .map(arguments -> arguments.stream().takeWhile(word -> !word.startsWith("-")).limit(3).toList())
-                .map(subcommands -> subcommands.contains("build") || subcommands.contains("bake")
-                        || (subcommands.contains("compose")
-                                && (subcommands.contains("up") || subcommands.contains("run"))))
-                .orElse(false);
     }
 }
