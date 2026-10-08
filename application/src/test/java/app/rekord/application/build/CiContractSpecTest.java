@@ -104,6 +104,7 @@ class CiContractSpecTest {
             + " outputs";
 
     private static final String ON_PUSH = "github.event_name == 'push'";
+    private static final String EXTEND = "extend CiContractSpecTest to read it";
 
     @Test
     void every_ci_job_that_starts_the_application_checks_out_the_pinned_contract_and_passes_its_spec()
@@ -207,8 +208,8 @@ class CiContractSpecTest {
         // When / Then: in a job that starts nothing else, so the refusal does not depend on a starting step
         for (var script : scripts) {
             assertThat(violations(build(run(script.get(0))))).as(script.get(0))
-                    .containsExactly("ci.yml job build: `" + script.get(1) + "` names the Gradle wrapper in a shape"
-                            + " this test cannot classify; extend CiContractSpecTest to read it");
+                    .containsExactly("ci.yml job build: `" + script.get(1) + "` names the Gradle wrapper or `gradle` in"
+                            + " a shape this test cannot classify; " + EXTEND);
         }
     }
 
@@ -472,7 +473,7 @@ class CiContractSpecTest {
         // When / Then
         assertThat(violations("ci.yml", workflow, dockerfile))
                 .containsExactly("ci.yml job build: Dockerfile `RUN stdbuf -oL ./gradlew build " + SPEC + "` names the"
-                        + " Gradle wrapper in a shape this test cannot classify; extend CiContractSpecTest to read it");
+                        + " Gradle wrapper or `gradle` in a shape this test cannot classify; " + EXTEND);
     }
 
     @Test
@@ -502,6 +503,19 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_dockerfile_that_misses_the_spec_is_reported_once_per_job_however_many_images_the_job_builds()
+            throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."), run("docker build -t y ."));
+        String dockerfile = DOCKERFILE.replace(" " + SPEC, "");
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile"
+                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+    }
+
+    @Test
     void an_image_build_from_another_dockerfile_is_found_rather_than_passed_unread() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -f other.Dockerfile -t x ."));
@@ -509,7 +523,7 @@ class CiContractSpecTest {
         // When / Then
         assertThat(violations(workflow))
                 .containsExactly("ci.yml job build: `docker build -f other.Dockerfile -t x .`"
-                        + " builds from a Dockerfile this test does not read");
+                        + " builds from a Dockerfile this test does not read; " + EXTEND);
     }
 
     @Test
@@ -534,7 +548,7 @@ class CiContractSpecTest {
         for (String command : otherContexts) {
             assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command)
                     .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not"
-                            + " read");
+                            + " read; " + EXTEND);
         }
         for (String command : rootContexts) {
             assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command).isEmpty();
@@ -542,7 +556,7 @@ class CiContractSpecTest {
     }
 
     @Test
-    void a_step_that_builds_through_an_action_is_found() throws IOException {
+    void an_action_the_test_does_not_know_is_found() throws IOException {
         // Given: the step as YAML, and the uses: value the message quotes
         var steps = List.of(
                 List.of("{uses: 'docker/build-push-action@v6', with: {context: ., push: false}}",
@@ -557,8 +571,8 @@ class CiContractSpecTest {
         // When / Then
         for (var step : steps) {
             assertThat(violations(build(PIN, CHECKOUT, step.get(0)))).as(step.get(1))
-                    .containsExactly("ci.yml job build: `uses: " + step.get(1) + "` builds through an action this test"
-                            + " does not read; extend CiContractSpecTest to read it");
+                    .containsExactly("ci.yml job build: `uses: " + step.get(1) + "` is an action this test does not"
+                            + " know; add it to SETUP_ACTIONS or " + EXTEND);
         }
     }
 
@@ -573,8 +587,8 @@ class CiContractSpecTest {
 
         // When / Then
         assertThat(violations(workflow))
-                .containsExactly("ci.yml job build: `uses: ./.github/workflows/build.yml` builds through a reusable"
-                        + " workflow this test does not read");
+                .containsExactly("ci.yml job build: `uses: ./.github/workflows/build.yml` is a reusable workflow this"
+                        + " test does not read; " + EXTEND);
     }
 
     @Test
