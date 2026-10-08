@@ -163,6 +163,21 @@ class ScriptRunnerTest {
     }
 
     @Test
+    void a_runner_is_not_changed_by_the_calls_that_derive_another_from_it() throws Exception {
+        // Given: a base runner that a test class could keep in a constant
+        script("base.sh", "echo \"${TASK_FLAG-unset}\"\n");
+        var base = ScriptRunner.in(tmp);
+
+        // When
+        var derived = base.with("TASK_FLAG", "on").timeout(Duration.ofSeconds(5));
+
+        // Then
+        assertThat(derived).isNotSameAs(base);
+        assertThat(derived.run("base.sh").stdout().trim()).isEqualTo("on");
+        assertThat(base.run("base.sh").stdout().trim()).isEqualTo("unset");
+    }
+
+    @Test
     void removing_a_variable_works_on_one_the_parent_has_and_the_last_call_for_a_name_wins() {
         // Given
         Map<String, String> environment = new HashMap<>(Map.of("PATH", "/usr/bin", "HOME", "/home/x"));
