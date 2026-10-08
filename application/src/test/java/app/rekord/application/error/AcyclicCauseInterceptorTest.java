@@ -78,6 +78,30 @@ class AcyclicCauseInterceptorTest {
     }
 
     @Test
+    void an_error_is_rethrown_as_it_is_and_a_cyclic_one_as_a_copy() {
+        // Given: an Error is no Exception, yet Quarkus REST walks its causes just the same
+        AssertionError plain = new AssertionError("plain");
+        AssertionError cyclic = new AssertionError("cyclic tok-example-123");
+        cyclic.initCause(new RuntimeException("link", cyclic));
+
+        // When
+        Throwable plainThrown = catchThrowable(() -> interceptor.around(invocation(() -> {
+            throw plain;
+        })));
+        Throwable cyclicThrown = catchThrowable(() -> interceptor.around(invocation(() -> {
+            throw cyclic;
+        })));
+
+        // Then: the one without a loop is untouched, the one with a loop is an acyclic copy that keeps the class
+        assertThat(plainThrown).isSameAs(plain);
+        assertThat(cyclicThrown).isInstanceOf(RedactedCause.class).isNotSameAs(cyclic);
+        assertThat(cyclicThrown.toString()).isEqualTo("java.lang.AssertionError");
+        assertThat(causeLinks(cyclicThrown)).extracting(Throwable::toString)
+                .containsExactly("java.lang.AssertionError", "java.lang.RuntimeException");
+        assertThat(cyclicThrown.getMessage()).isNull();
+    }
+
+    @Test
     void the_same_cause_reached_twice_without_a_loop_is_not_a_cycle() {
         // Given: a shared cause hangs below two suppressed exceptions, which is not a loop of the cause chain
         IllegalStateException shared = new IllegalStateException("shared");
