@@ -16,7 +16,7 @@ public sealed interface BootstrapOutcome {
     record AdminExists() implements BootstrapOutcome {
     }
 
-    /** The password has fewer than 12 characters. */
+    /** The password has fewer than 12 UTF-16 units ({@code String.length()}), counted as rekord-api does. */
     record PasswordTooShort() implements BootstrapOutcome {
     }
 }

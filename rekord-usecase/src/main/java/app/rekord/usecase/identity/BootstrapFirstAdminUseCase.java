@@ -15,6 +15,7 @@ import java.util.UUID;
 @ApplicationScoped
 public class BootstrapFirstAdminUseCase {
 
+    /** Counted as UTF-16 units ({@code String.length()}), as rekord-api's {@code Bootstrap} does: six emoji pass. */
     static final int MIN_PASSWORD_LENGTH = 12;
     private static final String TIMEZONE = "Europe/Amsterdam";
 
@@ -67,6 +68,7 @@ public class BootstrapFirstAdminUseCase {
         return value == null || value.isBlank();
     }
 
+    /** ASCII only, as rekord-api's {@code Bootstrap.slugify}: any other character, accents too, is a dash. */
     private static String slugify(String name) {
         String slug = (name == null ? "" : name)
                 .toLowerCase(Locale.ROOT)

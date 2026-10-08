@@ -112,6 +112,26 @@ class BootstrapFirstAdminUseCaseTest {
     }
 
     @Test
+    void the_password_length_counts_utf_16_units_as_rekord_api_does() {
+        // Six emoji are 6 code points but 12 UTF-16 units: String.length() in the oracle lets them through.
+        String sixEmoji = "😀".repeat(6);
+        String fiveEmoji = "😀".repeat(5);
+
+        assertThat(useCase.execute(command("a@example.com", fiveEmoji, "Rekord Match")))
+                .isInstanceOf(BootstrapOutcome.PasswordTooShort.class);
+        assertThat(useCase.execute(command("a@example.com", sixEmoji, "Rekord Match")))
+                .isInstanceOf(BootstrapOutcome.Created.class);
+    }
+
+    @Test
+    void the_slug_is_ascii_only_as_in_rekord_api() {
+        // Every character outside a-z and 0-9, an accented letter included, becomes a dash: not a transliteration.
+        useCase.execute(command("a@example.com", PASSWORD, "Café Noël"));
+
+        assertThat(repository.saved).extracting(NewFirstAdmin::businessSlug).containsExactly("caf-no-l");
+    }
+
+    @Test
     void an_active_admin_is_checked_before_the_password_length() {
         repository.activeAdmin = true;
 
