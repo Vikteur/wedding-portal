@@ -10,14 +10,15 @@ import java.util.List;
 /**
  * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
  * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
- * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, plus the names of the other non-system schemas.
+ * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, plus the names of the other non-system schemas, and the indexes
+ * that back no constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them.
  * {@code flyway_schema_history} is never part of it.
  * <p>
- * Not covered: indexes that are not constraints (including partial unique indexes), column defaults, identity and
- * sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign key
+ * Not covered: column defaults, identity and sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign key
  * on-update, match and deferrability, and the content of other schemas.
  */
-public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints) {
+public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
+        List<Index> indexes) {
 
     /**
      * {@code type} is {@code data_type} plus {@code (n)} for a length, {@code (p,s)} for a numeric precision and scale,
@@ -28,17 +29,30 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     /** {@code detail}: the check clause, {@code references <table>(<cols>) on delete <rule>} for a foreign key, else empty. */
     public record Constraint(String table, String name, String type, List<String> columns, String detail) {}
 
+    /**
+     * An index of {@code public} that backs no PRIMARY KEY, UNIQUE or EXCLUSION constraint of its own table;
+     * {@code definition} is PostgreSQL's {@code pg_get_indexdef} text.
+     */
+    public record Index(String table, String name, String definition) {}
+
+    /** A snapshot that declares no index. */
+    public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
+            List<Constraint> constraints) {
+        this(schemas, tables, columns, constraints, List.of());
+    }
+
     private static final String HISTORY = "flyway_schema_history";
     private static final int DEFAULT_TIME_PRECISION = 6;
     // PostgreSQL 17 lists every NOT NULL as a CHECK named <oid>_<oid>_<n>_not_null; nullability lives on the column.
     private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
 
     public static SchemaSnapshot empty() {
-        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
+        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static SchemaSnapshot read(Connection connection) throws SQLException {
-        return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection));
+        return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection),
+                indexes(connection));
     }
 
     private static List<String> schemas(Connection c) throws SQLException {
@@ -139,6 +153,27 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
                 };
                 result.add(new Constraint(r.getString("table_name"), r.getString("constraint_name"), type,
                         cols.isEmpty() ? List.of() : List.of(cols.split(",")), detail));
+            }
+        }
+        return result;
+    }
+
+    private static List<Index> indexes(Connection c) throws SQLException {
+        List<Index> result = new ArrayList<>();
+        try (PreparedStatement s = c.prepareStatement("""
+                select t.relname as table_name, i.relname as index_name, pg_get_indexdef(x.indexrelid) as definition
+                from pg_index x
+                join pg_class i on i.oid = x.indexrelid
+                join pg_class t on t.oid = x.indrelid
+                join pg_namespace n on n.oid = t.relnamespace
+                where n.nspname = 'public' and t.relname <> '%s'
+                  and not exists (select 1 from pg_constraint k
+                                   where k.conindid = x.indexrelid and k.conrelid = x.indrelid
+                                     and k.contype in ('p', 'u', 'x'))
+                order by t.relname, i.relname""".formatted(HISTORY));
+                ResultSet r = s.executeQuery()) {
+            while (r.next()) {
+                result.add(new Index(r.getString("table_name"), r.getString("index_name"), r.getString("definition")));
             }
         }
         return result;
