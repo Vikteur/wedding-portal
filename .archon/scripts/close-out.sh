@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Close a merged ticket out (P2: a script, not a model): commit and push its Backlog files, pull main, and delete the
 # run's branch and worktree.
-#   close-out.sh <TASK id or empty> <pull request url> <umbrella dir>
+#   close-out.sh <ticket id or empty> <pull request url> <backlog dir>
 # Runs after `finalize` set the ticket Done. The merge was the human approval for exactly these steps (UD-21.c):
 # only the ticket's and its parent's Backlog files are committed, and only the pull request's own branch is deleted.
 # Every step runs; a failed one is reported and fails the node at the end, so a later step is never skipped silently.
@@ -32,7 +32,7 @@ head=$(gh pr view "$pr" --json headRefOid -q .headRefOid)
 branch=$(gh pr view "$pr" --json headRefName -q .headRefName)
 repo=$(printf '%s' "$pr" | sed -E 's#^https://github.com/[^/]+/([^/]+)/pull/.*#\1#')
 
-# 1. Commit and push the ticket's Backlog files on the umbrella's main.
+# 1. Commit and push the ticket's Backlog files on its backlog's main.
 backlog_commit=""
 if [ -n "$task" ]; then
   status=$(field "$task" status)
@@ -48,14 +48,16 @@ if [ -n "$task" ]; then
     [ "$(field "$parent" status)" = Done ] && subject="backlog: $task and epic $parent done"
   fi
   if [ "$(git -C "$home" symbolic-ref --short HEAD)" != main ]; then
-    failed="$failed; the umbrella checkout $home is not on main, so the Backlog change is not committed"
+    failed="$failed; the backlog checkout $home is not on main, so the Backlog change is not committed"
   elif git -C "$home" diff --quiet HEAD -- "${files[@]}"; then
     echo "No Backlog change to commit for $task." >&2
-  elif git -C "$home" commit -q -m "$subject ($repo PR #$number merged, CI green on ${head:0:7})" -- "${files[@]}" \
+  # The backlog may be the pull request's own repo (TASK-36), whose main is behind by the merge: pull it first, the
+  # finalized ticket set aside meanwhile, so the commit lands on top of the merge and the push is a fast-forward.
+  elif git -C "$home" pull -q --ff-only --autostash origin main       && git -C "$home" commit -q -m "$subject ($repo PR #$number merged, CI green on ${head:0:7})" -- "${files[@]}" \
       && git -C "$home" push -q origin main; then
     backlog_commit=$(git -C "$home" rev-parse --short HEAD)
   else
-    failed="$failed; the Backlog commit or push in $home failed"
+    failed="$failed; the Backlog pull, commit or push in $home failed"
   fi
 fi
 

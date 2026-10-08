@@ -221,7 +221,10 @@ function index(home) {
 }
 
 // ---------- stopped runs ----------
-const TASK = /task-[0-9]+(\.[0-9]+)*/i;
+// The ticket prefixes of the backlogs beside the umbrella (retro-stopped.sh passes them, TASK-36); Backlog's default
+// is task. An ID starts a word, so UTF-8 is no ticket.
+const PREFIXES = (process.env.TICKET_PREFIXES || 'task').split('|').filter(p => /^[a-z0-9_]+$/i.test(p));
+const TASK = new RegExp(`(?:^|[^a-z0-9_-])((?:${PREFIXES.join('|') || 'task'})-[0-9]+(?:\\.[0-9]+)*)`, 'i');
 const runList = j => !j ? [] : Array.isArray(j) ? j : j.runs || [];
 const artifactsRoot = g => (g.terminal_record && g.terminal_record.artifacts && g.terminal_record.artifacts.root)
   || path.join(g.output_root, 'artifacts', 'runs', g.id);
@@ -277,7 +280,7 @@ function stopped(mode, getFile, transcript, runsFile, home) {
     process.exit(1);
   }
   const id8 = g.id.slice(0, 8);
-  const task = ((g.user_message || '').match(TASK) || [''])[0].toUpperCase();
+  const task = ((g.user_message || '').match(TASK) || ['', ''])[1].toUpperCase();
   const name = task || `run-${id8}`;
   const dir = `docs/retro/${name}`;
   const file = path.join(home, dir, 'lessons-learned.md');

@@ -1,12 +1,14 @@
 name: build-feature
 description: |
-  Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
+  Use when: building one Backlog ticket (name its ID: TASK-n is wedding-portal's, TOOL-n this umbrella's) or one small
+  request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> per step, the test
   agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> push and open a
   DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
-  wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done) -> commit and
-  push the Backlog ticket, and delete the run's branch and worktree. The retro (lessons learned and the ticket's ADRs)
-  is not part of this workflow: it is launched separately, after the pull request is merged (see docs/retro/README.md).
+  wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done) in the repo whose
+  backlog holds it -> commit and push the Backlog ticket, and delete the run's branch and worktree. The retro (lessons
+  learned and the ticket's ADRs) is not part of this workflow: it is launched separately, after the pull request is
+  merged (see docs/retro/README.md).
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
@@ -214,13 +216,15 @@ nodes:
   # After `ready` the run waits for your merge. The merge is the human approval for closing the ticket out (UD-21.c):
   # finalize it in Backlog, commit and push its Backlog files, delete the run's own branch and worktree. A pull request
   # closed without a merge ends the run here; a merge whose head SHA is not green fails it before anything changes.
-  # If the run dies while waiting, `archon workflow resume <run-id>` picks the wait up again.
+  # If the run dies while waiting, `archon workflow resume <run-id>` picks the wait up again. The ticket is finalized
+  # in the backlog its ID prefix names (TASK-36): TASK-n in wedding-portal, TOOL-n in the umbrella.
   - id: merged
     depends_on: [ready]
     timeout: 1209600000
     bash: |
       pr=$open-pr.output.pr
-      bash .archon/scripts/wait-merge.sh "$pr"
+      task=$ticket.output.task
+      bash .archon/scripts/wait-merge.sh "$pr" "$task"
     output_format:
       type: object
       properties:

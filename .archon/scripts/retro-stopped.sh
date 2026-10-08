@@ -9,7 +9,7 @@
 #                               section is not committed.
 #   retro-stopped.sh --sweep    every cancelled build-feature run, in every project, that has no section yet. It never
 #                               fails its caller: a problem is a warning on stderr, and the next sweep tries again.
-# BACKLOG_CWD names the umbrella (see retro-umbrella.sh).
+# RETRO_HOME names the umbrella (see retro-umbrella.sh). A ticket ID of any backlog beside it names the folder.
 set -uo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/retro-umbrella.sh"
@@ -35,7 +35,7 @@ document() { # document <add|refresh> <run id>
     return 1
   fi
   archon workflow logs "$run" > "$work/transcript.jsonl" 2>/dev/null || : > "$work/transcript.jsonl"
-  dir=$(node "$here/retro.js" stopped "$mode" "$work/get.json" "$work/transcript.jsonl" "$work/runs.json" "$umbrella") \
+  dir=$(TICKET_PREFIXES=$(ticket_prefixes) node "$here/retro.js" stopped "$mode" "$work/get.json" "$work/transcript.jsonl" "$work/runs.json" "$umbrella") \
     || return 1
   if [ -z "$dir" ]; then
     echo "Run ${run:0:8} already has a retro section; left alone." >&2

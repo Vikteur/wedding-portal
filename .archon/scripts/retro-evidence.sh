@@ -9,7 +9,7 @@
 # reviews and comments, CI runs, artifacts) and prints one JSON line
 #   {"umbrella": "...", "dir": "docs/retro/<TASK or run-<id8>>", "evidence": "...", "next_adr": "NN", "task": "..."}
 # A failing gh or archon call is written down as unavailable instead of failing the run; no umbrella found fails it.
-# BACKLOG_CWD names the umbrella; RETRO_TRANSCRIPT a transcript file to read instead of `archon workflow logs`.
+# RETRO_HOME names the umbrella (retro-umbrella.sh); RETRO_TRANSCRIPT a transcript file to read instead of `archon workflow logs`.
 set -uo pipefail
 request=$1 run=$2 art=$3 base=${4:-main} pr_arg=${5:-}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -17,7 +17,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/retro-umbrella.sh"
 find_umbrella || exit 1
 
-task=$(printf '%s' "$request" | grep -oiE 'task-[0-9]+(\.[0-9]+)*' | head -1 | tr '[:lower:]' '[:upper:]')
+task=$(request_ticket "$request")   # TASK-n, TOOL-n: the prefix of any backlog beside the umbrella
 dir="docs/retro/${task:-run-${run:0:8}}"
 last=$(ls "$umbrella/$dir/adr" 2>/dev/null | sed -nE 's/^ADR-([0-9]+)-.*\.md$/\1/p' | sort -n | tail -1)
 next_adr=$(printf '%02d' $((10#${last:-0} + 1)))
