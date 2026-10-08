@@ -52,6 +52,22 @@ class BaselineMigrationTest {
         assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
     }
 
+    @Test
+    void a_hyphenated_description_that_the_migration_gate_accepts_is_a_versioned_migration(@TempDir Path dir)
+            throws IOException {
+        // Given V3__add-x.sql, whose description holds a hyphen: MigrationCoverage accepts any description (.+)
+        for (String name : List.of("V3__add-x.sql", "V1__baseline.sql")) {
+            Files.writeString(dir.resolve(name), "-- x\n");
+        }
+
+        // When they are sorted by version
+        List<String> names = byVersion(dir);
+
+        // Then the hyphenated file is accepted and sorts after the baseline
+        assertThat(names).containsExactly("V1__baseline.sql", "V3__add-x.sql");
+        assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
+    }
+
     private static List<String> byVersion(Path dir) throws IOException {
         try (Stream<Path> files = Files.list(dir)) {
             return files.map(path -> path.getFileName().toString())
