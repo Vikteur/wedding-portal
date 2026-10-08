@@ -90,17 +90,15 @@ green build: a dropped column and a leaked personal identifier both pass CI.
 
 ## Project specifics → see docs
 
-- Decisions already taken, lessons learned, and approaches already tried and abandoned →
-  `docs/memory.md` — read it before proposing a change that reverses one; the reasoning is not in
-  the code
-- The patterns the skills point to (one leaf per skill, e.g. what is regulated and why in
-  `docs/code-maps/security-review.md`) → `docs/code-maps/`
-  *(plain references on purpose — linked files eager-load into every context; open them on demand)*
+- **What doc goes where** → `docs/README.md`, the docs map. Read it before you write any doc; one kind of fact
+  has one home. *(plain references on purpose — linked files eager-load into every context; open them on demand)*
+- Decisions already taken, and approaches already tried and abandoned → `docs/memory.md` — read it before
+  proposing a change that reverses one; the reasoning is not in the code
+- The project facts a skill needs, one leaf per skill → `docs/code-maps/<skill>.md` (see its `README.md`)
 - The architecture map → `groma/`. Change it only through the `groma` CLI (`groma agent-instructions`
   names the guide for each job); never edit the Groma-owned files by hand.
-- The project profile (ticket id, branch name, ticket docs folder, repo names), the layer model
-  (including the OpenAPI-tag join key and per-repo sync) and the retro history live in the umbrella
-  repo `weddingapp`, under `docs/` — not in this repo.
+- Tickets and their specs, owner decisions (`docs/rewrite/STATUS.md`), retros and follow-ups live in the umbrella
+  repo `weddingapp` — not in this repo.
 
 ## Shared mechanisms (not agents, but everyone must respect them)
 
