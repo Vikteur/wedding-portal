@@ -36,14 +36,19 @@ class CiContractSpecTest {
     private static final Pattern GRADLE = Pattern.compile("(.*/)?gradlew(\\.bat)?|gradle");
     /** What may stand in front of the wrapper without making it a mere argument. */
     private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
-    /** Tasks that only report; the words after one are its own arguments (help --task test). */
+    /** Tasks that only report. A bare word after one is another task Gradle runs (help build builds). */
     private static final Set<String> DIAGNOSTIC_TASKS = Set.of(
             "help", "tasks", "projects", "properties", "dependencies", "dependencyInsight", "buildEnvironment",
             "components", "outgoingVariants", "resolvableConfigurations", "javaToolchains", "wrapper");
-    /** Gradle options that take their value as the next word. */
+    /**
+     * Gradle options, and options of the diagnostic tasks (help --task test), that take their value as the next word.
+     * Not exhaustive: the value of an option missing here reads as a task, so the run counts as starting.
+     */
     private static final Set<String> VALUE_OPTIONS = Set.of(
             "-x", "--exclude-task", "-p", "--project-dir", "-b", "--build-file", "-c", "--settings-file", "-g",
-            "--gradle-user-home", "-I", "--init-script", "--include-build", "--project-cache-dir");
+            "--gradle-user-home", "-I", "--init-script", "--include-build", "--project-cache-dir",
+            "--task", "--group", "--configuration", "--dependency", "--variant", "--gradle-version",
+            "--distribution-type", "--distribution-url");
 
     private static final String PIN =
             "{id: contract-pin, run: 'bash .github/scripts/contract-pin.sh gradle.properties'}";
@@ -59,8 +64,9 @@ class CiContractSpecTest {
 
     private static final String NO_PIN = "ci.yml job build: no step before the first one that starts the application"
             + " reads the pin (contract-pin.sh gradle.properties)";
-    private static final String NO_CHECKOUT = "ci.yml job build: no step before the first one that starts the"
-            + " application checks out rekord-contract to a path of its own at the ref the pin step outputs";
+    private static final String NO_CHECKOUT = "ci.yml job build: no step after the pin step and before the first one"
+            + " that starts the application checks out rekord-contract to a path of its own at the ref the pin step"
+            + " outputs";
 
     @Test
     void every_ci_job_that_starts_the_application_checks_out_the_pinned_contract_and_passes_its_spec()
@@ -186,6 +192,15 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_checkout_before_the_pin_step_is_found() throws IOException {
+        // Given: the ref output is still empty when the checkout runs, so actions/checkout takes the default branch
+        JsonNode workflow = build(CHECKOUT, PIN, run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).containsExactly(NO_CHECKOUT);
+    }
+
+    @Test
     void a_checkout_path_outside_the_workspace_is_found() throws IOException {
         // Given
         JsonNode workflow = build(
@@ -211,6 +226,11 @@ class CiContractSpecTest {
                 "./gradlew assemble",
                 "./gradlew --no-daemon -x test build",
                 "./gradlew clean build",
+                "./gradlew help build",
+                "./gradlew tasks test",
+                "./gradlew -q dependencies --configuration runtimeClasspath integrationTest",
+                "./gradlew :application:help --task quarkusBuild quarkusBuild",
+                "./gradlew javaToolchains build",
                 "echo start && ./gradlew test",
                 "docker build -t x .",
                 "docker buildx build -t x .",
@@ -233,6 +253,9 @@ class CiContractSpecTest {
                 "./gradlew --version",
                 "./gradlew --no-daemon --version",
                 "./gradlew tasks",
+                "./gradlew tasks --all --group build",
+                "./gradlew -q dependencyInsight --dependency jackson --configuration runtimeClasspath",
+                "./gradlew help clean",
                 "./gradlew clean",
                 "docker login ghcr.io",
                 "docker run --rm x",
@@ -357,8 +380,9 @@ class CiContractSpecTest {
 
     /**
      * One line per way a job that starts the application leaves out the pinned contract or its spec: no step before
-     * it reading the pin from gradle.properties, no checkout of rekord-contract to a path of its own at the ref that
-     * step outputs, a checkout path outside the workspace, a Gradle run (or the Dockerfile of an image build) whose
+     * it reading the pin from gradle.properties, no checkout of rekord-contract after that step (before it the ref
+     * output is still empty, so the default branch is checked out) to a path of its own at the ref that step outputs,
+     * a checkout path outside the workspace, a Gradle run (or the Dockerfile of an image build) whose
      * last {@code -Pcontract.spec} is missing or is not {@code <checkout path>/dist/openapi.yaml}.
      */
     static List<String> violations(String file, JsonNode workflow, String dockerfile) {
@@ -371,15 +395,17 @@ class CiContractSpecTest {
             }
             String where = file + " job " + job.getKey() + ": ";
             List<JsonNode> before = steps.subList(0, first);
-            String pin = pinStepId(before);
-            String path = pin == null ? null : checkoutPath(before, pin);
+            int pinStep = pinStep(before);
+            String pin = pinStep < 0 ? null : before.get(pinStep).path("id").asText();
+            String path = pin == null ? null : checkoutPath(before.subList(pinStep + 1, before.size()), pin);
             if (pin == null) {
                 violations.add(where + "no step before the first one that starts the application reads the pin"
                         + " (contract-pin.sh gradle.properties)");
             }
             if (path == null) {
-                violations.add(where + "no step before the first one that starts the application checks out"
-                        + " rekord-contract to a path of its own at the ref the pin step outputs");
+                violations.add(where + "no step after the pin step and before the first one that starts the"
+                        + " application checks out rekord-contract to a path of its own at the ref the pin step"
+                        + " outputs");
             } else if (!insideTheWorkspace(path)) {
                 violations.add(where + "the contract is checked out to " + path + ", outside the workspace");
             }
@@ -434,14 +460,15 @@ class CiContractSpecTest {
                 || buildsImage(words);
     }
 
-    /** The id of the step, among those given, that reads the pin from gradle.properties; null when there is none. */
-    private static String pinStepId(List<JsonNode> steps) {
-        for (JsonNode step : steps) {
+    /** The index, among the steps given, of the one with an id that reads the pin from gradle.properties, or -1. */
+    private static int pinStep(List<JsonNode> steps) {
+        for (int i = 0; i < steps.size(); i++) {
+            JsonNode step = steps.get(i);
             if (!step.path("id").asText("").isBlank() && PIN_SCRIPT.matcher(step.path("run").asText("")).find()) {
-                return step.path("id").asText();
+                return i;
             }
         }
-        return null;
+        return -1;
     }
 
     /** The path the contract is checked out to at the ref the pin step outputs; null when no step does that. */
@@ -503,8 +530,8 @@ class CiContractSpecTest {
     }
 
     /**
-     * The tasks one Gradle run starts: options and their values skipped, project paths dropped, {@code clean} left
-     * out, and everything from the first diagnostic task on ignored (it is that task's own argument).
+     * The tasks one Gradle run starts: options and their values skipped (a diagnostic's --task value included),
+     * project paths dropped, {@code clean} and the diagnostic tasks left out.
      */
     private static List<String> startedTasks(List<String> arguments) {
         List<String> tasks = new ArrayList<>();
@@ -514,10 +541,7 @@ class CiContractSpecTest {
                 i++;
             } else if (!argument.startsWith("-")) {
                 String task = argument.substring(argument.lastIndexOf(':') + 1);
-                if (DIAGNOSTIC_TASKS.contains(task)) {
-                    break;
-                }
-                if (!task.equals("clean")) {
+                if (!DIAGNOSTIC_TASKS.contains(task) && !task.equals("clean")) {
                     tasks.add(task);
                 }
             }
