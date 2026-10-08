@@ -436,6 +436,34 @@ class CiContractSpecTest {
     }
 
     @Test
+    void an_image_build_whose_dockerfile_runs_gradle_in_exec_form_through_a_shell_is_checked() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = """
+                FROM x
+                RUN ["sh", "-c", "./gradlew --no-daemon build"]
+                """;
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `./gradlew --no-daemon build` does not pass"
+                        + " -Pcontract.spec");
+        assertThat(violations("ci.yml", workflow, dockerfile.replace("build\"", "build " + SPEC + "\""))).isEmpty();
+    }
+
+    @Test
+    void a_dockerfile_line_that_names_the_wrapper_in_a_shape_the_test_cannot_read_is_refused() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String dockerfile = DOCKERFILE + "RUN stdbuf -oL ./gradlew build " + SPEC + "\n";
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, dockerfile))
+                .containsExactly("ci.yml job build: Dockerfile `RUN stdbuf -oL ./gradlew build " + SPEC + "` names the"
+                        + " Gradle wrapper in a shape this test cannot classify; extend CiContractSpecTest to read it");
+    }
+
+    @Test
     void a_spec_inside_a_dockerfile_comment_is_not_passed() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
