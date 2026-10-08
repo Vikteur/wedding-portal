@@ -27,6 +27,9 @@ dependencies {
     testImplementation("io.rest-assured:rest-assured")
     testImplementation(libs.assertj.core)
     testImplementation(libs.archunit.junit5)
+    testImplementation(project(path = ":rekord-adapter", configuration = "testArtifacts"))
+    testImplementation(project(path = ":rekord-usecase", configuration = "testArtifacts"))
+    testImplementation("io.smallrye:jandex")
 }
 
 tasks.test {

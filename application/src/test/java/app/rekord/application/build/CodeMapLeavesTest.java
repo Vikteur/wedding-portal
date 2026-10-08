@@ -145,6 +145,42 @@ class CodeMapLeavesTest {
                 "jq");
     }
 
+    @Test
+    void jvm_testing_states_the_per_migration_test_its_gate_and_the_test_artifacts() throws IOException {
+        // TASK-4.2 AC #2 and #3: every V file has its V<version>MigrationIT, the gate fails build without it, the row rollback
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "V<version>MigrationIT",
+                "MigrationSchemaCheck",
+                "MigrationCoverageTest",
+                "migration-fixtures",
+                "testArtifacts");
+    }
+
+    @Test
+    void memory_records_the_migration_gate_and_the_row_rollback() throws IOException {
+        // TASK-4.2: the decisions behind the gate, the fresh-container proof and the library-module test beans
+        String memory = Files.readString(REPO_ROOT.resolve(Path.of("docs", "memory.md")));
+        java.util.regex.Matcher heading =
+                java.util.regex.Pattern.compile("(?m)^## .*TASK-4[.]2.*$").matcher(memory);
+        assertThat(heading.find()).as("docs/memory.md has a TASK-4.2 section").isTrue();
+        int end = memory.indexOf("\n## ", heading.end());
+        String section = memory.substring(heading.end(), end < 0 ? memory.length() : end);
+
+        assertThat(section).contains("MigrationCoverageTest", "RowRollbackIT", "probe_row", "testArtifacts", "FreshDatabase");
+    }
+
+    @Test
+    void jvm_testing_states_what_else_the_migration_gate_and_the_snapshot_refuse() throws IOException {
+        // TASK-4.2 review: the gate's stray folders and skipped checks, the snapshot's shared constraint names
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "strayMigrationFolders",
+                "overrides the inherited check",
+                "MigrationSchemaCheckIT",
+                "table-specific constraint name");
+    }
+
     private static void assertLeaf(Path relative, String... phrases) throws IOException {
         Path file = REPO_ROOT.resolve(relative);
         assertThat(file).as("the leaf %s", relative).isRegularFile();
