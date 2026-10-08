@@ -476,6 +476,61 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_step_that_builds_through_an_action_is_found() throws IOException {
+        // Given: the step as YAML, and the uses: value the message quotes
+        var steps = List.of(
+                List.of("{uses: 'docker/build-push-action@v6', with: {context: ., push: false}}",
+                        "docker/build-push-action@v6"),
+                List.of("{uses: 'docker/bake-action@v5'}", "docker/bake-action@v5"),
+                List.of("{uses: 'gradle/gradle-build-action@v2', with: {arguments: build}}",
+                        "gradle/gradle-build-action@v2"),
+                List.of("{uses: ./.github/actions/build}", "./.github/actions/build"),
+                List.of("{uses: 'docker://gradle:9'}", "docker://gradle:9"),
+                List.of("{uses: 'some-org/some-action@v1'}", "some-org/some-action@v1"));
+
+        // When / Then
+        for (var step : steps) {
+            assertThat(violations(build(PIN, CHECKOUT, step.get(0)))).as(step.get(1))
+                    .containsExactly("ci.yml job build: `uses: " + step.get(1) + "` builds through an action this test"
+                            + " does not read; extend CiContractSpecTest to read it");
+        }
+    }
+
+    @Test
+    void a_reusable_workflow_job_is_found() throws IOException {
+        // Given
+        JsonNode workflow = Workflows.parse("""
+                jobs:
+                  build:
+                    uses: ./.github/workflows/build.yml
+                """);
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `uses: ./.github/workflows/build.yml` builds through a reusable"
+                        + " workflow this test does not read");
+    }
+
+    @Test
+    void the_actions_ci_yml_uses_to_set_up_are_not_reported() throws IOException {
+        // Given
+        String sha = "0123456789abcdef0123456789abcdef01234567";
+        JsonNode workflow = build(
+                PIN,
+                CHECKOUT,
+                "{uses: 'actions/checkout@" + sha + "'}",
+                "{uses: 'actions/setup-java@" + sha + "', with: {java-version: 25}}",
+                "{uses: 'gradle/actions/setup-gradle@" + sha + "'}",
+                "{uses: 'actions/setup-node@" + sha + "'}",
+                "{uses: 'actions/upload-artifact@" + sha + "', with: {name: x, path: y}}",
+                "{uses: 'gradle/gradle-build-action@v2'}",
+                run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow)).isEmpty();
+    }
+
+    @Test
     void an_image_build_without_the_contract_checkout_is_found() throws IOException {
         // Given
         JsonNode workflow = build(PIN, run("docker build -t x ."));
