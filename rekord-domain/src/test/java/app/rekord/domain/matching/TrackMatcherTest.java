@@ -195,6 +195,7 @@ class TrackMatcherTest {
         MatchResult result = match(320.0, daftPunk("x", "One More Time", 320.0), daftPunk("y", "One More Time", 320.0));
 
         assertThat(ids(result)).containsExactly("y", "x");
+        assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(1.0, 1.0);
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
         assertThat(result.autoSelectedId()).isNull();
     }
@@ -241,6 +242,17 @@ class TrackMatcherTest {
         assertThat(result.autoSelectedId()).isNull();
     }
 
+    // Design: a null membership map means no file is in a playlist, as in rekord-api.
+    @Test
+    void a_null_playlist_map_means_no_playlists() {
+        MatchResult result = match(320.0, (Map<String, List<String>>) null,
+                daftPunk("x", "One More Time", 320.0), daftPunk("y", "One More Time", 320.0));
+
+        assertThat(ids(result)).containsExactly("y", "x");
+        assertThat(result.candidates()).extracting(ScoredCandidate::playlists).containsOnly(List.of());
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
     // AC #11
     @Test
     void nine_identical_files_list_8_and_are_ambiguous() {
@@ -264,6 +276,11 @@ class TrackMatcherTest {
         assertThat(ids(listed)).containsExactly("o");
         assertThat(listed.candidates().get(0).score()).isEqualTo(0.4502);
         assertThat(listed.bucket()).isEqualTo(Bucket.UNMATCHED);
+        // The file is retrieved, so it is the 0.45 floor that drops it, not the token gate.
+        QueryText query = QueryText.of("Daft Punk", "One More Time");
+        assertThat(new LibraryIndex(List.of(daftPunk("l", "Da Funk (Live)", 500.0)))
+                .candidates(query.tokens(), query.allNorm()))
+                .extracting(c -> c.track().id()).containsExactly("l");
         assertThat(dropped.candidates()).isEmpty();
         assertThat(dropped.bucket()).isEqualTo(Bucket.UNMATCHED);
         assertThat(dropped.input().artist()).isEqualTo("Daft Punk");
