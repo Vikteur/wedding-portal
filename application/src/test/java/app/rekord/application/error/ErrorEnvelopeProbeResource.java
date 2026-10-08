@@ -5,9 +5,14 @@ import app.rekord.domain.shared.error.NotFoundException;
 import app.rekord.domain.shared.error.NotPermittedException;
 import app.rekord.domain.shared.error.RejectedException;
 import app.rekord.domain.shared.error.UpstreamUnavailableException;
+import app.rekord.api.model.InviteAccept;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.UnauthorizedException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -67,5 +72,13 @@ public class ErrorEnvelopeProbeResource {
     @Path("/uuid/{id}")
     public String uuid(@PathParam("id") UUID id) {
         return id.toString();
+    }
+
+    /** Takes the generated DTO, whose minLength constraints are what breaks. */
+    @POST
+    @Path("/invite-accept")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public void inviteAccept(@Valid @NotNull InviteAccept body) {
+        // reaching here means validation did not run
     }
 }

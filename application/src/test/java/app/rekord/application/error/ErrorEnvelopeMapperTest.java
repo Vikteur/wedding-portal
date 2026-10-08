@@ -11,7 +11,15 @@ import app.rekord.domain.shared.error.RekordException;
 import app.rekord.domain.shared.error.UpstreamUnavailableException;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.UnauthorizedException;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Valid;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.ws.rs.core.MediaType;
+import java.util.List;
+import org.hibernate.validator.messageinterpolation.ParameterMessageInterpolator;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import org.jboss.resteasy.reactive.RestResponse;
@@ -103,5 +111,78 @@ class ErrorEnvelopeMapperTest {
         assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
         assertThat(response.getEntity().getDetail().getCode().name()).isEqualTo(code);
         assertThat(response.getEntity().getDetail().getMessage()).isEqualTo(message);
+    }
+
+    // --- bean validation: rekord-api's rendering, no sorting (sorting is TASK-5.6's deviation) ---
+
+    static class Account {
+        @NotBlank String name;
+        @Size(min = 8) String password;
+
+        Account(String name, String password) {
+            this.name = name;
+            this.password = password;
+        }
+    }
+
+    static class Line {
+        @NotBlank String name;
+
+        Line(String name) {
+            this.name = name;
+        }
+    }
+
+    static class Order {
+        @Valid List<Line> lines;
+
+        Order(List<Line> lines) {
+            this.lines = lines;
+        }
+    }
+
+    private static final Validator VALIDATOR = Validation.byDefaultProvider()
+            .configure()
+            .messageInterpolator(new ParameterMessageInterpolator())
+            .buildValidatorFactory()
+            .getValidator();
+
+    private <T> RestResponse<Error> validationAnswer(T bean) {
+        return mapper.onConstraintViolation(new ConstraintViolationException(VALIDATOR.validate(bean)));
+    }
+
+    @Test
+    void two_violations_render_as_last_segment_and_message_joined_by_semicolon() {
+        RestResponse<Error> response = validationAnswer(new Account("", "short"));
+
+        assertThat(response.getStatus()).isEqualTo(422);
+        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
+        assertThat(response.getEntity().getDetail().getCode().name()).isEqualTo("VALIDATION_FAILED");
+        assertThat(response.getEntity().getDetail().getMessage())
+                .isIn(
+                        "name must not be blank; password size must be between 8 and 2147483647",
+                        "password size must be between 8 and 2147483647; name must not be blank");
+    }
+
+    @Test
+    void a_nested_path_renders_its_last_segment_only() {
+        RestResponse<Error> response = validationAnswer(new Order(List.of(new Line("ok"), new Line(""))));
+
+        assertThat(response.getEntity().getDetail().getMessage()).isEqualTo("name must not be blank");
+    }
+
+    @Test
+    void identical_renderings_from_different_paths_appear_once() {
+        RestResponse<Error> response = validationAnswer(new Order(List.of(new Line(""), new Line(""))));
+
+        assertThat(response.getEntity().getDetail().getMessage()).isEqualTo("name must not be blank");
+    }
+
+    @Test
+    void a_single_violation_has_no_separator() {
+        RestResponse<Error> response = validationAnswer(new Account("Test Persona", "short"));
+
+        assertThat(response.getEntity().getDetail().getMessage())
+                .isEqualTo("password size must be between 8 and 2147483647");
     }
 }

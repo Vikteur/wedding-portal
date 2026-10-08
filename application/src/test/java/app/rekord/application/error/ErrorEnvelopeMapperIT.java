@@ -11,6 +11,7 @@ import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -64,5 +65,32 @@ class ErrorEnvelopeMapperIT {
 
         // Then
         assertAnswersAsFixture(response, fixture);
+    }
+
+    @Test
+    void a_broken_generated_dto_answers_422_validation_failed_as_rekord_api_does() throws Exception {
+        // Given
+        JsonNode fixture;
+        try (InputStream in = getClass().getResourceAsStream("/fixtures/error-validation-422.json")) {
+            assertThat(in).isNotNull();
+            fixture = new ObjectMapper().readTree(in);
+        }
+        JsonNode expected = new ObjectMapper().readTree(fixture.get("body").asText());
+        String[] parts = expected.at("/detail/message").asText().split("; ");
+
+        // When
+        Response response = given().contentType("application/json")
+                .body("{\"display_name\":\"\",\"password\":\"short\"}")
+                .when()
+                .post(PROBE + "/invite-accept");
+
+        // Then: the set has no defined order, so either order of the same two parts
+        assertThat(response.statusCode()).isEqualTo(fixture.get("status").asInt());
+        assertThat(response.getHeader("Content-Type")).isEqualTo(fixture.get("contentType").asText());
+        JsonNode body = new ObjectMapper().readTree(response.asByteArray());
+        assertThat(body.at("/detail/code").asText()).isEqualTo(expected.at("/detail/code").asText());
+        assertThat(parts).hasSize(2);
+        assertThat(body.at("/detail/message").asText())
+                .isIn(parts[0] + "; " + parts[1], parts[1] + "; " + parts[0]);
     }
 }
