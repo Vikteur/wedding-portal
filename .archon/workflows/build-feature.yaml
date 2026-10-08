@@ -3,8 +3,8 @@ description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> per step, the test
   agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> fold a fresh
-  Groma scan into the architecture map and curate what it added (repos with groma/ only) -> push and open a
-  DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
+  Groma scan into the architecture map, curate what it added, and link the ticket to the map elements it changed
+  (repos with groma/ only) -> push and open a DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
   wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done) -> commit and
   push the Backlog ticket, and delete the run's branch and worktree. The retro (lessons learned and the ticket's ADRs)
   is not part of this workflow: it is launched separately, after the pull request is merged (see docs/retro/README.md).
@@ -160,9 +160,23 @@ nodes:
     bash: |
       if [ -f .github/scripts/groma-check.sh ]; then bash .github/scripts/groma-check.sh; fi
 
+  # Link the ticket to the map (TASK-36): its changed files and the elements that own them, so Groma shows the ticket on
+  # the map while it is open. The ticket is edited in the umbrella checkout; close-out commits it with the ticket's Done.
+  - id: map-links
+    depends_on: [map-check]
+    bash: |
+      task=$ticket.output.task
+      bash .archon/scripts/groma-links.sh "$task" "$BASE_BRANCH"
+    output_format:
+      type: object
+      properties:
+        files: { type: number }
+        refs: { type: string }
+      required: [files, refs]
+
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
   - id: pr-text
-    depends_on: [map-check]
+    depends_on: [map-links]
     model: "@build"
     prompt: |
       Request: $ARGUMENTS
