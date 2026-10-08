@@ -4,6 +4,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -35,5 +37,14 @@ class ScoreTest {
         assertThat(Score.durationScore(200.0, 224.0)).isEqualTo(0.5);
         assertThat(Score.durationScore(200.0, 245.0)).isEqualTo(0.0);
         assertThat(Score.durationScore(200.0, null)).isNull();
+    }
+
+    // AC #8-#10 (BR-MX-15, BR-LIB-42): 0.02 per playlist, at most 3 count.
+    @Test
+    void ranked_adds_002_per_playlist_up_to_3() {
+        assertThat(Score.ranked(0.9, List.of())).isEqualTo(0.9);
+        assertThat(Score.ranked(0.9, List.of("P1"))).isCloseTo(0.92, within(1e-9));
+        assertThat(Score.ranked(0.9, List.of("P1", "P2", "P3"))).isCloseTo(0.96, within(1e-9));
+        assertThat(Score.ranked(0.9, List.of("P1", "P2", "P3", "P4"))).isCloseTo(0.96, within(1e-9));
     }
 }

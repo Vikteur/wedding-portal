@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -115,6 +116,11 @@ class TrackMatcherTest {
                 java.util.Map.entry("version", 1.0), java.util.Map.entry("duration", 1.0));
     }
 
+    private static MatchResult match(Double queryDuration, Map<String, List<String>> playlists, Track... tracks) {
+        return TrackMatcher.matchOne(new MatchQuery(0, "Daft Punk", "One More Time", queryDuration),
+                new LibraryIndex(List.of(tracks)), playlists);
+    }
+
     // AC #3 (BR-MX-14, PIN-14-0369): half-even to one decimal, each file matched alone.
     @Test
     void the_duration_delta_is_rounded_half_even_to_one_decimal() {
@@ -183,11 +189,54 @@ class TrackMatcherTest {
         assertThat(result.autoSelectedId()).isEqualTo("a");
     }
 
+    // AC #8: without membership, equal files stay ambiguous in retrieval order.
     @Test
     void two_equal_leaders_are_ambiguous_and_keep_retrieval_order() {
         MatchResult result = match(320.0, daftPunk("x", "One More Time", 320.0), daftPunk("y", "One More Time", 320.0));
 
         assertThat(ids(result)).containsExactly("y", "x");
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // AC #8 (BR-MX-15, BR-MX-16, BR-LIB-42): the only playlist member leads and passes the margin guard.
+    @Test
+    void a_playlist_member_leads_two_equal_files_and_is_auto() {
+        MatchResult result = match(320.0, Map.of("x", List.of("Peak hour")),
+                daftPunk("x", "One More Time", 320.0), daftPunk("y", "One More Time", 320.0));
+
+        assertThat(ids(result)).containsExactly("x", "y");
+        assertThat(result.candidates().get(0).playlists()).containsExactly("Peak hour");
+        assertThat(result.candidates().get(1).playlists()).isEmpty();
+        assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(1.0, 1.0);
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("x");
+    }
+
+    // AC #9 (BR-MX-15, BR-LIB-42): the nudge orders, the bucket reads the raw scores.
+    @Test
+    void the_nudge_orders_but_the_bucket_reads_the_raw_scores() {
+        MatchResult result = match(320.0, Map.of(
+                        "a", List.of("P1"),
+                        "b", List.of("P1", "P2", "P3", "P4")),
+                daftPunk("a", "One More Time", 320.0), daftPunk("b", "One More Time", 326.0));
+
+        assertThat(ids(result)).containsExactly("b", "a");
+        assertThat(result.candidates()).extracting(ScoredCandidate::score).containsExactly(0.9893, 1.0);
+        assertThat(result.candidates().get(0).playlists()).containsExactly("P1", "P2", "P3", "P4");
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // AC #10 (BR-MX-15, BR-LIB-42): at most 3 playlists count, and a playlist leader with a playlist-less
+    // runner-up is not what happens here, because the leader is in none.
+    @Test
+    void the_nudge_counts_at_most_3_playlists() {
+        MatchResult result = match(320.0, Map.of("b", List.of("P1", "P2", "P3", "P4")),
+                daftPunk("a", "One More Time", 320.0), daftPunk("b", "One More Time", 342.6));
+
+        assertThat(ids(result)).containsExactly("a", "b");
+        assertThat(result.candidates().get(1).score()).isEqualTo(0.93);
         assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
         assertThat(result.autoSelectedId()).isNull();
     }
