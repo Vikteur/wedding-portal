@@ -537,6 +537,68 @@ class CiContractSpecTest {
         assertThat(violations(workflow)).isEmpty();
     }
 
+    private static final String ON_PUSH = "github.event_name == 'push'";
+
+    private static String when(String condition, String step) {
+        return "{if: " + "\"" + condition + "\", " + step.substring(1);
+    }
+
+    private static String conditionalPin(String condition) {
+        return when(condition, PIN);
+    }
+
+    private static String conditionalCheckout(String condition) {
+        return "{name: 'Check out rekord-contract', " + when(condition, CHECKOUT).substring(1);
+    }
+
+    private static String notShared(String step, String condition) {
+        return step + " runs only if `" + condition + "`, a condition the steps that start the application do not share";
+    }
+
+    @Test
+    void a_pin_step_that_runs_only_on_some_events_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(conditionalPin(ON_PUSH), CHECKOUT, run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: " + notShared("the pin step `contract-pin`", ON_PUSH));
+    }
+
+    @Test
+    void a_contract_checkout_that_runs_only_on_some_events_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, conditionalCheckout(ON_PUSH), run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: "
+                        + notShared("the rekord-contract checkout `Check out rekord-contract`", ON_PUSH));
+    }
+
+    @Test
+    void a_conditional_pin_and_checkout_shared_by_the_step_that_starts_the_application_pass() throws IOException {
+        // Given
+        JsonNode workflow = build(conditionalPin(ON_PUSH), conditionalCheckout(ON_PUSH), when(ON_PUSH, run(BUILD)));
+
+        // When / Then
+        assertThat(violations(workflow)).isEmpty();
+    }
+
+    @Test
+    void a_later_step_that_starts_the_application_without_the_condition_is_found() throws IOException {
+        // Given
+        JsonNode workflow = build(
+                conditionalPin(ON_PUSH), conditionalCheckout(ON_PUSH), when(ON_PUSH, run(BUILD)), run(BUILD));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly(
+                        "ci.yml job build: " + notShared("the pin step `contract-pin`", ON_PUSH),
+                        "ci.yml job build: "
+                                + notShared("the rekord-contract checkout `Check out rekord-contract`", ON_PUSH));
+    }
+
     @Test
     void an_image_build_without_the_contract_checkout_is_found() throws IOException {
         // Given
