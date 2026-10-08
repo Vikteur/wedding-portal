@@ -24,7 +24,7 @@ import java.util.List;
  * schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
-        List<Index> indexes, List<Default> defaults) {
+        List<Index> indexes, List<Default> defaults, List<EnumType> enums) {
 
     /**
      * {@code type} is {@code data_type} plus {@code (n)} for a length, {@code (p,s)} for a numeric precision and scale,
@@ -50,6 +50,15 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
      */
     public record Default(String table, String column, String expression, String identity) {}
 
+    /** An enum type of {@code public} with its labels in the order PostgreSQL sorts them. */
+    public record EnumType(String name, List<String> labels) {}
+
+    /** A snapshot that declares no enum type. */
+    public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
+            List<Constraint> constraints, List<Index> indexes, List<Default> defaults) {
+        this(schemas, tables, columns, constraints, indexes, defaults, List.of());
+    }
+
     /** A snapshot that declares no column default and no identity. */
     public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
             List<Constraint> constraints, List<Index> indexes) {
@@ -68,12 +77,12 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
 
     public static SchemaSnapshot empty() {
-        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static SchemaSnapshot read(Connection connection) throws SQLException {
         return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection),
-                indexes(connection), defaults(connection));
+                indexes(connection), defaults(connection), List.of());
     }
 
     private static List<String> schemas(Connection c) throws SQLException {
