@@ -73,7 +73,12 @@ class ErrorFixturesTest {
         JsonNode fixture = load(name);
         assertThat(fixture.path("capturedFrom").asText()).contains(ORACLE_COMMIT);
         assertThat(fixture.path("status").isInt()).isTrue();
-        assertThat(fixture.path("contentType").asText()).isNotBlank();
+        if (name.equals(BODY_TOO_LARGE)) {
+            // Vert.x answers 413 itself: no Content-Type, no body.
+            assertThat(fixture.path("contentType").asText()).isEmpty();
+        } else {
+            assertThat(fixture.path("contentType").asText()).isNotBlank();
+        }
         assertThat(fixture.path("body").isTextual()).isTrue();
     }
 
