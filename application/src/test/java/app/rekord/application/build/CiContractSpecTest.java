@@ -124,6 +124,34 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_gradle_run_behind_a_wrapper_a_shell_keyword_or_the_windows_wrapper_is_checked() throws IOException {
+        // Given: each shape with the Gradle part of it as written
+        var shapes = List.of(
+                List.of("timeout 30m ./gradlew build", "./gradlew build"),
+                List.of("timeout -s KILL 30m ./gradlew build", "./gradlew build"),
+                List.of("xvfb-run ./gradlew test", "./gradlew test"),
+                List.of("xvfb-run -a ./gradlew test", "./gradlew test"),
+                List.of("nice ./gradlew build", "./gradlew build"),
+                List.of("nice -n 10 ./gradlew build", "./gradlew build"),
+                List.of("if ./gradlew build; then echo ok; fi", "./gradlew build"),
+                List.of("for m in a b; do ./gradlew build; done", "./gradlew build"),
+                List.of("! ./gradlew check", "./gradlew check"),
+                List.of(".\\gradlew.bat build", ".\\gradlew.bat build"),
+                List.of("gradlew.bat build", "gradlew.bat build"));
+
+        // When / Then
+        for (var shape : shapes) {
+            JsonNode workflow = build(PIN, CHECKOUT, run(shape.get(0)));
+            assertThat(jobsStartingTheApplication("ci.yml", workflow)).as(shape.get(0)).containsExactly("ci.yml: build");
+            assertThat(violations(workflow)).as(shape.get(0))
+                    .containsExactly("ci.yml job build: `" + shape.get(1) + "` does not pass -Pcontract.spec");
+
+            JsonNode passing = build(PIN, CHECKOUT, run(shape.get(0).replace(shape.get(1), shape.get(1) + " " + SPEC)));
+            assertThat(violations(passing)).as(shape.get(0) + " with the spec").isEmpty();
+        }
+    }
+
+    @Test
     void a_spec_in_a_sibling_directory_instead_of_the_checkout_is_found() throws IOException {
         // Given
         String sibling = "-Pcontract.spec=../rekord-contract/dist/openapi.yaml";
