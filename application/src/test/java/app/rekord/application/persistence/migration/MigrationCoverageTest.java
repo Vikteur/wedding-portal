@@ -105,6 +105,18 @@ class MigrationCoverageTest {
     }
 
     @Test
+    void a_subfolder_of_the_migration_folder_is_reported(@TempDir Path dir) throws IOException {
+        // Given a V file in a subfolder, which Quarkus and Flyway both walk into
+        Files.writeString(dir.resolve("V1__baseline.sql"), "-- baseline\n");
+        Files.createDirectories(dir.resolve("v2"));
+        Files.writeString(dir.resolve("v2/V2__nested.sql"), "select 1;\n");
+
+        // When / Then the folder is reported, since no V<n>MigrationIT could be matched with the file in it
+        assertThat(MigrationCoverage.unrecognised(dir)).as("unrecognised entries").containsExactly("v2/");
+        assertThat(MigrationCoverage.versions(dir)).as("versions of the top level").containsExactly("1");
+    }
+
+    @Test
     void versions_with_dots_or_underscores_map_to_one_test_class_name(@TempDir Path underscore, @TempDir Path dot)
             throws IOException {
         // Given the same version written both ways
@@ -145,6 +157,22 @@ class MigrationCoverageTest {
         // When / Then only the stray source folders are reported
         assertThat(MigrationCoverage.strayMigrationFolders(root)).containsExactly(
                 "application/src/test/resources/db/migration", "rekord-adapter/src/main/resources/db/migration");
+    }
+
+    @Test
+    void a_java_migration_folder_in_any_module_or_source_set_is_reported(@TempDir Path root) throws IOException {
+        // Given Java-based migration folders, which Flyway reads from classpath:db/migration too, and build output
+        for (String folder : List.of(
+                "application/src/main/java/db/migration",
+                "rekord-adapter/src/test/java/db/migration",
+                "application/build/classes/java/main/db/migration",
+                "application/src/main/java/app/rekord/db/migration")) {
+            Files.createDirectories(root.resolve(folder));
+        }
+
+        // When / Then only the Java source folders named db/migration directly under src/<set>/java are reported
+        assertThat(MigrationCoverage.strayMigrationFolders(root))
+                .containsExactly("application/src/main/java/db/migration", "rekord-adapter/src/test/java/db/migration");
     }
 
     private static Optional<Class<?>> loadByName(String version) {

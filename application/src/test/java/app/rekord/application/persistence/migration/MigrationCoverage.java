@@ -35,12 +35,15 @@ final class MigrationCoverage {
     private static final Pattern TEST_CLASS = Pattern.compile("V([0-9]+(?:_[0-9]+)*)MigrationIT");
     private static final String PACKAGE = MigrationSchemaCheck.class.getPackageName();
     private static final String GATED_FOLDER = "application/src/main/resources/db/migration";
-    private static final Pattern SOURCE_MIGRATION_FOLDER = Pattern.compile("(?:.+/)?src/[^/]+/resources/db/migration");
+    private static final Pattern SOURCE_MIGRATION_FOLDER = Pattern.compile("(?:.+/)?src/[^/]+/(?:resources|java)/db/migration");
     private static final Set<String> SKIPPED_DIRECTORIES = Set.of(".git", ".gradle", "build", "node_modules", "contract");
 
     private MigrationCoverage() {}
 
-    /** The versions of the versioned migrations in the folder, in ascending order. */
+    /**
+     * The versions of the versioned migrations directly in the folder, in ascending order. A V file in a subfolder is not
+     * listed, since no test class could be matched with it: {@link #unrecognised} reports the subfolder instead.
+     */
     static List<String> versions(Path folder) {
         return files(folder).stream()
                 .map(MIGRATION_FILE::matcher)
@@ -90,8 +93,9 @@ final class MigrationCoverage {
     }
 
     /**
-     * The {@code src/<set>/resources/db/migration} folders of the repository other than the application's main one. Every
-     * module's resources reach {@code classpath:db/migration}, so a V file there would escape the gate.
+     * The {@code src/<set>/resources/db/migration} folders of the repository other than the application's main one, and
+     * every {@code src/<set>/java/db/migration} folder, where Flyway finds Java-based migrations. Every module's resources
+     * reach {@code classpath:db/migration}, so a V file there would escape the gate, and so would a migration class.
      */
     static List<String> strayMigrationFolders(Path repoRoot) {
         List<String> stray = new ArrayList<>();
@@ -116,9 +120,20 @@ final class MigrationCoverage {
         return stray.stream().sorted().toList();
     }
 
-    /** The files of the folder that Flyway would not run as a versioned migration. */
+    /**
+     * The entries of the folder that Flyway would not run as a top-level versioned migration: files whose name is not
+     * {@code V<version>__<description>.sql}, and every subfolder, written with a trailing {@code /}. Quarkus and Flyway
+     * both walk into a subfolder, so a V file there would run at boot without a {@code V<version>MigrationIT}.
+     */
     static List<String> unrecognised(Path folder) {
-        return files(folder).stream().filter(n -> !MIGRATION_FILE.matcher(n).matches()).sorted().toList();
+        try (Stream<Path> list = Files.list(folder)) {
+            return list.filter(p -> !Files.isRegularFile(p) || !MIGRATION_FILE.matcher(p.getFileName().toString()).matches())
+                    .map(p -> p.getFileName() + (Files.isDirectory(p) ? "/" : ""))
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static boolean isTested(String version, Optional<Class<?>> candidate) {
