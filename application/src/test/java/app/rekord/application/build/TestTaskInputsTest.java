@@ -1,6 +1,7 @@
 package app.rekord.application.build;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -14,6 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class TestTaskInputsTest {
 
@@ -253,6 +255,18 @@ class TestTaskInputsTest {
     }
 
     @Test
+    void a_failing_git_reports_its_own_message_and_where_it_ran(@TempDir Path notARepository) {
+        // Given a directory that is not a git repository
+        // When the tracked files are listed there
+        // Then the failure carries what git said, and what ran where, not only an exit code
+        assertThatThrownBy(() -> trackedFiles(notARepository))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("not a git repository")
+                .hasMessageContaining("git ls-files")
+                .hasMessageContaining(notARepository.toString());
+    }
+
+    @Test
     void no_build_script_changes_gradles_default_excludes() throws Exception {
         // Given the Kotlin build scripts git tracks
         List<String> scripts =
@@ -345,8 +359,12 @@ class TestTaskInputsTest {
     }
 
     private static List<String> trackedFiles() throws Exception {
+        return trackedFiles(REPO_ROOT);
+    }
+
+    private static List<String> trackedFiles(Path directory) throws Exception {
         Process process = new ProcessBuilder("git", "ls-files", "-z")
-                .directory(REPO_ROOT.toFile())
+                .directory(directory.toFile())
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start();
         String output = new String(process.getInputStream().readAllBytes());
