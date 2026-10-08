@@ -8,13 +8,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
+import io.restassured.config.HttpClientConfig;
+import io.restassured.config.RestAssuredConfig;
 import io.restassured.response.Response;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -225,5 +232,123 @@ class ErrorEnvelopeMapperIT {
 
         assertThat(log.fromMapper()).isEmpty();
         assertThat(log.errors()).isEmpty();
+    }
+
+    // --- TASK-5.7: a cause cycle on the request path ---
+
+    private static final String QUARKUS_REST_EXCEPTION_MAPPER =
+            "org.jboss.resteasy.reactive.server.core.RuntimeExceptionMapper";
+
+    /**
+     * Quarkus REST 3.39.1 does not survive a cause cycle on its own: after our mapper has run,
+     * {@code RuntimeExceptionMapper.mapException} calls {@code logBlockingErrorIfRequired}, whose
+     * {@code isKnownProblem} walks {@code getCause()} in a {@code while (e != null)} loop with no visited set. A cycle
+     * keeps that worker thread at 100% CPU and the response is never written, although the catch-all had already
+     * logged its one line. {@code AcyclicCauseInterceptor} rethrows an acyclic copy from every resource method, which
+     * is what these two tests hold. The socket timeouts make a regression a failure with a message that names the
+     * looping method, instead of a build that never ends.
+     */
+    @Test
+    @Timeout(60)
+    void an_exception_with_a_cyclic_cause_answers_the_500_fixture_and_logs_one_redacted_error() throws Exception {
+        // When: the resource method throws top -> SQLException -> top
+        Response response = getWithinTwentySeconds(PROBE + "/cyclic-cause");
+
+        // Then: the cycle reached the catch-all, which answered and logged exactly as for an acyclic chain
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /**
+     * Every real resource is a class without a {@code @Path} of its own that implements a generated interface which
+     * has one, so the guard has to reach that shape too, not only a class annotated itself.
+     */
+    @Test
+    @Timeout(60)
+    void a_resource_that_implements_a_path_interface_gets_the_same_guard() throws Exception {
+        // When
+        Response response = getWithinTwentySeconds("/api/test-only/error-envelope-interface/cyclic-cause");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope-interface/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /**
+     * The guard also has to catch what another interceptor of the method throws, which only holds while it is the
+     * outermost one. {@code CyclicChainInterceptor} stands for validation or a transaction and runs after it.
+     */
+    @Test
+    @Timeout(60)
+    void a_cyclic_chain_thrown_by_another_interceptor_answers_the_500_fixture_and_logs_one_redacted_error()
+            throws Exception {
+        // When
+        Response response = getWithinTwentySeconds(PROBE + "/cyclic-from-interceptor");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-from-interceptor");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /**
+     * The {@code @Path} can also sit on an abstract superclass of the class that serves it; the guard has to reach that
+     * shape too.
+     */
+    @Test
+    @Timeout(60)
+    void a_resource_whose_abstract_superclass_carries_the_path_gets_the_same_guard() throws Exception {
+        // When
+        Response response = getWithinTwentySeconds("/api/test-only/error-envelope-superclass/cyclic-cause");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope-superclass/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /** Sockets that give up, so a request the server never answers fails the test instead of hanging it. */
+    private static Response getWithinTwentySeconds(String path) throws Exception {
+        RestAssuredConfig bounded = RestAssured.config()
+                .httpClient(HttpClientConfig.httpClientConfig()
+                        .setParam("http.connection.timeout", 5_000)
+                        .setParam("http.socket.timeout", 20_000));
+        try {
+            return given().config(bounded).when().get(path);
+        } catch (Exception failure) {
+            // REST Assured rethrows the client's checked exception without declaring it, so it is caught as Exception
+            if (failure instanceof SocketTimeoutException) {
+                throw new AssertionError(
+                        "No answer within 20 s to a request whose exception has a cyclic cause; a thread is looping in "
+                                + whereQuarkusRestLoops(),
+                        failure);
+            }
+            throw failure;
+        }
+    }
+
+    private void assertRedactedCyclicTraceLogged() {
+        String text = LogCapture.text(log.errors().get(0));
+        assertThat(text)
+                .contains("java.lang.IllegalStateException")
+                .contains("Caused by: java.sql.SQLException")
+                .contains("ErrorEnvelopeProbeResource")
+                .doesNotContain("CIRCULAR REFERENCE");
+    }
+
+    /** The Quarkus REST class, the methods on the looping thread's stack (innermost first) and the thread, if any. */
+    private static String whereQuarkusRestLoops() {
+        for (var thread : Thread.getAllStackTraces().entrySet()) {
+            String methods = Arrays.stream(thread.getValue())
+                    .filter(frame -> frame.getClassName().equals(QUARKUS_REST_EXCEPTION_MAPPER))
+                    .map(frame -> frame.getMethodName() + ":" + frame.getLineNumber())
+                    .collect(Collectors.joining(" <- "));
+            if (!methods.isEmpty()) {
+                return QUARKUS_REST_EXCEPTION_MAPPER + " [" + methods + "] on thread " + thread.getKey().getName();
+            }
+        }
+        return "no thread inside " + QUARKUS_REST_EXCEPTION_MAPPER;
     }
 }
