@@ -2,7 +2,8 @@ name: build-feature
 description: |
   Use when: building one Backlog ticket (name its TASK-n) or one small request, end to end in this repo.
   Steps: read the ticket -> plan -> STOP approval when the ticket or the plan touches the STOP list -> per step, the test
-  agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> push and open a
+  agent writes failing tests, then the build agent makes them pass -> review -> test-first check -> fold a fresh
+  Groma scan into the architecture map and curate what it added (repos with groma/ only) -> push and open a
   DRAFT pull request -> wait for CI by commit SHA, fix a red run (at most 3 rounds) -> mark it ready for your merge ->
   wait for your merge, which is the review and the STOP approval -> finalize the Backlog ticket (Done) -> commit and
   push the Backlog ticket, and delete the run's branch and worktree. The retro (lessons learned and the ticket's ADRs)
@@ -127,9 +128,41 @@ nodes:
     bash: |
       bash .archon/scripts/tdd-check.sh "$ARTIFACTS_DIR" "$BASE_BRANCH"
 
+  # The Groma architecture map (TASK-36), in a repo with groma/ only: a script commits a fresh scan; the model curates
+  # only what that scan added and the repo's groma-check.sh still rejects. CI runs the same check, so it gates the merge.
+  - id: map-scan
+    depends_on: [tdd-check]
+    bash: |
+      bash .archon/scripts/groma-sync.sh
+    output_format:
+      type: object
+      properties:
+        curate: { type: boolean }
+      required: [curate]
+
+  - id: map-curate
+    depends_on: [map-scan]
+    when: "$map-scan.output.curate == 'true'"
+    model: "@analyse"
+    prompt: |
+      Request: $ARGUMENTS
+      This branch changed the code, and a fresh Groma scan (already committed) put elements into the architecture map
+      under groma/ that `bash .github/scripts/groma-check.sh` rejects; run it to see which. Run `groma agent-instructions`
+      and read the guides it names for structure, descriptions and relationships. Change groma/ only through the groma
+      CLI, never by editing its files. Place each new element under the container it belongs to; combine it into the
+      existing component with the same responsibility, or keep it as a component when its responsibility is new.
+      Describe what is new or changed, and add relationships only where the source supports them. Leave the rest of the
+      map as it is. Run the check again until it passes, then commit groma/ alone as `docs(groma): <what changed>`.
+
+  - id: map-check
+    depends_on: [map-scan, map-curate]
+    trigger_rule: none_failed_min_one_success
+    bash: |
+      if [ -f .github/scripts/groma-check.sh ]; then bash .github/scripts/groma-check.sh; fi
+
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
   - id: pr-text
-    depends_on: [tdd-check]
+    depends_on: [map-check]
     model: "@build"
     prompt: |
       Request: $ARGUMENTS
