@@ -30,7 +30,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         UserEntity duplicate = IdentityRows.user(2, "Planner@example.com", "Pat Planner");
         Outcome outcome = capturing(() -> em.persist(duplicate));
 
-        // Then the address is in no record and no message
+        // Then the refusal was logged, and the address is in no record and no message
+        outcome.assertLogged("ux_users_email");
         outcome.assertNoneContains("example.com");
         outcome.assertNoneContains("Pat Planner");
     }
@@ -44,13 +45,14 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(user));
 
-        // Then neither the hash nor the address is in any record or message
+        // Then the refusal was logged, and neither the hash nor the address is in any record or message
+        outcome.assertLogged("users_status_check");
         outcome.assertNoneContains(IdentityRows.PASSWORD_HASH);
         outcome.assertNoneContains("example.com");
     }
 
     @Test
-    void a_refused_session_row_shows_no_token_hash() throws SQLException {
+    void a_refused_session_row_shows_no_token_hash() {
         // Given an organisation, a user, and a user session that also names a portal (breaks the subject check)
         OrganizationEntity org = IdentityRows.organization();
         UserEntity user = IdentityRows.planner();
@@ -64,7 +66,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(session));
 
-        // Then the token hash is in no record or message, in hex or in PostgreSQL's \x form
+        // Then the refusal was logged, and the token hash is in no record or message, in hex or in PostgreSQL's \x form
+        outcome.assertLogged("ck_sessions_subject");
         String hex = HexFormat.of().formatHex(IdentityRows.tokenHash(1));
         outcome.assertNoneContains(hex);
         outcome.assertNoneContains("\\x" + hex);
@@ -84,6 +87,11 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
     }
 
     private record Outcome(Throwable refused, List<LogRecord> records) {
+
+        /** A captured record names the refused constraint, so the log half of the check cannot pass vacuously. */
+        void assertLogged(String constraint) {
+            assertThat(records).anyMatch(record -> LogCapture.text(record).contains(constraint));
+        }
 
         void assertNoneContains(String value) {
             // The refusal was produced, so the test cannot pass vacuously
