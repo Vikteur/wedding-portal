@@ -69,7 +69,7 @@ EOF
 layout() {
   local d="$root/$1"; mkdir -p "$d"
   umb="$d/umbrella"; mkdir -p "$umb/backlog" "$umb/docs/retro/TASK-7.1/adr"
-  echo 'project_name: "t"' > "$umb/backlog/config.yml"
+  echo 'project_name: "t"' > "$umb/backlog/config.yml"; echo '# Retro' > "$umb/docs/retro/README.md"
   echo x > "$umb/docs/retro/TASK-7.1/adr/ADR-01-one.md"; echo x > "$umb/docs/retro/TASK-7.1/adr/ADR-02-two.md"
   git init -q -b main "$d/wp"; git -C "$d/wp" config user.name t; git -C "$d/wp" config user.email t@t
   echo base > "$d/wp/README.md"; git -C "$d/wp" add -A; git -C "$d/wp" commit -qm base
@@ -122,11 +122,25 @@ check "E2 commits from git" $(has 'feat: local work' "$ev"; echo $?)
 layout e3; rm -rf "$umb"; evid "TASK-7.1"
 check "E3 exit non-zero without an umbrella" $([ "$rc" -ne 0 ]; echo $?)
 
-# E4. BACKLOG_CWD overrides the search.
-layout e4; other="$root/e4/elsewhere"; mkdir -p "$other/backlog"; echo x > "$other/backlog/config.yml"
-evid "TASK-7.1" BACKLOG_CWD="$other"
-check "E4 BACKLOG_CWD wins" $(same umbrella "$other"; echo $?)
+# E4. RETRO_HOME overrides the search; BACKLOG_CWD (a ticket's backlog, TASK-36) does not name the umbrella.
+layout e4; other="$root/e4/elsewhere"; mkdir -p "$other/docs/retro"; echo x > "$other/docs/retro/README.md"
+evid "TASK-7.1" RETRO_HOME="$other" BACKLOG_CWD="$root/e4/wp"
+check "E4 RETRO_HOME wins" $(same umbrella "$other"; echo $?)
 check "E4 next ADR in that umbrella is 01" $(echo "$out" | grep -qF '"next_adr":"01"'; echo $?)
+
+# E8. A product repo with its own backlog (TASK-36) is not the umbrella: the umbrella is the repo with the retro index.
+layout e8; mkdir -p "$root/e8/wp/backlog"; echo 'project_name: "wp"' > "$root/e8/wp/backlog/config.yml"
+evid "TASK-7.1 add the thing"
+check "E8 umbrella is the retro home, not the product backlog" $(same umbrella "$umb"; echo $?)
+
+# E9. A ticket of any backlog's prefix names the folder (the umbrella's own tickets use the tool prefix).
+layout e9; echo 'task_prefix: "tool"' >> "$umb/backlog/config.yml"
+mkdir -p "$root/e9/wp/backlog"; echo 'task_prefix: "task"' > "$root/e9/wp/backlog/config.yml"
+evid "TOOL-2 fix the script"
+check "E9 folder docs/retro/TOOL-2" $(echo "$out" | grep -qF '"dir":"docs/retro/TOOL-2"'; echo $?)
+check "E9 task reported" $(echo "$out" | grep -qF '"task":"TOOL-2"'; echo $?)
+evid "TASK-7.1 add the thing"
+check "E9 a TASK ticket still names its folder" $(echo "$out" | grep -qF '"dir":"docs/retro/TASK-7.1"'; echo $?)
 
 # E5. After the merge: HEAD is main, the run's branch and worktree are gone, the pull request is the argument.
 evidpr() { # evidpr <request> <pr> [env...]: runs retro-evidence.sh from the product repo's main checkout; sets out rc ev

@@ -121,5 +121,26 @@ d=$(dirname "$main_dir"); mkdir "$d/empty-beside-main"
 out=$( (cd "$main_dir" && PATH="$root/bin:$PATH" STUB_HEAD="$head" ARCHON_LOG="$log"   bash "$script" "" https://github.com/o/repo/pull/7 "$main_dir") 2>&1 ); rc=$?
 check "7 empty folder beside the main checkout survives" $([ -d "$d/empty-beside-main" ]; echo $?)
 
+# 8. The ticket's backlog is in the pull request's own repo (TASK-36): its main is behind origin by the merge when
+# finalize changes the ticket. The ticket is still committed on top of the merge and pushed.
+scenario eight
+mkdir -p "$main_dir/backlog/tasks"; echo open > "$main_dir/backlog/tasks/task-7.md"
+git -C "$main_dir" add -A; git -C "$main_dir" commit -qm ticket; git -C "$main_dir" push -q origin main
+git clone -q "$root/eight/origin.git" "$root/eight/merger" 2>/dev/null
+git -C "$root/eight/merger" -c user.name=t -c user.email=t@t merge -q --no-ff origin/feat -m "Merge pull request #7"
+git -C "$root/eight/merger" push -q origin main
+echo done > "$main_dir/backlog/tasks/task-7.md"
+cat > "$root/bin/backlog" <<'STUB'
+#!/usr/bin/env bash
+printf '{"task":{"status":"Done","path":"%s/backlog/tasks/task-7.md","parentTaskId":null}}\n' "$BACKLOG_CWD"
+STUB
+chmod +x "$root/bin/backlog"
+out=$( (cd "$wt" && PATH="$root/bin:$PATH" STUB_HEAD="$head" ARCHON_LOG="$log" \
+  bash "$script" TASK-7 https://github.com/o/repo/pull/7 "$main_dir") 2>&1 ); rc=$?
+check "8 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "8 ticket commit pushed" $(git --git-dir="$root/eight/origin.git" log --format=%s main | grep -q '^backlog: TASK-7 done'; echo $?)
+check "8 on top of the merge" $(git --git-dir="$root/eight/origin.git" log --format=%s main -2 | tail -1 | grep -q 'Merge pull request #7'; echo $?)
+check "8 ticket as finalized" $([ "$(git --git-dir="$root/eight/origin.git" show main:backlog/tasks/task-7.md)" = done ]; echo $?)
+
 echo "close-out tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

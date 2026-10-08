@@ -163,6 +163,15 @@ check "S3b exit 0" $([ "$rc" -eq 0 ]; echo $?)
 check "S3b nothing pushed" $([ "$(origin_log s3b | head -1)" = "full retro" ]; echo $?)
 check "S3b full section kept" $(has 'written by the retro agent' "$f/lessons-learned.md" && git -C "$u" diff --quiet; echo $?)
 
+# S3c. A ticket of the umbrella's own prefix (TASK-36: each backlog has its own) names the run's folder too.
+fixtures s3c
+echo 'task_prefix: "tool"' >> "$u/backlog/config.yml"
+git -C "$u" commit -qam "tool prefix"; git -C "$u" push -q origin main
+get "$R3" cancelled "Build TOOL-2" build-feature "$nodes_plan" > "$STUB/$R3.get.json"
+sh_ "$stopped" "$R3"
+check "S3c exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "S3c folder named by the ticket" $(pushed s3c docs/retro/TOOL-2/lessons-learned.md 2>/dev/null | grep -q '^## Run cccccccc'; echo $?)
+
 # ---------- retro-stopped.sh --sweep ----------
 # S4. Every stopped build-feature run without a section gets one; other workflows and finished runs are left out.
 fixtures s4; sh_ "$stopped" --sweep
