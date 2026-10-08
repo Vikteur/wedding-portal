@@ -27,7 +27,7 @@ class RouteGuardTest {
             public interface AuthApi {
                 @POST @Path("/sign-in") void signIn();
                 @POST @Path("/other") void other();
-                @GET @Path("/not-a-route-annotation-free") void plain();
+                @GET @Path("/plain") void plain();
                 void notARoute();
             }
             """;
@@ -319,7 +319,7 @@ class RouteGuardTest {
     }
 
     @Test
-    void a_class_implementing_no_generated_interface_is_not_scanned() {
+    void only_concrete_classes_implementing_a_generated_interface_are_scanned() {
         String outsideApi = """
                 package app.rekord.elsewhere;
 
@@ -352,6 +352,42 @@ class RouteGuardTest {
 
         assertThat(RouteGuard.implementations(fixtures)).isEmpty();
         assertThat(RouteGuard.unguarded(fixtures, Set.of())).isEmpty();
+    }
+
+    @Test
+    void overloads_of_a_route_share_one_name_and_one_allow_list_entry_covers_them_all() {
+        // Given a generated interface with two routed overloads of same, and an unannotated implementation
+        String overloadApi = """
+                package app.rekord.api;
+
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.PathParam;
+
+                public interface OverloadApi {
+                    @GET @Path("/a") void same();
+                    @GET @Path("/b/{id}") void same(@PathParam("id") String id);
+                }
+                """;
+        String overloadResource = """
+                package app.rekord.fixture;
+
+                public class OverloadResource implements app.rekord.api.OverloadApi {
+                    @Override public void same() {}
+                    @Override public void same(String id) {}
+                }
+                """;
+        JavaClasses fixtures = FixtureCompiler.compile(overloadApi, overloadResource);
+
+        // When the routes are listed and the implementation is checked, without and with the allow-list entry
+        Set<String> routes = RouteGuard.routes(fixtures);
+        Set<String> unlisted = RouteGuard.unguarded(fixtures, Set.of());
+        Set<String> listed = RouteGuard.unguarded(fixtures, Set.of("OverloadApi#same"));
+
+        // Then both overloads count once, and the one entry exempts both
+        assertThat(routes).containsExactly("OverloadApi#same");
+        assertThat(unlisted).containsExactly("OverloadApi#same  (OverloadResource)");
+        assertThat(listed).isEmpty();
     }
 
     @Test
@@ -624,6 +660,7 @@ class RouteGuardTest {
     void every_production_implementation_of_a_generated_interface_is_guarded_or_public() {
         JavaClasses production = ProductionClasses.importAll();
 
+        assertThatCode(() -> RouteGuard.requireFloor(RouteGuard.routes(production))).doesNotThrowAnyException();
         assertThat(RouteGuard.implementations(production))
                 .contains("app.rekord.adapter.web.health.HealthResource");
         assertThat(RouteGuard.unguarded(production, RouteGuard.PUBLIC.keySet())).isEmpty();

@@ -3,19 +3,27 @@ package app.rekord.application.security;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Reads the routes of the generated {@code app.rekord.api} interfaces and checks the public allow-list against them. */
+/**
+ * Reads the routes of the generated {@code app.rekord.api} interfaces, checks the public allow-list against them, and
+ * reports routes whose implementing method and declaring class carry no access annotation (BR-OPS-22). It also reports
+ * allow-listed routes that carry one, every {@code @PermitAll} (D2), and resources it cannot see.
+ */
 final class RouteGuard {
 
     static final String API_PACKAGE = "app.rekord.api";
+
+    /** A floor, not the count: the pinned contract has 84 operations, and a contract bump must not need an edit here. */
     static final int FLOOR = 60;
     static final String PERMIT_ALL = "jakarta.annotation.security.PermitAll";
 
@@ -27,7 +35,10 @@ final class RouteGuard {
             "jakarta.annotation.security.PermitAll",
             "jakarta.annotation.security.DenyAll");
 
-    /** The public operations, each with the reason it needs no session. */
+    /**
+     * The public operations, each with the reason it needs no session. A name is {@code Api#method}, so one entry
+     * covers every overload of that method.
+     */
     static final Map<String, String> PUBLIC = publicOperations();
 
     private RouteGuard() {}
@@ -44,7 +55,10 @@ final class RouteGuard {
         return Collections.unmodifiableMap(operations);
     }
 
-    /** The {@code Interface#method} names of every routed method of an interface directly in {@code app.rekord.api}. */
+    /**
+     * The {@code Interface#method} names of every routed method of an interface directly in {@code app.rekord.api}.
+     * Overloads share one name, so they count once.
+     */
     static Set<String> routes(JavaClasses classes) {
         Set<String> routes = new TreeSet<>();
         for (JavaClass type : classes) {
@@ -206,7 +220,7 @@ final class RouteGuard {
 
     private static boolean isImplementation(JavaClass type) {
         return !type.isInterface()
-                && !type.getModifiers().contains(com.tngtech.archunit.core.domain.JavaModifier.ABSTRACT)
+                && !type.getModifiers().contains(JavaModifier.ABSTRACT)
                 && type.getAllRawInterfaces().stream().anyMatch(RouteGuard::isApi);
     }
 
@@ -223,7 +237,7 @@ final class RouteGuard {
         return Optional.empty();
     }
 
-    private static boolean hasAccessAnnotation(com.tngtech.archunit.core.domain.properties.HasAnnotations<?> target) {
+    private static boolean hasAccessAnnotation(HasAnnotations<?> target) {
         return ACCESS_ANNOTATIONS.stream().anyMatch(target::isAnnotatedWith);
     }
 }

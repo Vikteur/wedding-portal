@@ -40,6 +40,7 @@ class RouteGuardIT {
 
         // Then
         assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.getHeader("Content-Type")).isEqualTo("application/json;charset=UTF-8");
         assertThat(response.then().extract().asByteArray()).isEqualTo("{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
     }
 
