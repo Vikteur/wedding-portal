@@ -61,6 +61,31 @@ class RedactedCauseTest {
     }
 
     @Test
+    void the_cause_of_a_suppressed_exception_and_the_suppressed_of_a_cause_are_redacted_too() {
+        // Given: the sentinels sit one level below a suppressed exception and in a cause's suppressed exception
+        IllegalStateException top = new IllegalStateException("top member@example.com");
+        top.addSuppressed(new IllegalArgumentException(
+                "suppressed", new java.io.UncheckedIOException("tok-example-123", new java.io.IOException("pw-test-0001"))));
+        java.sql.SQLException cause = new java.sql.SQLException("Testa Persona");
+        cause.addSuppressed(new UnsupportedOperationException("+12025550100 4821-7735"));
+        top.initCause(cause);
+
+        // When
+        Throwable redacted = RedactedCause.of(top);
+
+        // Then
+        for (String rendered : new String[] {printed(redacted), formatted(redacted)}) {
+            assertThat(rendered)
+                    .contains("java.io.UncheckedIOException")
+                    .contains("Caused by: java.io.IOException")
+                    .contains("java.lang.UnsupportedOperationException");
+            for (String sentinel : ErrorEnvelopeProbeResource.SENTINELS) {
+                assertThat(rendered).doesNotContain(sentinel);
+            }
+        }
+    }
+
+    @Test
     void a_cause_cycle_terminates() {
         assertThat(RedactedCause.of(ErrorEnvelopeProbeResource.chain())).isNotNull();
     }
