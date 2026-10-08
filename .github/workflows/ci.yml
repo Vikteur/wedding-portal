@@ -92,6 +92,9 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -121,3 +124,12 @@ jobs:
 
       - name: Check image
         run: bash .github/scripts/image-check.sh wedding-portal:ci
+
+      - name: Sign in to ghcr.io with the workflow's own token
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Sign out of ghcr.io
+        if: always()
+        run: docker logout ghcr.io
