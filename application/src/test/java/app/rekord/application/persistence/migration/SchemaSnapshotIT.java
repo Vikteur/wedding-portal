@@ -180,6 +180,221 @@ class SchemaSnapshotIT {
         }
     }
 
+    private static final String TAGGED = """
+            create table tagged (code text not null, gone_at timestamp with time zone, label text);
+            create unique index ux_tagged_code on tagged (lower(code)) where gone_at is null;
+            create index ix_tagged_label on tagged (label);
+            """;
+
+    private static final SchemaSnapshot.Index UX_TAGGED_CODE = new SchemaSnapshot.Index("tagged", "ux_tagged_code",
+            "CREATE UNIQUE INDEX ux_tagged_code ON public.tagged USING btree (lower(code)) WHERE (gone_at IS NULL)");
+    private static final SchemaSnapshot.Index IX_TAGGED_LABEL = new SchemaSnapshot.Index("tagged", "ix_tagged_label",
+            "CREATE INDEX ix_tagged_label ON public.tagged USING btree (label)");
+
+    @Test
+    void lists_an_index_that_is_no_constraint_with_its_table_name_and_definition() throws SQLException {
+        // Given a partial expression unique index and a plain index
+        try (Connection c = freshDatabase()) {
+            execute(c, TAGGED);
+
+            // When the schema is read
+            SchemaSnapshot snapshot = SchemaSnapshot.read(c);
+
+            // Then both are listed, ordered by table and name, with PostgreSQL's pg_get_indexdef text
+            assertThat(snapshot.indexes()).containsExactly(IX_TAGGED_LABEL, UX_TAGGED_CODE);
+        }
+    }
+
+    @Test
+    void an_index_that_backs_a_primary_key_or_unique_constraint_is_not_listed() throws SQLException {
+        // Given the parent and child fixture: primary keys and a unique constraint only
+        try (Connection c = freshDatabase()) {
+            execute(c, PARENT_AND_CHILD);
+            assertThat(SchemaSnapshot.read(c).indexes()).isEmpty();
+
+            // And a foreign key that references a column backed by a plain unique index
+            execute(c, """
+                    create table target (code text not null);
+                    create unique index ux_target_code on target (code);
+                    create table pointer (target_code text references target (code));
+                    """);
+
+            // When the schema is read, then that index is still listed: no constraint of its own table hides it
+            assertThat(SchemaSnapshot.read(c).indexes()).containsExactly(new SchemaSnapshot.Index("target",
+                    "ux_target_code", "CREATE UNIQUE INDEX ux_target_code ON public.target USING btree (code)"));
+        }
+    }
+
+    @Test
+    void a_dropped_index_or_a_changed_predicate_expression_or_uniqueness_makes_the_snapshot_differ()
+            throws SQLException {
+        // Given the declared schema with its indexes
+        SchemaSnapshot declared;
+        try (Connection c = freshDatabase()) {
+            execute(c, TAGGED);
+            declared = SchemaSnapshot.read(c);
+        }
+        assertThat(declared.indexes()).hasSize(2);
+
+        // When an index is dropped, or its predicate, expression or uniqueness differs, then the snapshot is not equal
+        for (String change : List.of(
+                "drop index ix_tagged_label",
+                "drop index ux_tagged_code",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (lower(code))",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (code) where gone_at is null",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (lower(code))"
+                        + " where gone_at is not null",
+                "drop index ux_tagged_code; create unique index ux_tagged_code on tagged (upper(code))"
+                        + " where gone_at is null",
+                "drop index ix_tagged_label; create index ix_tagged_label on tagged (label) where gone_at is null",
+                "drop index ix_tagged_label; create unique index ix_tagged_label on tagged (label)")) {
+            try (Connection c = freshDatabase()) {
+                execute(c, TAGGED);
+                execute(c, change);
+                assertThat(SchemaSnapshot.read(c)).as(change).isNotEqualTo(declared);
+            }
+        }
+    }
+
+    @Test
+    void an_index_of_the_history_table_or_of_another_schema_is_not_listed() throws SQLException {
+        // Given an index on the Flyway history table and an index in a schema of its own
+        try (Connection c = freshDatabase()) {
+            execute(c, """
+                    create table flyway_schema_history (installed_rank integer primary key, success boolean);
+                    create index flyway_schema_history_s_idx on flyway_schema_history (success);
+                    create schema audit;
+                    create table audit.entries (note text);
+                    create index ix_entries_note on audit.entries (note);
+                    """);
+
+            // When the schema is read, then neither is listed
+            assertThat(SchemaSnapshot.read(c).indexes()).isEmpty();
+        }
+    }
+
+    private static final String DEFAULTED = """
+            create table defaulted (
+                id bigint generated always as identity primary key,
+                serial_no integer not null,
+                state text not null default 'NEW',
+                seen_at timestamp with time zone not null default now(),
+                note text
+            );
+            """;
+
+    @Test
+    void a_dropped_or_changed_column_default_or_identity_makes_the_snapshot_differ() throws SQLException {
+        // Given the declared schema with a literal default, an expression default and an identity column
+        SchemaSnapshot declared;
+        try (Connection c = freshDatabase()) {
+            execute(c, DEFAULTED);
+            declared = SchemaSnapshot.read(c);
+        }
+        assertThat(declared.defaults()).hasSize(3);
+
+        // When a default is dropped, changed or added, or an identity is added, dropped, switched or has one of its
+        // options (increment, start, minimum, maximum, cycle) changed, then the snapshot is not equal
+        for (String change : List.of(
+                "alter table defaulted alter column state drop default",
+                "alter table defaulted alter column state set default 'OLD'",
+                "alter table defaulted alter column seen_at set default clock_timestamp()",
+                "alter table defaulted alter column seen_at drop default",
+                "alter table defaulted alter column note set default 'none'",
+                "alter table defaulted alter column serial_no add generated by default as identity",
+                "alter table defaulted alter column id drop identity",
+                "alter table defaulted alter column id set generated by default",
+                "alter table defaulted alter column id set increment by 10",
+                "alter table defaulted alter column id set start with 1000",
+                "alter table defaulted alter column id set minvalue 0",
+                "alter table defaulted alter column id set maxvalue 1000",
+                "alter table defaulted alter column id set cycle")) {
+            try (Connection c = freshDatabase()) {
+                execute(c, DEFAULTED);
+                execute(c, change);
+                assertThat(SchemaSnapshot.read(c)).as(change).isNotEqualTo(declared);
+            }
+        }
+    }
+
+    @Test
+    void lists_a_column_default_as_postgresql_renders_it_and_an_identity_column_with_its_generation_and_options()
+            throws SQLException {
+        // Given a literal default, an expression default and an identity column of each generation, in two tables
+        try (Connection c = freshDatabase()) {
+            execute(c, DEFAULTED);
+            execute(c, """
+                    create table counted (
+                        n integer generated by default as identity,
+                        label varchar(10) default 'x',
+                        plain integer
+                    )""");
+            execute(c, """
+                    create table tuned (
+                        code smallint generated always as identity
+                            (start with 100 increment by 5 minvalue 10 maxvalue 500 cycle)
+                    )""");
+
+            // When the schema is read
+            SchemaSnapshot snapshot = SchemaSnapshot.read(c);
+
+            // Then each is listed once, ordered by table and column position; a column without either is not; an
+            // identity reads its generation, then its start, increment, minimum and maximum, then cycle or no cycle
+            assertThat(snapshot.defaults()).containsExactly(
+                    new SchemaSnapshot.Default("counted", "n", null,
+                            "BY DEFAULT start 1 increment 1 min 1 max 2147483647 no cycle"),
+                    new SchemaSnapshot.Default("counted", "label", "'x'::character varying", null),
+                    new SchemaSnapshot.Default("defaulted", "id", null,
+                            "ALWAYS start 1 increment 1 min 1 max 9223372036854775807 no cycle"),
+                    new SchemaSnapshot.Default("defaulted", "state", "'NEW'::text", null),
+                    new SchemaSnapshot.Default("defaulted", "seen_at", "now()", null),
+                    new SchemaSnapshot.Default("tuned", "code", null,
+                            "ALWAYS start 100 increment 5 min 10 max 500 cycle"));
+        }
+    }
+
+    @Test
+    void a_default_of_the_history_table_a_view_or_another_schema_is_not_listed() throws SQLException {
+        // Given a default on the Flyway history table, on a view, and on a table of a schema of its own
+        try (Connection c = freshDatabase()) {
+            execute(c, """
+                    create table flyway_schema_history (
+                        installed_rank integer primary key, installed_on timestamp default now());
+                    create schema audit;
+                    create table audit.entries (note text default 'x');
+                    create table base (state text default 'NEW');
+                    create view base_view as select state from base;
+                    alter view base_view alter column state set default 'VIEW';
+                    """);
+
+            // When the schema is read, then only the default of the table of public is listed
+            assertThat(SchemaSnapshot.read(c).defaults())
+                    .containsExactly(new SchemaSnapshot.Default("base", "state", "'NEW'::text", null));
+        }
+    }
+
+    @Test
+    void the_four_and_five_argument_snapshots_declare_no_column_default() {
+        // Given snapshots built with the components that predate column defaults and identity
+        SchemaSnapshot four = new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
+        SchemaSnapshot five = new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of());
+
+        // Then they declare none, and equal the empty snapshot
+        assertThat(four.defaults()).isEmpty();
+        assertThat(five.defaults()).isEmpty();
+        assertThat(SchemaSnapshot.empty()).isEqualTo(four).isEqualTo(five);
+    }
+
+    @Test
+    void the_four_argument_snapshot_declares_no_index() {
+        // Given a snapshot built with the four components that predate indexes
+        SchemaSnapshot snapshot = new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
+
+        // Then it declares no index, and equals the empty snapshot
+        assertThat(snapshot.indexes()).isEmpty();
+        assertThat(SchemaSnapshot.empty()).isEqualTo(snapshot);
+    }
+
     private static SchemaSnapshot declared() {
         return new SchemaSnapshot(
                 List.of(),

@@ -10,14 +10,21 @@ import java.util.List;
 /**
  * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
  * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
- * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, plus the names of the other non-system schemas.
+ * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, the column defaults and identity settings (generation, start,
+ * increment, minimum, maximum and cycle), plus the names of the other non-system schemas, and the indexes that back no
+ * constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them.
  * {@code flyway_schema_history} is never part of it.
  * <p>
- * Not covered: indexes that are not constraints (including partial unique indexes), column defaults, identity and
- * sequences, views, functions, triggers and extensions, enum labels, collation, exclusion constraints, foreign key
- * on-update, match and deferrability, and the content of other schemas.
+ * Defaults and identity are read from {@code information_schema.columns}: {@code column_default} as PostgreSQL renders
+ * it, and {@code identity_generation} with {@code identity_start}, {@code identity_increment},
+ * {@code identity_minimum}, {@code identity_maximum} and {@code identity_cycle}. Not covered: the position of an
+ * identity sequence ({@code restart}, a {@code nextval}), which is data and no schema shape; generated columns
+ * (PostgreSQL leaves their {@code column_default} empty), sequences, views, functions, triggers and extensions, enum
+ * labels, collation, exclusion constraints, foreign key on-update, match and deferrability, and the content of other
+ * schemas.
  */
-public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints) {
+public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
+        List<Index> indexes, List<Default> defaults) {
 
     /**
      * {@code type} is {@code data_type} plus {@code (n)} for a length, {@code (p,s)} for a numeric precision and scale,
@@ -28,17 +35,45 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     /** {@code detail}: the check clause, {@code references <table>(<cols>) on delete <rule>} for a foreign key, else empty. */
     public record Constraint(String table, String name, String type, List<String> columns, String detail) {}
 
+    /**
+     * An index of {@code public} that backs no PRIMARY KEY, UNIQUE or EXCLUSION constraint of its own table;
+     * {@code definition} is PostgreSQL's {@code pg_get_indexdef} text.
+     */
+    public record Index(String table, String name, String definition) {}
+
+    /**
+     * A column of {@code public} that has a default or is an identity column. {@code expression} is
+     * {@code column_default} as PostgreSQL renders it, null for an identity column; {@code identity} is
+     * {@code identity_generation} ({@code ALWAYS} or {@code BY DEFAULT}) followed by the options of the identity
+     * sequence, for example {@code BY DEFAULT start 1 increment 1 min 1 max 2147483647 no cycle}, and null when the
+     * column is no identity column.
+     */
+    public record Default(String table, String column, String expression, String identity) {}
+
+    /** A snapshot that declares no column default and no identity. */
+    public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
+            List<Constraint> constraints, List<Index> indexes) {
+        this(schemas, tables, columns, constraints, indexes, List.of());
+    }
+
+    /** A snapshot that declares no index, no column default and no identity. */
+    public SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns,
+            List<Constraint> constraints) {
+        this(schemas, tables, columns, constraints, List.of(), List.of());
+    }
+
     private static final String HISTORY = "flyway_schema_history";
     private static final int DEFAULT_TIME_PRECISION = 6;
     // PostgreSQL 17 lists every NOT NULL as a CHECK named <oid>_<oid>_<n>_not_null; nullability lives on the column.
     private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
 
     public static SchemaSnapshot empty() {
-        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
+        return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static SchemaSnapshot read(Connection connection) throws SQLException {
-        return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection));
+        return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection),
+                indexes(connection), defaults(connection));
     }
 
     private static List<String> schemas(Connection c) throws SQLException {
@@ -142,6 +177,58 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
             }
         }
         return result;
+    }
+
+    private static List<Index> indexes(Connection c) throws SQLException {
+        List<Index> result = new ArrayList<>();
+        try (PreparedStatement s = c.prepareStatement("""
+                select t.relname as table_name, i.relname as index_name, pg_get_indexdef(x.indexrelid) as definition
+                from pg_index x
+                join pg_class i on i.oid = x.indexrelid
+                join pg_class t on t.oid = x.indrelid
+                join pg_namespace n on n.oid = t.relnamespace
+                where n.nspname = 'public' and t.relname <> '%s'
+                  and not exists (select 1 from pg_constraint k
+                                   where k.conindid = x.indexrelid and k.conrelid = x.indrelid
+                                     and k.contype in ('p', 'u', 'x'))
+                order by t.relname, i.relname""".formatted(HISTORY));
+                ResultSet r = s.executeQuery()) {
+            while (r.next()) {
+                result.add(new Index(r.getString("table_name"), r.getString("index_name"), r.getString("definition")));
+            }
+        }
+        return result;
+    }
+
+    private static List<Default> defaults(Connection c) throws SQLException {
+        List<Default> result = new ArrayList<>();
+        try (PreparedStatement s = c.prepareStatement("""
+                select c.table_name, c.column_name, c.column_default, c.identity_generation, c.identity_start,
+                       c.identity_increment, c.identity_minimum, c.identity_maximum, c.identity_cycle
+                from information_schema.columns c
+                join information_schema.tables t
+                  on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+                where c.table_schema = 'public' and c.table_name <> '%s'
+                  and (c.column_default is not null or c.is_identity = 'YES')
+                order by c.table_name, c.ordinal_position""".formatted(HISTORY));
+                ResultSet r = s.executeQuery()) {
+            while (r.next()) {
+                result.add(new Default(r.getString("table_name"), r.getString("column_name"),
+                        r.getString("column_default"), identity(r)));
+            }
+        }
+        return result;
+    }
+
+    /** The generation and the sequence options of an identity column, null when the column is no identity column. */
+    private static String identity(ResultSet r) throws SQLException {
+        String generation = r.getString("identity_generation");
+        if (generation == null) {
+            return null;
+        }
+        return "%s start %s increment %s min %s max %s %s".formatted(generation, r.getString("identity_start"),
+                r.getString("identity_increment"), r.getString("identity_minimum"), r.getString("identity_maximum"),
+                "YES".equals(r.getString("identity_cycle")) ? "cycle" : "no cycle");
     }
 
     private static List<String> strings(Connection c, String sql) throws SQLException {

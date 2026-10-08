@@ -9,8 +9,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
@@ -19,34 +21,45 @@ class SchemaMigrationIT {
     @Inject
     DataSource dataSource;
 
+    @Inject
+    Flyway flyway;
+
     @Test
-    void flyway_applied_v1_baseline_once_and_successfully() throws SQLException {
-        // Given: the application started against Dev Services PostgreSQL
+    void flyway_applied_every_migration_once_in_order_and_successfully_starting_with_the_v1_baseline()
+            throws SQLException {
+        // Given: the application started against Dev Services PostgreSQL and the versioned migrations Flyway resolves
+        List<String> resolved = Arrays.stream(flyway.info().all())
+                .filter(i -> i.getVersion() != null)
+                .map(i -> i.getVersion().getVersion())
+                .toList();
 
         // When
+        List<String> applied = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
                 Statement s = c.createStatement();
                 ResultSet rs = s.executeQuery(
                         "select version, script, type, success from flyway_schema_history order by installed_rank")) {
-
-            // Then
-            assertThat(rs.next()).as("one history row").isTrue();
-            assertThat(rs.getString("version")).isEqualTo("1");
-            assertThat(rs.getString("script")).isEqualTo("db/migration/V1__baseline.sql");
-            assertThat(rs.getString("type")).isEqualTo("SQL");
-            assertThat(rs.getBoolean("success")).isTrue();
-            assertThat(rs.next()).as("no second row").isFalse();
+            while (rs.next()) {
+                // Then every row is a successful SQL migration
+                assertThat(rs.getString("type")).isEqualTo("SQL");
+                assertThat(rs.getBoolean("success")).isTrue();
+                if (applied.isEmpty()) {
+                    assertThat(rs.getString("script")).isEqualTo("db/migration/V1__baseline.sql");
+                }
+                applied.add(rs.getString("version"));
+            }
         }
+
+        // And the history is the resolved list, once each, in order, starting with V1
+        assertThat(applied).isEqualTo(resolved).first().isEqualTo("1");
     }
 
     @Test
-    void the_baseline_creates_no_table_view_sequence_or_extension() throws SQLException {
+    void the_migrations_create_no_view_sequence_or_extension() throws SQLException {
         // Given: the application started against Dev Services PostgreSQL
 
         // When
-        List<String> tables = column(
-                "select table_name from information_schema.tables"
-                        + " where table_schema not in ('pg_catalog', 'information_schema') and table_type = 'BASE TABLE'");
+
         List<String> views = column(
                 "select table_name from information_schema.views"
                         + " where table_schema not in ('pg_catalog', 'information_schema')");
@@ -54,7 +67,6 @@ class SchemaMigrationIT {
         List<String> extensions = column("select extname from pg_extension");
 
         // Then
-        assertThat(tables).containsExactly("flyway_schema_history");
         assertThat(views).isEmpty();
         assertThat(sequences).isEmpty();
         assertThat(extensions).containsExactly("plpgsql");

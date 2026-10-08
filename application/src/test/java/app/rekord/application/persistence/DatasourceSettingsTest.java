@@ -4,8 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -15,6 +22,9 @@ class DatasourceSettingsTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Path RESOURCES = REPO_ROOT.resolve("application/src/main/resources");
+    private static final String SERVER_ERROR_DETAIL =
+            "quarkus.datasource.jdbc.additional-jdbc-properties.logServerErrorDetail";
+    private static final String SERVER_ERROR_DETAIL_FILE = "application/src/main/resources/application.properties";
     private static final Pattern DB_KIND = Pattern.compile("(%[\\w-]+\\.)?quarkus\\.datasource\\.(.+\\.)?db-kind");
     private static final Pattern FORBIDDEN = Pattern.compile(
             "rekord-api|sqlite|\\.db(?![\\w-])|\\.sqlite3?\\b|import|jdbc:[^\\s]*/rekord\\b", Pattern.CASE_INSENSITIVE);
@@ -118,5 +128,79 @@ class DatasourceSettingsTest {
         assertThat(properties.getProperty("%prod.quarkus.datasource.jdbc.url")).isEqualTo("${DB_URL}");
         assertThat(properties.getProperty("%prod.quarkus.datasource.username")).isEqualTo("${DB_USER}");
         assertThat(properties.getProperty("%prod.quarkus.datasource.password")).isEqualTo("${DB_PASSWORD}");
+    }
+
+    @Test
+    void the_server_error_detail_is_off_in_every_profile_and_no_profile_turns_it_on() throws IOException {
+        // Given the shipped settings
+        Properties properties = settings();
+
+        // Then the unprofiled key is false, so every profile (production included) inherits it
+        assertThat(properties.getProperty(SERVER_ERROR_DETAIL)).isEqualTo("false");
+        // And no other key sets the pgjdbc property: not a %test. or %dev. rewrite, not a %prod. override
+        assertThat(properties.stringPropertyNames())
+                .filteredOn(name -> name.toLowerCase(Locale.ROOT).contains("logservererrordetail"))
+                .containsExactly(SERVER_ERROR_DETAIL);
+    }
+
+    @Test
+    void no_file_the_build_ships_mentions_the_server_error_detail_but_the_one_line_that_turns_it_off()
+            throws IOException {
+        // Given every file under src/main/resources of every module: application-{profile}.properties, yaml and
+        // microprofile-config.properties included, and every value, so a jdbc.url with the pgjdbc parameter shows
+        List<String> lines = new ArrayList<>();
+        List<String> entries = new ArrayList<>();
+        for (Path file : shippedResourceFiles()) {
+            String name = REPO_ROOT.relativize(file).toString().replace('\\', '/');
+            List<String> text = Files.readAllLines(file, StandardCharsets.ISO_8859_1);
+            for (String line : text) {
+                if (mentionsServerErrorDetail(line)) {
+                    lines.add(name + ": " + line.trim());
+                }
+            }
+            if (name.endsWith(".properties")) {
+                Properties loaded = new Properties();
+                try (Reader reader = Files.newBufferedReader(file, StandardCharsets.ISO_8859_1)) {
+                    loaded.load(reader);
+                }
+                // A key or a value continued over two lines reads as one here
+                loaded.forEach((key, value) -> {
+                    if (mentionsServerErrorDetail(key + "=" + value)) {
+                        entries.add(name + ": " + key + "=" + value);
+                    }
+                });
+            }
+        }
+
+        // Then exactly one line of one file does, and it is the unprofiled key set to false
+        String only = SERVER_ERROR_DETAIL_FILE + ": " + SERVER_ERROR_DETAIL + "=false";
+        assertThat(lines).as("lines that mention logServerErrorDetail").containsExactly(only);
+        assertThat(entries).as("properties that mention logServerErrorDetail").containsExactly(only);
+    }
+
+    private static boolean mentionsServerErrorDetail(String text) {
+        return text.toLowerCase(Locale.ROOT).contains("logservererrordetail");
+    }
+
+    /** Every regular file under a {@code src/main/resources} folder of the repository: what the build ships. */
+    private static List<Path> shippedResourceFiles() throws IOException {
+        List<Path> files = new ArrayList<>();
+        Files.walkFileTree(REPO_ROOT, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) throws IOException {
+                String name = dir.getFileName().toString();
+                if (!dir.equals(REPO_ROOT) && (name.startsWith(".") || name.equals("build"))) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (dir.endsWith(Path.of("src", "main", "resources"))) {
+                    try (Stream<Path> inside = Files.walk(dir)) {
+                        inside.filter(Files::isRegularFile).forEach(files::add);
+                    }
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return files;
     }
 }
