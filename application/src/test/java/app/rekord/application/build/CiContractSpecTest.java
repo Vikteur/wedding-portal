@@ -113,6 +113,16 @@ class CiContractSpecTest {
     }
 
     @Test
+    void a_spec_inside_a_comment_is_not_passed() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("./gradlew build # " + SPEC));
+
+        // When / Then
+        assertThat(violations(workflow))
+                .containsExactly("ci.yml job build: `./gradlew build` does not pass -Pcontract.spec");
+    }
+
+    @Test
     void a_spec_in_a_sibling_directory_instead_of_the_checkout_is_found() throws IOException {
         // Given
         String sibling = "-Pcontract.spec=../rekord-contract/dist/openapi.yaml";
@@ -263,7 +273,8 @@ class CiContractSpecTest {
                 "docker tag a b",
                 "chmod +x gradlew",
                 "test -f gradlew",
-                "echo ./gradlew test");
+                "echo ./gradlew test",
+                "# ./gradlew build");
 
         // When / Then
         for (String script : scripts) {
