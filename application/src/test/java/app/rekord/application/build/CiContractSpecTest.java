@@ -168,6 +168,11 @@ class CiContractSpecTest {
                 List.of("nice ./gradlew build", "./gradlew build"),
                 List.of("nice -n 10 ./gradlew build", "./gradlew build"),
                 List.of("if ./gradlew build; then echo ok; fi", "./gradlew build"),
+                List.of("if true; then ./gradlew build; fi", "./gradlew build"),
+                List.of("if false; then :; elif ./gradlew build; then :; fi", "./gradlew build"),
+                List.of("if false; then :; else ./gradlew build; fi", "./gradlew build"),
+                List.of("while ./gradlew build; do break; done", "./gradlew build"),
+                List.of("until ./gradlew build; do sleep 1; done", "./gradlew build"),
                 List.of("for m in a b; do ./gradlew build; done", "./gradlew build"),
                 List.of("! ./gradlew check", "./gradlew check"),
                 List.of(".\\gradlew.bat build", ".\\gradlew.bat build"),
@@ -513,7 +518,8 @@ class CiContractSpecTest {
                 "docker build -t x https://github.com/Vikteur/wedding-portal.git",
                 "docker build --frobnicate y -t x .",
                 "docker buildx bake",
-                "docker bake image");
+                "docker bake image",
+                "docker compose build");
         var rootContexts = List.of(
                 "docker build -t wedding-portal:ci .",
                 "docker build --build-arg A=b -t x ./",
