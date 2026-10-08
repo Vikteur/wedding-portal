@@ -410,4 +410,121 @@ class TrackMatcherTest {
         assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
         assertThat(result.autoSelectedId()).isEqualTo("f");
     }
+
+    // The remembered-choice step (BR-MX-18): it preselects a file and never changes the bucket.
+
+    private static Map<String, String> choice(String artist, String title, String trackId) {
+        return Map.of(Signature.signatureId(artist, title), trackId);
+    }
+
+    @Test
+    void a_remembered_file_scoring_listed_moves_to_the_front_and_is_picked_with_from_preference() {
+        MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, "Band", "Love", null),
+                bandLibraryWithSolo(), Map.of(), choice("Band", "Love", "b45"));
+
+        assertThat(ids(result)).containsExactly("b45", "b50", "b49", "b48", "b47", "b46", "b44", "b43");
+        assertThat(result.autoSelectedId()).isEqualTo("b45");
+        assertThat(result.fromPreference()).isTrue();
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_remembered_file_scoring_did_not_list_is_scored_and_put_first_and_the_list_recapped_at_8() {
+        MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, "Band", "Love", null),
+                bandLibraryWithSolo(), Map.of(), choice("Band", "Love", "b10"));
+
+        assertThat(ids(result)).containsExactly("b10", "b50", "b49", "b48", "b47", "b46", "b45", "b44");
+        assertThat(result.autoSelectedId()).isEqualTo("b10");
+        assertThat(result.fromPreference()).isTrue();
+        assertThat(result.candidates().get(0).score()).isEqualTo(1.0);
+
+        // A file under the 0.45 floor still gets its own facets, delta and playlists.
+        MatchQuery query = new MatchQuery(0, "Alpha", "Love", 100.0);
+        LibraryIndex index = new LibraryIndex(List.of(new Track("x", "Zeta", "Love Zzzz Wwww Yyyy", 130.0)));
+        assertThat(TrackMatcher.matchOne(query, index).candidates()).isEmpty();
+
+        MatchResult floor = TrackMatcher.matchOne(query, index, Map.of("x", List.of("Peak hour")),
+                choice("Alpha", "Love", "x"));
+
+        assertThat(ids(floor)).containsExactly("x");
+        ScoredCandidate only = floor.candidates().get(0);
+        assertThat(only.score()).isLessThan(Score.REPORT_THRESHOLD);
+        assertThat(only.parts()).containsKeys("title", "artist", "version", "duration");
+        assertThat(only.durationDeltaSec()).isEqualTo(30.0);
+        assertThat(only.playlists()).containsExactly("Peak hour");
+    }
+
+    @Test
+    void a_remembered_choice_never_turns_ambiguous_or_unmatched_into_auto() {
+        MatchResult unmatched = TrackMatcher.matchOne(new MatchQuery(0, "Alpha", "Love", null),
+                new LibraryIndex(List.of(new Track("x", "Zeta", "Love Zzzz Wwww Yyyy", null))),
+                Map.of(), choice("Alpha", "Love", "x"));
+
+        assertThat(unmatched.bucket()).isEqualTo(Bucket.UNMATCHED);
+        assertThat(unmatched.autoSelectedId()).isEqualTo("x");
+        assertThat(unmatched.fromPreference()).isTrue();
+
+        MatchResult ambiguous = TrackMatcher.matchOne(new MatchQuery(0, "Band", "Love", null),
+                bandLibraryWithSolo(), Map.of(), choice("Band", "Love", "b44"));
+
+        assertThat(ambiguous.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+    }
+
+    @Test
+    void a_remembered_file_that_is_not_the_requested_song_leaves_an_auto_bucket_auto() {
+        LibraryIndex index = new LibraryIndex(List.of(
+                daftPunk("f", "One More Time", 320.0),
+                daftPunk("g", "Around the World", 320.0)));
+        MatchQuery query = new MatchQuery(0, "Daft Punk", "One More Time", 320.0);
+
+        assertThat(TrackMatcher.matchOne(query, index).bucket()).isEqualTo(Bucket.AUTO);
+
+        MatchResult result = TrackMatcher.matchOne(query, index, Map.of(),
+                choice("Daft Punk", "One More Time", "g"));
+
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("g");
+        assertThat(result.fromPreference()).isTrue();
+        assertThat(ids(result).getFirst()).isEqualTo("g");
+    }
+
+    @Test
+    void a_choice_whose_file_is_not_in_the_index_is_ignored() {
+        LibraryIndex index = new LibraryIndex(List.of(daftPunk("f", "One More Time", 320.0)));
+        MatchQuery query = new MatchQuery(0, "Daft Punk", "One More Time", 320.0);
+
+        MatchResult result = TrackMatcher.matchOne(query, index, Map.of(),
+                choice("Daft Punk", "One More Time", "gone"));
+
+        assertThat(result.autoSelectedId()).isEqualTo("f");
+        assertThat(result.fromPreference()).isFalse();
+        assertThat(ids(result)).containsExactly("f");
+    }
+
+    @Test
+    void the_choice_is_looked_up_by_the_queries_signature_id() {
+        LibraryIndex index = new LibraryIndex(List.of(daftPunk("f", "Strobe", 320.0), daftPunk("g", "Strobe (Radio Edit)", 200.0)));
+        Map<String, String> filedUnderRadioEdit = choice("Daft Punk", "Strobe (Radio Edit)", "g");
+
+        MatchResult plain = TrackMatcher.matchOne(new MatchQuery(0, "Daft Punk", "Strobe", 320.0),
+                index, Map.of(), filedUnderRadioEdit);
+        MatchResult radio = TrackMatcher.matchOne(new MatchQuery(0, "Daft Punk", "Strobe (Radio Edit)", 200.0),
+                index, Map.of(), filedUnderRadioEdit);
+
+        assertThat(plain.fromPreference()).isFalse();
+        assertThat(radio.fromPreference()).isTrue();
+        assertThat(radio.autoSelectedId()).isEqualTo("g");
+    }
+
+    @Test
+    void the_two_and_three_argument_forms_and_a_null_map_mean_no_choice() {
+        LibraryIndex index = bandLibraryWithSolo();
+        MatchQuery query = new MatchQuery(0, "Band", "Love", null);
+
+        assertThat(TrackMatcher.matchOne(query, index).fromPreference()).isFalse();
+        assertThat(TrackMatcher.matchOne(query, index, Map.of()).fromPreference()).isFalse();
+        MatchResult nullChoices = TrackMatcher.matchOne(query, index, Map.of(), null);
+        assertThat(nullChoices.fromPreference()).isFalse();
+        assertThat(nullChoices.autoSelectedId()).isNull();
+    }
 }
