@@ -45,7 +45,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(user));
 
-        // Then the refusal names its constraint and was logged, and neither the hash nor the address is in any record or message
+        // Then the refusal names its constraint and was logged, and neither the hash nor the address is in any
+        // record or message
         outcome.assertRefusedOn("users_status_check");
         outcome.assertNoneContains(IdentityRows.PASSWORD_HASH);
         outcome.assertNoneContains("example.com");
