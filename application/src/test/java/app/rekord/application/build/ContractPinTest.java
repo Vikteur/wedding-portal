@@ -22,7 +22,10 @@ class ContractPinTest {
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Pattern TAG = Pattern.compile("^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$");
     private static final String PIN_LINE = "^\\s*rekordContractTag\\s*[=:].*$";
-    /** TASK-2.4: the first tag that carries the hub's smoke/pom.xml, which the parity test reads from the checkout. */
+    /**
+     * TASK-2.4: the first tag whose smoke/pom.xml has the shape and option set the parity test reads from the
+     * checkout (hub commit bee8ce6; the smoke/pom.xml of v0.1.0 predates it).
+     */
     private static final String FIRST_TAG_WITH_THE_HUB_PROBE = "v0.2.0";
     private static final String PIN_REF = "${{ steps.contract-pin.outputs.ref }}";
     private static final String PIN = ".github/scripts/contract-pin.sh";
@@ -52,8 +55,8 @@ class ContractPinTest {
     }
 
     @Test
-    void the_pin_is_not_below_v0_2_0_the_first_tag_whose_checkout_holds_the_hub_probe() throws IOException {
-        // Given: HubProbeParityTest reads smoke/pom.xml from the pinned checkout, which v0.1.0 does not have
+    void the_pin_is_not_below_v0_2_0_the_first_tag_with_the_hub_probe_the_parity_test_reads() throws IOException {
+        // Given: HubProbeParityTest reads smoke/pom.xml from the pinned checkout, in the shape v0.2.0 first has
         String pin = pinnedValue();
         Assumptions.assumeTrue(
                 TAG.matcher(pin).matches(), "a branch pin names no version; the merge check refuses it anyway");
