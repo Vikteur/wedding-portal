@@ -390,6 +390,32 @@ class CiContractSpecTest {
     }
 
     @Test
+    void an_image_build_whose_dockerfile_runs_gradle_in_exec_form_is_checked() throws IOException {
+        // Given
+        JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
+        String withoutSpec = """
+                FROM x
+                RUN ["./gradlew", "--no-daemon", ":application:quarkusBuild", "-x", "test"]
+                """;
+        String withSpec = """
+                FROM x
+                RUN ["./gradlew", "--no-daemon", ":application:quarkusBuild", "-x", "test", "-Pcontract.spec=contract/dist/openapi.yaml"]
+                """;
+        String withMount = """
+                FROM x
+                RUN --mount=type=cache,target=/root/.gradle ["./gradlew", "build"]
+                """;
+
+        // When / Then
+        assertThat(violations("ci.yml", workflow, withoutSpec))
+                .containsExactly("ci.yml job build: Dockerfile"
+                        + " `./gradlew --no-daemon :application:quarkusBuild -x test` does not pass -Pcontract.spec");
+        assertThat(violations("ci.yml", workflow, withSpec)).isEmpty();
+        assertThat(violations("ci.yml", workflow, withMount))
+                .containsExactly("ci.yml job build: Dockerfile `./gradlew build` does not pass -Pcontract.spec");
+    }
+
+    @Test
     void an_image_build_whose_dockerfile_takes_the_spec_from_a_sibling_path_is_found() throws IOException {
         // Given
         JsonNode workflow = build(PIN, CHECKOUT, run("docker build -t x ."));
