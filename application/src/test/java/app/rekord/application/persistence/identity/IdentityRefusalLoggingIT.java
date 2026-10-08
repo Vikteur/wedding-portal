@@ -30,8 +30,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         UserEntity duplicate = IdentityRows.user(2, "Planner@example.com", "Pat Planner");
         Outcome outcome = capturing(() -> em.persist(duplicate));
 
-        // Then the refusal was logged, and the address is in no record and no message
-        outcome.assertLogged("ux_users_email");
+        // Then the refusal names its constraint and was logged, and the address is in no record and no message
+        outcome.assertRefusedOn("ux_users_email");
         outcome.assertNoneContains("example.com");
         outcome.assertNoneContains("Pat Planner");
     }
@@ -45,8 +45,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(user));
 
-        // Then the refusal was logged, and neither the hash nor the address is in any record or message
-        outcome.assertLogged("users_status_check");
+        // Then the refusal names its constraint and was logged, and neither the hash nor the address is in any record or message
+        outcome.assertRefusedOn("users_status_check");
         outcome.assertNoneContains(IdentityRows.PASSWORD_HASH);
         outcome.assertNoneContains("example.com");
     }
@@ -66,8 +66,8 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(session));
 
-        // Then the refusal was logged, and the token hash is in no record or message, in hex or in PostgreSQL's \x form
-        outcome.assertLogged("ck_sessions_subject");
+        // Then the refusal names its constraint and was logged, and the token hash is in no record or message, in hex or in PostgreSQL's \x form
+        outcome.assertRefusedOn("ck_sessions_subject");
         String hex = HexFormat.of().formatHex(IdentityRows.tokenHash(1));
         outcome.assertNoneContains(hex);
         outcome.assertNoneContains("\\x" + hex);
@@ -88,14 +88,17 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
 
     private record Outcome(Throwable refused, List<LogRecord> records) {
 
-        /** A captured record names the refused constraint, so the log half of the check cannot pass vacuously. */
-        void assertLogged(String constraint) {
+        /**
+         * The refusal names the expected constraint (read from the PSQLException in its cause chain, so a renamed
+         * constraint fails here and not only by substring), and a captured record names it too, so the log half of the
+         * check cannot pass vacuously.
+         */
+        void assertRefusedOn(String constraint) {
+            assertThat(Refusals.constraintOf(refused)).as("constraint named by the refusal").isEqualTo(constraint);
             assertThat(records).anyMatch(record -> LogCapture.text(record).contains(constraint));
         }
 
         void assertNoneContains(String value) {
-            // The refusal was produced, so the test cannot pass vacuously
-            assertThat(refused).isNotNull();
             for (LogRecord record : records) {
                 assertThat(LogCapture.text(record)).as("log record %s", record.getLoggerName()).doesNotContain(value);
             }
