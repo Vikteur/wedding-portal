@@ -16,9 +16,10 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * The golden-set gate's engine (TASK-24.4): loads rekord-api's golden fixtures from the classpath once, runs the
- * matcher over the 212 cases with the recorded preferences and membership rows, and lists the differences from
- * the recorded answers, one line per difference, naming the case (see {@link #differences} for its two limits).
+ * The golden-set gate's engine (TASK-24.4): loads rekord-api's golden fixtures from the classpath on first use (see
+ * {@link Fixture}), runs the matcher over the 212 cases with the recorded preferences and membership rows, and lists
+ * the differences from the recorded answers, one line per difference, naming the case (see {@link #differences} for
+ * its two limits).
  */
 final class GoldenGate {
 
@@ -28,27 +29,52 @@ final class GoldenGate {
 
     private static final double TOLERANCE = 1e-6;
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final JsonNode SET = read("/golden/golden-set.json");
-    private static final JsonNode LIBRARY = read("/golden/golden-library.json");
+    private static final Fixture SET = new Fixture("/golden/golden-set.json");
+    private static final Fixture LIBRARY = new Fixture("/golden/golden-library.json");
     private static List<MatchResult> answers;
 
     private GoldenGate() {
     }
 
-    private static JsonNode read(String name) {
-        try (InputStream in = GoldenGate.class.getResourceAsStream(name)) {
-            if (in == null) {
-                throw new IllegalStateException("classpath resource missing: " + name);
+    /**
+     * A golden fixture read from the classpath on first use, never in a static initializer: one that is missing or
+     * not valid JSON fails every access that needs it with a fresh {@code IllegalStateException} naming the
+     * resource, where a failing static initializer would report once and then only as {@code NoClassDefFoundError}.
+     * A failure is not kept: the next {@link #get} reads again.
+     */
+    static final class Fixture {
+
+        private final String resource;
+        private JsonNode tree;
+
+        Fixture(String resource) {
+            this.resource = resource;
+        }
+
+        /** The parsed fixture, read once on the first successful call. */
+        synchronized JsonNode get() {
+            if (tree == null) {
+                tree = read();
             }
-            return JSON.readTree(in);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
+            return tree;
+        }
+
+        private JsonNode read() {
+            try (InputStream in = GoldenGate.class.getResourceAsStream(resource)) {
+                if (in == null) {
+                    throw new IllegalStateException("golden fixture " + resource + " is missing from the classpath");
+                }
+                return JSON.readTree(in);
+            } catch (IOException e) {
+                throw new IllegalStateException(
+                        "golden fixture " + resource + " could not be read as JSON: " + e.getMessage(), e);
+            }
         }
     }
 
     /** A fresh copy of the checked-in golden set, safe to change. */
     static JsonNode set() {
-        return SET.deepCopy();
+        return SET.get().deepCopy();
     }
 
     static String contractBucket(Bucket bucket) {
@@ -62,24 +88,26 @@ final class GoldenGate {
     /** The matcher's answer for every case, in case order (computed once per JVM). */
     static synchronized List<MatchResult> answers() {
         if (answers == null) {
+            JsonNode set = SET.get();
+            JsonNode library = LIBRARY.get();
             List<Track> tracks = new ArrayList<>();
-            for (JsonNode t : LIBRARY.get("tracks")) {
+            for (JsonNode t : library.get("tracks")) {
                 tracks.add(new Track(t.get("id").asText(), text(t.get("artist")), t.get("title").asText(),
                         number(t.get("duration_sec"))));
             }
             LibraryIndex index = new LibraryIndex(tracks);
             Map<String, String> preferences = new HashMap<>();
-            LIBRARY.get("preferences").fields()
+            library.get("preferences").fields()
                     .forEachRemaining(e -> preferences.put(e.getKey(), e.getValue().asText()));
             Map<String, List<String>> membership = new HashMap<>();
-            LIBRARY.get("membership").fields().forEachRemaining(e -> {
+            library.get("membership").fields().forEachRemaining(e -> {
                 List<String> names = new ArrayList<>();
                 e.getValue().forEach(n -> names.add(n.asText()));
                 membership.put(e.getKey(), names);
             });
             List<MatchResult> results = new ArrayList<>();
             int position = 0;
-            for (JsonNode c : SET.get("cases")) {
+            for (JsonNode c : set.get("cases")) {
                 results.add(matchCase(position++, c, index, membership, preferences));
             }
             answers = List.copyOf(results);
@@ -115,7 +143,7 @@ final class GoldenGate {
             lines.add("cases: expected " + cases.size() + " actual " + actual.size());
             return lines;
         }
-        JsonNode checkedIn = SET.get("cases");
+        JsonNode checkedIn = SET.get().get("cases");
         for (int i = 0; i < cases.size(); i++) {
             JsonNode c = cases.get(i);
             JsonNode query = c.get("query");
