@@ -7,7 +7,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** An account, global across organisations. Mapped by name; Flyway owns the table (V2__identity.sql). No behaviour, no association. */
+/**
+ * An account, global across organisations. Mapped by name; Flyway owns the table (V2__identity.sql). No behaviour, no
+ * association.
+ */
 @Entity
 @Table(name = "users")
 public class UserEntity {

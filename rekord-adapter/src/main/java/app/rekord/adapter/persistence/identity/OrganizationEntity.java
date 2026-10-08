@@ -7,7 +7,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A business that uses the portal. Mapped by name; Flyway owns the table (V2__identity.sql). No behaviour, no association. */
+/**
+ * A business that uses the portal. Mapped by name; Flyway owns the table (V2__identity.sql). No behaviour, no
+ * association.
+ */
 @Entity
 @Table(name = "organizations")
 public class OrganizationEntity {

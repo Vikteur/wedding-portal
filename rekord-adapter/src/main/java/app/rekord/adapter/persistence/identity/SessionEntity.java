@@ -7,7 +7,11 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A live sign-in; only the SHA-256 hash of the token is stored (BR-ID-09). The ip column is not mapped. Mapped by name; Flyway owns the table (V2__identity.sql). No behaviour, no association. */
+/**
+ * A server-side session of an account or of a portal, live or not: a row is a session whether it is live, revoked or
+ * expired. Only the SHA-256 hash of the token is stored (BR-ID-09). The ip column is not mapped. Mapped by name; Flyway
+ * owns the table (V2__identity.sql). No behaviour, no association.
+ */
 @Entity
 @Table(name = "sessions")
 public class SessionEntity {
