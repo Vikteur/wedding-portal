@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 # Pre-push hook (TASK-37): runs the Groma map check before a push, so a map that is out of step with the code, or holds
 # an undescribed element, is caught here instead of in CI.
+# It checks the checked-out work tree (HEAD plus any uncommitted change), not the refs being pushed: the check rescans
+# the source, so it needs a work tree. A push that only deletes remote refs carries no code and is not checked.
 # Git does not version .git/hooks; switch this hook on once per clone with: bash scripts/install-hooks.sh
 # Linked worktrees share the clone's git config, so the hook also runs on their pushes.
 # GROMA names the groma CLI (default: groma).
 set -euo pipefail
+
+# Git passes one line per pushed ref on stdin: <local ref> <local sha> <remote ref> <remote sha>. A delete has an
+# all-zero local sha.
+carries_code=0
+while read -r _ local_sha _ _; do
+  [[ "$local_sha" =~ ^0+$ ]] || carries_code=1
+done
+[ "$carries_code" = 1 ] || exit 0
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -21,6 +31,9 @@ if ! bash .github/scripts/groma-check.sh; then
   {
     echo
     echo "pre-push: the Groma map check failed; the push is stopped. To fix it:"
+    if [ -n "$(git status --porcelain -- . ':(exclude)groma')" ]; then
+      echo "  (the check scans the work tree, which has uncommitted changes: commit or stash them first)"
+    fi
     echo "  1. groma scan"
     echo "  2. curate what is new (groma agent-instructions tells how)"
     echo "  3. commit groma/"
