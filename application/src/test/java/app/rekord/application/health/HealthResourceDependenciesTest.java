@@ -17,9 +17,7 @@ import org.junit.jupiter.api.Test;
 /** AC3, static half (BR-OPS-21): the health resource reaches no datasource, repository, port or EntityManager. */
 class HealthResourceDependenciesTest {
 
-    private static final String[] ALLOWED = {
-        "app.rekord.api..", "app.rekord.adapter.web.health..", "jakarta.enterprise.context..", "java.lang.."
-    };
+    private static final String[] ALLOWED = {"app.rekord.api..", "jakarta.enterprise.context..", "java.lang.."};
 
     private static ArchRule onlyTheContractAndCdi(String resourceName) {
         return ArchRuleDefinition.classes()
