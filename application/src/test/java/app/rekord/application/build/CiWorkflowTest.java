@@ -742,7 +742,10 @@ class CiWorkflowTest {
         assertThat(steps.get(0).path("with").has("repository")).isFalse();
 
         // And the gradle step runs test and integrationTest
-        JsonNode gradle = steps.stream().filter(step -> "gradle".equals(step.path("id").asText())).findFirst().orElseThrow();
+        JsonNode gradle = steps.stream()
+                .filter(step -> "gradle".equals(step.path("id").asText()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the build job has no step with id 'gradle'"));
         assertThat(gradle.path("run").asText()).contains(" test ").contains(" integrationTest ");
     }
 

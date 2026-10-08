@@ -149,7 +149,7 @@ class RowRollbackIT {
         try (Connection c = dataSource.getConnection();
                 Statement s = c.createStatement();
                 ResultSet rs = s.executeQuery("select count(*) from probe_row where marker = '" + marker + "'")) {
-            rs.next();
+            assertThat(rs.next()).as("the count query returns a row").isTrue();
             return rs.getInt(1);
         }
     }

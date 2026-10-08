@@ -36,7 +36,7 @@ class FreshDatabaseIT {
             try (Statement s = c.createStatement();
                     ResultSet rs = s.executeQuery("select count(*), count(*) filter (where installed_on >= pg_postmaster_start_time())"
                             + " from flyway_schema_history")) {
-                rs.next();
+                assertThat(rs.next()).as("the history count query returns a row").isTrue();
                 assertThat(rs.getLong(1)).as("rows of the V files").isEqualTo(versionedMigrations);
                 assertThat(rs.getInt(2)).as("rows installed by this server").isEqualTo(rs.getInt(1));
             }
@@ -51,7 +51,7 @@ class FreshDatabaseIT {
                 ResultSet rs = s.executeQuery("select version()")) {
 
             // When / Then
-            rs.next();
+            assertThat(rs.next()).as("select version() returns a row").isTrue();
             assertThat(rs.getString(1)).startsWith("PostgreSQL 17").contains("musl");
         }
     }
