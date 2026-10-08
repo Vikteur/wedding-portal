@@ -401,6 +401,24 @@ class TrackMatcherTest {
         assertThat(featInFileArtist.bucket()).isEqualTo(Bucket.AMBIGUOUS);
     }
 
+    // UD-19.c was kept on 2026-10-08 (TASK-24.7): a blank artist tag is never the requested song, even when the
+    // file's title names a featured artist and the file is the clear leader for a query for that artist.
+    @Test
+    void a_blank_artist_file_is_never_auto_even_when_its_title_names_the_featured_artist() {
+        for (String blankArtist : new String[] {null, ""}) {
+            MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, "Romanthony", "One More Time", 320.0),
+                    new LibraryIndex(List.of(new Track("f", blankArtist, "One More Time (feat. Romanthony)", 320.0))));
+
+            ScoredCandidate only = result.candidates().get(0);
+            assertThat(only.track().id()).isEqualTo("f");
+            assertThat(only.parts().get("title")).isEqualTo(1.0);
+            assertThat(only.parts().get("artist")).isEqualTo(1.0);
+            assertThat(only.score()).isEqualTo(1.0);
+            assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+            assertThat(result.autoSelectedId()).isNull();
+        }
+    }
+
     @Test
     void a_featured_artist_in_the_query_title_still_allows_auto() {
         MatchResult result = TrackMatcher.matchOne(
