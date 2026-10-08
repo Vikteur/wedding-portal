@@ -276,6 +276,22 @@ class ErrorEnvelopeMapperIT {
         assertRedactedCyclicTraceLogged();
     }
 
+    /**
+     * The {@code @Path} can also sit on an abstract superclass of the class that serves it; the guard has to reach that
+     * shape too.
+     */
+    @Test
+    @Timeout(60)
+    void a_resource_whose_abstract_superclass_carries_the_path_gets_the_same_guard() throws Exception {
+        // When
+        Response response = getWithinTwentySeconds("/api/test-only/error-envelope-superclass/cyclic-cause");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope-superclass/cyclic-cause");
+        assertRedactedCyclicTraceLogged();
+    }
+
     /** Sockets that give up, so a request the server never answers fails the test instead of hanging it. */
     private static Response getWithinTwentySeconds(String path) throws Exception {
         RestAssuredConfig bounded = RestAssured.config()

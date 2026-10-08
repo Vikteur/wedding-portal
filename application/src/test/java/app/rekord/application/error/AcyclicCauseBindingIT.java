@@ -77,13 +77,14 @@ class AcyclicCauseBindingIT {
                 .filter(bean -> isResource(bean.getBeanClass()))
                 .toList();
 
-        // Then: the three kinds of resource in this application are among them
+        // Then: each place the @Path can be found is represented among them
         assertThat(resources).extracting(bean -> bean.getBeanClass().getSimpleName())
                 .contains(
                         "HealthResource", // the real one: the @Path is on the generated HealthApi
                         "InterfaceProbeResource", // the same shape, with a probe that throws
+                        "SuperclassProbeResource", // the @Path is on an abstract superclass
                         "ErrorEnvelopeProbeResource", // the @Path is on the class
-                        "SuccessStatusProbeResource");
+                        "SuccessStatusProbeResource"); // the @Path is on the class too
 
         // And: the extension bound every one of them
         assertThat(bindings.isResolvable()).as("the extension publishes the classes it bound").isTrue();
