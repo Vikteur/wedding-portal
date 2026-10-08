@@ -219,6 +219,33 @@ class GoldenFixturesTest {
         assertThat(libraryProblems(copy)).containsExactly(parent + " lacks " + key);
     }
 
+    /** The owner decided on 2026-10-08 to scrub these 7 titles; this pin keeps a re-copy from the oracle from bringing the names back. */
+    @ParameterizedTest
+    @CsvSource({
+            "c89f6d9710b7, openingsdans-1",
+            "eef1a845080f, openingsdans-2",
+            "8555a3ea5d72, openingsdans-3",
+            "8a7d4af89b6f, openingsdans-4",
+            "71875e38f663, openingsdans-5",
+            "71f166562543, openingsdans-6",
+            "cfa8ac3f386b, openingsdans-7"})
+    void a_library_title_that_held_a_client_name_is_its_placeholder(String id, String placeholder) {
+        // Given the checked-in library and the id of a track whose title held a client name
+        List<JsonNode> matching = new ArrayList<>();
+        for (JsonNode t : library().get("tracks")) {
+            if (id.equals(t.get("id").asText())) {
+                matching.add(t);
+            }
+        }
+        assertThat(matching).as("tracks with id %s", id).hasSize(1);
+
+        // When its title is compared with the placeholder
+        String title = matching.get(0).get("title").asText();
+
+        // Then it is the placeholder (a boolean, so a failure never shows the title)
+        assertThat(placeholder.equals(title)).as("title of track %s is %s", id, placeholder).isTrue();
+    }
+
     private static final List<String> TRACK_KEYS = List.of("id", "artist", "title", "duration_sec");
 
     /** Like {@link #schemaProblems}: a position and a key, never a value (the titles stay out of any output). */
