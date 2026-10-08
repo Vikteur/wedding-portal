@@ -63,4 +63,20 @@ class SignatureTest {
         assertThat(Signature.signatureOf(null, null)).isEqualTo("|||");
         assertThat(Signature.signatureId(null, null)).isEqualTo("98c4b7d37a4c63c3");
     }
+
+    // AC #5, #12 (UD-19.c): the song is the normalised artist and core title, without the version.
+    @Test
+    void songOf_is_the_normalised_artist_and_core_title_without_the_version() {
+        assertThat(Signature.songOf("Daft Punk", "One More Time (Extended Mix)")).isEqualTo("daft punk|one more time");
+        assertThat(Signature.songOf("DAFT PUNK", "One More Time")).isEqualTo("daft punk|one more time");
+        assertThat(Signature.songOf("Justin Bieber", "Peaches (feat. Daniel Caesar)"))
+                .isEqualTo("justin bieber|peaches");
+    }
+
+    @Test
+    void songOf_is_null_when_the_artist_normalises_to_empty() {
+        assertThat(Signature.songOf(null, "Anthem")).isNull();
+        assertThat(Signature.songOf("", "Anthem")).isNull();
+        assertThat(Signature.songOf("!!!", "Anthem")).isNull();
+    }
 }

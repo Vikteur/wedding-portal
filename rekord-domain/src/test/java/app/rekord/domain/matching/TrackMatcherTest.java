@@ -278,5 +278,49 @@ class TrackMatcherTest {
         ScoredCandidate only = result.candidates().get(0);
         assertThat(only.parts()).containsEntry("artist", null);
         assertThat(only.score()).isEqualTo(1.0);
+        // AC #5b (UD-19.c): a query without an artist is never auto.
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // AC #5a (UD-19.c): a file without an artist tag is never the requested song.
+    @Test
+    void a_filename_only_file_is_never_auto() {
+        MatchResult result = TrackMatcher.matchOne(new MatchQuery(0, "Daft Punk", "One More Time", null),
+                new LibraryIndex(List.of(new Track("f", null, "Daft Punk One More Time", null))));
+
+        ScoredCandidate only = result.candidates().get(0);
+        assertThat(only.parts().get("combined")).isEqualTo(1.0);
+        assertThat(only.parts().get("version")).isEqualTo(1.0);
+        assertThat(only.parts().get("duration")).isNull();
+        assertThat(only.score()).isEqualTo(1.0);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // AC #12 (UD-19.c): rekord-api answers auto; the core titles differ, so this is ambiguous.
+    @Test
+    void a_different_core_title_is_never_auto() {
+        MatchResult result = TrackMatcher.matchOne(
+                new MatchQuery(0, "The Chainsmokers ft. Daya", "on't Let Me Down (Intro)", 228.0),
+                new LibraryIndex(List.of(new Track("f", "The Chainsmokers ft. Daya",
+                        "Don't Let Me Down (Intro)", 228.0))));
+
+        ScoredCandidate only = result.candidates().get(0);
+        assertThat(only.score()).isEqualTo(0.9163);
+        assertThat(only.parts().get("artist")).isEqualTo(1.0);
+        assertThat(only.parts().get("version")).isEqualTo(1.0);
+        assertThat(only.parts().get("duration")).isEqualTo(1.0);
+        assertThat(result.bucket()).isEqualTo(Bucket.AMBIGUOUS);
+        assertThat(result.autoSelectedId()).isNull();
+    }
+
+    // UD-19.c must not be too strict: a featured artist in the file's title is left out of the song.
+    @Test
+    void a_featured_artist_in_the_file_title_still_allows_auto() {
+        MatchResult result = match(320.0, daftPunk("f", "One More Time (feat. Romanthony)", 320.0));
+
+        assertThat(result.bucket()).isEqualTo(Bucket.AUTO);
+        assertThat(result.autoSelectedId()).isEqualTo("f");
     }
 }
