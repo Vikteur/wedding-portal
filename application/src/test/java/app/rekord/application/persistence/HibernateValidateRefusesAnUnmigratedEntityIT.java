@@ -25,6 +25,11 @@ class HibernateValidateRefusesAnUnmigratedEntityIT {
                     .addClass(StrayEntity.class)
                     .addAsResource("stray-entity-orm.xml")
                     .addAsResource("application.properties")
+                    // The migrations are listed by name on purpose. This application root holds every entity of
+                    // app.rekord.adapter, so it must list every migration whose tables an entity maps: with one
+                    // missing, Hibernate validate fails on the first missing table of that migration (an identity
+                    // table) and not on stray_entity, and the assertion below fails. A new migration that creates
+                    // tables for an entity goes in this list (docs/memory.md, TASK-7.2).
                     .addAsResource("db/migration/V1__baseline.sql")
                     .addAsResource("db/migration/V2__identity.sql"))
             .assertException(e -> {
