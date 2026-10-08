@@ -264,6 +264,89 @@ class CiWorkflowTest {
         assertThat(pushGateViolations(strict)).isEmpty();
     }
 
+    @Test
+    void a_lenient_image_check_or_test_step_would_let_an_unchecked_or_red_build_push() throws IOException {
+        // Given
+        JsonNode lenientCheck = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        continue-on-error: true
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode skippedCheck = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        if: github.event_name == 'pull_request'
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode lenientTests = Workflows.parse("""
+                jobs:
+                  build:
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        continue-on-error: true
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Build image
+                        run: docker build -t wedding-portal:ci .
+                      - name: Check image
+                        run: bash .github/scripts/image-check.sh wedding-portal:ci
+                      - name: Push image
+                        run: docker push x
+                """);
+        JsonNode lenientBuildJob = Workflows.parse("""
+                jobs:
+                  build:
+                    continue-on-error: true
+                    steps:
+                      - name: Build and test
+                        id: gradle
+                        run: ./gradlew test
+                  image:
+                    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                    needs: build
+                    steps:
+                      - name: Push image
+                        run: docker push x
+                """);
+
+        // When / Then
+        assertThat(pushGateViolations(lenientCheck)).containsExactly("Check image");
+        assertThat(pushGateViolations(skippedCheck)).containsExactly("Check image");
+        assertThat(pushGateViolations(lenientTests)).containsExactly("build: Build and test");
+        assertThat(pushGateViolations(lenientBuildJob)).containsExactly("build job continue-on-error");
+    }
+
     /** What would let the image job push after a red build: a loose job if, continue-on-error, or a conditional push step. */
     private static List<String> pushGateViolations(JsonNode workflow) {
         List<String> violations = new ArrayList<>();
