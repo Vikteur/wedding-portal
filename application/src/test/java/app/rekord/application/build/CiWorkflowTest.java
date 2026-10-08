@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 class CiWorkflowTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
+    private static final Pattern REGISTRY_COMMAND = Pattern.compile("docker (image )?push|docker login|--push\\b");
+    private static final Pattern REGISTRY_ACTION = Pattern.compile("^docker/(login-action|build-push-action)@");
 
     @Test
     void every_action_in_every_workflow_is_pinned_by_a_40_character_commit_sha() throws IOException {
@@ -244,8 +246,9 @@ class CiWorkflowTest {
         workflow.path("jobs").fields().forEachRemaining(job -> {
             boolean isImageJobOfCi = "ci.yml".equals(fileName) && "image".equals(job.getKey());
             job.getValue().path("steps").forEach(step -> {
-                String run = step.path("run").asText();
-                if (!isImageJobOfCi && (run.contains("docker push") || run.contains("docker login"))) {
+                boolean registry = REGISTRY_COMMAND.matcher(step.path("run").asText()).find()
+                        || REGISTRY_ACTION.matcher(step.path("uses").asText()).find();
+                if (!isImageJobOfCi && registry) {
                     found.add(job.getKey() + ": " + step.path("name").asText());
                 }
             });
