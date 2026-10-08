@@ -15,8 +15,8 @@ import java.util.Set;
  * the response is never written. When a resource method throws such a chain, this rethrows a {@link RedactedCause}
  * copy, which has none; every other exception, and every normal return, passes through untouched.
  *
- * <p>It is outermost ({@code PLATFORM_BEFORE}, ahead of the framework's own interceptors) so it sees what validation,
- * security and transactions throw too. The catch-all mapper then answers the 500 {@code UNKNOWN} envelope and logs its
+ * <p>It is outermost ({@code PLATFORM_BEFORE}, ahead of the framework's own interceptors) so it sees what validation
+ * and transactions throw too. The catch-all mapper then answers the 500 {@code UNKNOWN} envelope and logs its
  * one "Unhandled exception" line; {@code RedactedCause.of} returns the copy as it is, so that line is unchanged. The
  * price: a {@code RekordException} or {@code WebApplicationException} whose chain loops back answers that 500 and not
  * its own status, because the copy is neither (owner-approved, 2026-10-08).

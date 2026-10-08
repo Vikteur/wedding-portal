@@ -8,8 +8,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Binds {@link AcyclicCauseInterceptor} to a resource class (TASK-5.7). Nothing writes it by hand: the build step
- * that finds the JAX-RS resources adds it.
+ * Binds {@link AcyclicCauseInterceptor} to a resource class (TASK-5.7). Nothing writes it by hand:
+ * {@link BindAcyclicCauseToResources} adds it at build time.
  */
 @InterceptorBinding
 @Documented

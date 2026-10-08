@@ -25,8 +25,9 @@ import java.util.UUID;
  * Test-only. The family, auth-failed, forbidden, web-application-exception and uuid probes replay what rekord-api's
  * probe threw, with the oracle's messages; invite-accept replays the oracle's invalid request body, and unauthorized
  * throws the exception behind the oracle's anonymous 401. The role-denied probe has no oracle: the framework answers
- * it. The unhandled, service-unavailable, internal-server-error and pair-without-row probes throw sentinel chains
- * (or sentinel messages), to prove none of them reaches a log record.
+ * it. The unhandled, service-unavailable, internal-server-error, pair-without-row and cyclic-cause probes throw
+ * sentinel chains (or sentinel messages), and cyclic-from-interceptor has an interceptor throw one, to prove none of
+ * them reaches a log record.
  */
 @Path("/test-only/error-envelope")
 @Produces(MediaType.APPLICATION_JSON)

@@ -23,7 +23,8 @@ final class RedactedCause extends RuntimeException {
 
     /**
      * The redacted copy of {@code original}. A throwable that is already a copy is answered as it is: the cause-cycle
-     * guard (TASK-5.7) throws a copy, and the catch-all mapper redacts what it logs, which must not copy it again.
+     * guard (TASK-5.7) throws a copy, and the catch-all mapper, which redacts what it logs, must not copy that copy
+     * again.
      */
     static RedactedCause of(Throwable original) {
         if (original instanceof RedactedCause alreadyRedacted) {
