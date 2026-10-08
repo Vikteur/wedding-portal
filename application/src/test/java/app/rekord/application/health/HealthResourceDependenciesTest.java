@@ -3,7 +3,6 @@ package app.rekord.application.health;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import app.rekord.adapter.web.health.HealthResource;
-import app.rekord.adapter.web.health.SamePackageHelperFixture;
 import app.rekord.architecture.FixtureCompiler;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -18,7 +17,8 @@ import org.junit.jupiter.api.Test;
 /** AC3, static half (BR-OPS-21): the health resource reaches no datasource, repository, port or EntityManager. */
 class HealthResourceDependenciesTest {
 
-    private static final String[] ALLOWED = {"app.rekord.api..", "jakarta.enterprise.context..", "java.lang.."};
+    /** The contract tree, and two packages named exactly: their subpackages (java.lang.invoke, ...) stay refused. */
+    private static final String[] ALLOWED = {"app.rekord.api..", "jakarta.enterprise.context", "java.lang"};
 
     private static ArchRule onlyTheContractAndCdi(String resourceName) {
         return ArchRuleDefinition.classes()
@@ -27,7 +27,7 @@ class HealthResourceDependenciesTest {
                 .should()
                 .onlyDependOnClassesThat()
                 .resideInAnyPackage(ALLOWED)
-                .as(resourceName + " depends only on the generated contract, CDI scopes and java.lang");
+                .as(resourceName + " depends only on the generated contract, the CDI scope annotations and java.lang itself");
     }
 
     @Test
@@ -56,16 +56,30 @@ class HealthResourceDependenciesTest {
     @Test
     void the_rule_refuses_a_helper_of_the_health_package_that_could_reach_a_datasource() {
         // Given a resource in the health resource's own package that reaches a datasource through a helper there
-        JavaClasses classes = new ClassFileImporter().importClasses(SamePackageHelperFixture.ResourceWithAHelper.class);
+        JavaClasses classes = FixtureCompiler.compile(
+                """
+                package app.rekord.adapter.web.health;
+                public class DatabaseHelper {
+                    @jakarta.inject.Inject
+                    javax.sql.DataSource dataSource;
+                }
+                """,
+                """
+                package app.rekord.adapter.web.health;
+                public class ResourceWithAHelper {
+                    @jakarta.inject.Inject
+                    DatabaseHelper helper;
+                }
+                """);
 
         // When
-        EvaluationResult result = onlyTheContractAndCdi(SamePackageHelperFixture.ResourceWithAHelper.class.getName())
-                .evaluate(classes);
+        EvaluationResult result =
+                onlyTheContractAndCdi("app.rekord.adapter.web.health.ResourceWithAHelper").evaluate(classes);
 
         // Then
         assertThat(result.hasViolation()).isTrue();
         String details = String.join("\n", result.getFailureReport().getDetails());
-        assertThat(details).contains(SamePackageHelperFixture.DatabaseHelper.class.getName());
+        assertThat(details).contains("app.rekord.adapter.web.health.DatabaseHelper");
     }
 
     @Test
