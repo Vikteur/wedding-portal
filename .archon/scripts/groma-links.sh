@@ -42,17 +42,19 @@ mapfile -t files < <(git diff --name-only "$from" HEAD)
 
 # The owner is the first word under "Owner" in `groma view <file> --plain`; a file without one makes groma exit 1.
 # Both `Owner` and `Element` blocks read "<id>  <type>  <title>" under the dashes, with an optional "parent: <id>".
+# Only the block's own lines count: a `parent:` after the first blank line belongs to a later block.
 block() { tr -d '\015' | awk -v h="$1" '$0 == h { seen = 1; next } seen && prev ~ /^-+$/ && !got { id = $1; type = $2; got = 1 }
-  got && /^parent: / && !par { par = $2 } { prev = $0 } END { if (got) print id, type, par }'; }
+  got && /^$/ { exit } got && /^parent: / && !par { par = $2 } { prev = $0 } END { if (got) print id, type, par }'; }
 declare -A etype=() eparent=()
 lookup() { # lookup <id>: fills etype/eparent from `groma view <id> --plain`, once per id
   [ -z "${etype[$1]+x}" ] || return 0
   local id type parent
   read -r id type parent < <("$groma" view "$1" --plain 2>/dev/null | block Element) || true
+  [ -n "${type:-}" ] || echo "groma-links: cannot resolve map element $1; container references above it are kept" >&2
   etype[$1]=${type:-}; eparent[$1]=${parent:-}
 }
 
-refs=(); owner_parent=()
+refs=()
 for f in "${files[@]}"; do
   read -r owner type parent < <("$groma" view "$f" --plain 2>/dev/null | block Owner) || owner=""
   if [ -n "$owner" ] && [[ ! " ${refs[*]} " == *" $owner "* ]]; then
@@ -60,15 +62,20 @@ for f in "${files[@]}"; do
   fi
 done
 
-# --modified-file replaces the list, so the ticket's files go first; --add-ref adds, so only new references are passed.
-mapfile -t have < <(backlog task view "$task" --json | node -e '
+# One edit: --modified-file replaces the list, so the ticket's files go first; --add-ref adds, so only new references
+# are passed; --remove-ref drops the superseded containers.
+# The view is read into a variable first: inside `mapfile < <(...)` a failing `backlog task view` would be invisible, and
+# the edit would then replace the ticket's file list with this branch's files alone.
+view=$(backlog task view "$task" --json | node -e '
   let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
     const t = JSON.parse(s).task;
     for (const f of t.modifiedFiles || []) console.log("file " + f);
     for (const r of t.references || []) console.log("ref " + r);
-  });')
+  });') || { echo "groma-links: cannot read $task from the backlog (backlog task view failed); the ticket is left as it is" >&2; exit 1; }
+have=()
+[ -z "$view" ] || mapfile -t have <<< "$view"
 old_files=(); old_refs=()
-for line in "${have[@]}"; do
+for line in ${have[@]+"${have[@]}"}; do
   case "$line" in "file "*) old_files+=("${line#file }") ;; "ref "*) old_refs+=("${line#ref }") ;; esac
 done
 
@@ -77,7 +84,7 @@ declare -A above=()
 if [ "${#old_refs[@]}" -gt 0 ]; then
   for owner in "${refs[@]}"; do
     id=${eparent[$owner]}; depth=0
-    while [ -n "$id" ] && [ "$depth" -lt 20 ]; do
+    while [ -n "$id" ] && [ "$depth" -lt 20 ]; do  # cycle guard: a loop in the parents ends at depth 20
       lookup "$id"
       if [ "${etype[$id]}" = container ]; then above[$id]=1; fi
       id=${eparent[$id]}; depth=$((depth + 1))
