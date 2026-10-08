@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,11 @@ class ContractPinTest {
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Pattern TAG = Pattern.compile("^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$");
     private static final String PIN_LINE = "^\\s*rekordContractTag\\s*[=:].*$";
+    /**
+     * TASK-2.4: the first tag whose smoke/pom.xml has the shape and option set the parity test reads from the
+     * checkout (hub commit bee8ce6; the smoke/pom.xml of v0.1.0 predates it).
+     */
+    private static final String FIRST_TAG_WITH_THE_HUB_PROBE = "v0.2.0";
     private static final String PIN_REF = "${{ steps.contract-pin.outputs.ref }}";
     private static final String PIN = ".github/scripts/contract-pin.sh";
     private static final String MERGE_CHECK = ".github/scripts/contract-pin-merge-check.sh";
@@ -46,6 +52,46 @@ class ContractPinTest {
         // Then
         assertThat(pins).as("rekordContractTag lines").hasSize(1);
         assertThat(value).as("the pinned tag or branch").matches("^[A-Za-z0-9._/-]+$");
+    }
+
+    @Test
+    void the_pin_is_not_below_v0_2_0_the_first_tag_with_the_hub_probe_the_parity_test_reads() throws IOException {
+        // Given: HubProbeParityTest reads smoke/pom.xml from the pinned checkout, in the shape v0.2.0 first has
+        String pin = pinnedValue();
+        Assumptions.assumeTrue(
+                TAG.matcher(pin).matches(), "a branch pin names no version; the merge check refuses it anyway");
+
+        // When
+        int order = compareVersions(pin, FIRST_TAG_WITH_THE_HUB_PROBE);
+
+        // Then
+        assertThat(order).as("%s against %s", pin, FIRST_TAG_WITH_THE_HUB_PROBE).isNotNegative();
+    }
+
+    @Test
+    void tags_compare_by_number_and_not_by_text() {
+        assertThat(compareVersions("v0.1.0", "v0.2.0")).isNegative();
+        assertThat(compareVersions("v0.2.0", "v0.2.0")).isZero();
+        assertThat(compareVersions("v0.10.0", "v0.2.0")).isPositive();
+        assertThat(compareVersions("v1.0.0", "v0.99.99")).isPositive();
+        assertThat(compareVersions("v0.2.1", "v0.2.0")).isPositive();
+    }
+
+    @Test
+    void the_spec_the_build_reads_is_the_version_the_pin_names() throws IOException {
+        // Given: contract.spec is <checkout>/dist/openapi.yaml; the hub keeps info.version equal to its tag
+        String pin = pinnedValue();
+        Assumptions.assumeTrue(TAG.matcher(pin).matches(), "a branch pin names no version");
+        String spec = System.getProperty("contract.spec");
+        assertThat(spec).as("contract.spec system property").isNotBlank();
+
+        // When
+        String version = Workflows.parse(Files.readString(Path.of(spec))).path("info").path("version").asText();
+
+        // Then
+        assertThat("v" + version)
+                .as("info.version of %s against rekordContractTag in gradle.properties", spec)
+                .isEqualTo(pin);
     }
 
     @Test
@@ -244,6 +290,34 @@ class ContractPinTest {
     }
 
     private record Result(int exit, String stderr, String output) {}
+
+    private static String pinnedValue() throws IOException {
+        var pins = Files.readAllLines(REPO_ROOT.resolve("gradle.properties")).stream()
+                .filter(line -> line.matches(PIN_LINE))
+                .toList();
+        assertThat(pins).as("rekordContractTag lines").hasSize(1);
+        return pins.get(0).replaceFirst("^\\s*rekordContractTag\\s*[=:]\\s*", "").trim();
+    }
+
+    /** Negative, zero or positive as {@code left} is lower than, equal to or higher than {@code right}. */
+    private static int compareVersions(String left, String right) {
+        int[] a = numbers(left);
+        int[] b = numbers(right);
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != b[i]) {
+                return Integer.compare(a[i], b[i]);
+            }
+        }
+        return 0;
+    }
+
+    private static int[] numbers(String tag) {
+        Matcher matcher = TAG.matcher(tag);
+        assertThat(matcher.matches()).as("%s is a vMAJOR.MINOR.PATCH tag", tag).isTrue();
+        return new int[] {
+            Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)), Integer.parseInt(matcher.group(3))
+        };
+    }
 
     private Path props(String content) throws IOException {
         return Files.writeString(tmp.resolve("gradle.properties"), content);
