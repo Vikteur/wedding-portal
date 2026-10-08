@@ -193,7 +193,22 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     }
 
     private static List<Default> defaults(Connection c) throws SQLException {
-        return List.of();
+        List<Default> result = new ArrayList<>();
+        try (PreparedStatement s = c.prepareStatement("""
+                select c.table_name, c.column_name, c.column_default, c.identity_generation
+                from information_schema.columns c
+                join information_schema.tables t
+                  on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+                where c.table_schema = 'public' and c.table_name <> '%s'
+                  and (c.column_default is not null or c.is_identity = 'YES')
+                order by c.table_name, c.ordinal_position""".formatted(HISTORY));
+                ResultSet r = s.executeQuery()) {
+            while (r.next()) {
+                result.add(new Default(r.getString("table_name"), r.getString("column_name"),
+                        r.getString("column_default"), r.getString("identity_generation")));
+            }
+        }
+        return result;
     }
 
     private static List<String> strings(Connection c, String sql) throws SQLException {
