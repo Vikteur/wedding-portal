@@ -444,6 +444,33 @@ class CiContractSpecTest {
     }
 
     @Test
+    void an_image_build_from_another_context_is_found_rather_than_checked_against_the_root_dockerfile()
+            throws IOException {
+        // Given
+        var otherContexts = List.of(
+                "docker build -t x application",
+                "docker buildx build --tag x ./application",
+                "docker build -t x -",
+                "docker build -t x https://github.com/Vikteur/wedding-portal.git",
+                "docker build --frobnicate y -t x .",
+                "docker buildx bake",
+                "docker bake image");
+        var rootContexts = List.of(
+                "docker build -t wedding-portal:ci .",
+                "docker build --build-arg A=b -t x ./",
+                "docker buildx build --platform linux/amd64 --load -t x .");
+
+        // When / Then
+        for (String command : otherContexts) {
+            assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command)
+                    .containsExactly("ci.yml job build: `" + command + "` builds from a Dockerfile this test does not read");
+        }
+        for (String command : rootContexts) {
+            assertThat(violations(build(PIN, CHECKOUT, run(command)))).as(command).isEmpty();
+        }
+    }
+
+    @Test
     void an_image_build_without_the_contract_checkout_is_found() throws IOException {
         // Given
         JsonNode workflow = build(PIN, run("docker build -t x ."));
