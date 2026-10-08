@@ -83,6 +83,18 @@ class ErrorEnvelopeMapperIT {
     }
 
     @Test
+    void the_role_denied_forbidden_is_left_to_the_framework_not_the_catch_all() {
+        // When
+        Response response = given().when().get(PROBE + "/role-denied");
+
+        // Then: the framework's 403, not the catch-all's 500 envelope, and nothing logged
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.asString()).doesNotContain("\"detail\"");
+        assertThat(log.fromMapper()).isEmpty();
+        assertThat(log.errors()).isEmpty();
+    }
+
+    @Test
     void a_broken_generated_dto_answers_422_validation_failed_as_rekord_api_does() throws Exception {
         // Given
         JsonNode fixture;

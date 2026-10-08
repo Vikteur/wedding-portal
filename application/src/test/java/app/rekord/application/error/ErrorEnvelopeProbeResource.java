@@ -70,6 +70,13 @@ public class ErrorEnvelopeProbeResource {
         throw new jakarta.ws.rs.ForbiddenException("No organisation on this session.");
     }
 
+    /** The role-denied refusal: no mapper of ours names it, so the framework answers it (TASK-6.2 records that body). */
+    @GET
+    @Path("/role-denied")
+    public String roleDenied() {
+        throw new io.quarkus.security.ForbiddenException();
+    }
+
     @GET
     @Path("/uuid/{id}")
     public String uuid(@PathParam("id") UUID id) {
