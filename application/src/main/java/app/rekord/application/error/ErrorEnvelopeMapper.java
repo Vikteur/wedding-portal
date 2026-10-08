@@ -99,8 +99,8 @@ public class ErrorEnvelopeMapper {
         detail.setMessage(message);
         Error error = new Error();
         error.setDetail(detail);
-        return RestResponse.ResponseBuilder.create(RestResponse.Status.OK, error)
-                .status(status)
+        return RestResponse.ResponseBuilder.<Error>create(status)
+                .entity(error)
                 .type(MediaType.APPLICATION_JSON_TYPE)
                 .build();
     }
