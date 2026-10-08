@@ -7,8 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,7 +19,8 @@ class BaselineMigrationTest {
     private static final Path MIGRATIONS =
             Path.of(System.getProperty("wedding.repoRoot")).resolve("application/src/main/resources/db/migration");
     private static final Path BASELINE = MIGRATIONS.resolve("V1__baseline.sql");
-    private static final Pattern VERSIONED = Pattern.compile("V[0-9]+__[A-Za-z0-9_]+\\.sql");
+    // The version syntax of MigrationCoverage: V1, V1.1 and V1_1 (Flyway reads an underscore as a dot).
+    private static final Pattern VERSIONED = Pattern.compile("V([0-9]+(?:[._][0-9]+)*)__[A-Za-z0-9_]+\\.sql");
     private static final Pattern STATEMENT =
             Pattern.compile("\\b(create|alter|drop|insert)\\b|;", Pattern.CASE_INSENSITIVE);
 
@@ -52,13 +55,17 @@ class BaselineMigrationTest {
     private static List<String> byVersion(Path dir) throws IOException {
         try (Stream<Path> files = Files.list(dir)) {
             return files.map(path -> path.getFileName().toString())
-                    .sorted(Comparator.comparingInt(BaselineMigrationTest::version))
+                    .sorted(Comparator.comparing(BaselineMigrationTest::version))
                     .toList();
         }
     }
 
-    private static int version(String fileName) {
-        return Integer.parseInt(fileName.substring(1, fileName.indexOf("__")));
+    private static MigrationVersion version(String fileName) {
+        Matcher m = VERSIONED.matcher(fileName);
+        if (!m.matches()) {
+            throw new AssertionError(fileName + " is not a versioned migration");
+        }
+        return MigrationVersion.fromVersion(m.group(1).replace('_', '.'));
     }
 
     @Test
