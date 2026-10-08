@@ -1,6 +1,0 @@
-{
-  "capturedFrom": "rekord-api ec65ae35c182e6e25f571c76d45b15a78f183c10 built against rekord-contract f3ed000e14b40e55393bcb0990c7620ee1b36560, ./mvnw quarkus:dev on a scratch copy of the commit plus a public probe resource, GET probe that throws ApiException(401, BAD_CREDENTIALS, \"That email and password do not match an account.\"), no Accept-Language, en_US locale",
-  "status": 401,
-  "contentType": "application/json",
-  "body": "{\"detail\":{\"code\":\"BAD_CREDENTIALS\",\"message\":\"That email and password do not match an account.\"}}"
-}

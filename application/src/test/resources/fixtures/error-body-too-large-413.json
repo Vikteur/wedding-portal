@@ -1,6 +1,0 @@
-{
-  "capturedFrom": "rekord-api ec65ae35c182e6e25f571c76d45b15a78f183c10 built against rekord-contract f3ed000e14b40e55393bcb0990c7620ee1b36560, ./mvnw quarkus:dev on the unmodified commit, real route, POST /api/invites/tok-example-0001/accept with 10485761 bytes (10240K + 1) of application/json, sent by curl with Expect: 100-continue, no Accept-Language, en_US locale",
-  "status": 413,
-  "contentType": "",
-  "body": ""
-}
