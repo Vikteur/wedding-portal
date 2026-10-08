@@ -13,13 +13,17 @@ import java.util.List;
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints) {
 
-    /** {@code type} is {@code data_type} plus {@code (n)} for a length, or the {@code udt_name} of a user-defined or array type. */
+    /**
+     * {@code type} is {@code data_type} plus {@code (n)} for a length, {@code (p,s)} for a numeric precision and scale,
+     * {@code (p)} for a time precision other than the default 6, or the {@code udt_name} of a user-defined or array type.
+     */
     public record Column(String table, String name, String type, boolean nullable) {}
 
     /** {@code detail}: the check clause, {@code references <table>(<cols>) on delete <rule>} for a foreign key, else empty. */
     public record Constraint(String table, String name, String type, List<String> columns, String detail) {}
 
     private static final String HISTORY = "flyway_schema_history";
+    private static final int DEFAULT_TIME_PRECISION = 6;
 
     public static SchemaSnapshot empty() {
         return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of());
@@ -46,7 +50,8 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
     private static List<Column> columns(Connection c) throws SQLException {
         List<Column> result = new ArrayList<>();
         try (PreparedStatement s = c.prepareStatement("""
-                select c.table_name, c.column_name, c.data_type, c.character_maximum_length, c.udt_name, c.is_nullable
+                select c.table_name, c.column_name, c.data_type, c.character_maximum_length, c.udt_name, c.is_nullable,
+                  c.numeric_precision, c.numeric_scale, c.datetime_precision
                 from information_schema.columns c
                 join information_schema.tables t
                   on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
@@ -59,6 +64,11 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
                     type = r.getString("udt_name");
                 } else if (r.getObject("character_maximum_length") != null) {
                     type += "(" + r.getInt("character_maximum_length") + ")";
+                } else if (type.equals("numeric") && r.getObject("numeric_precision") != null) {
+                    type += "(" + r.getInt("numeric_precision") + "," + r.getInt("numeric_scale") + ")";
+                } else if (type.startsWith("time") && r.getInt("datetime_precision") != DEFAULT_TIME_PRECISION) {
+                    // Written as PostgreSQL does: timestamp(3) with time zone
+                    type = type.replaceFirst("^(timestamp|time)", "$1(" + r.getInt("datetime_precision") + ")");
                 }
                 result.add(new Column(r.getString("table_name"), r.getString("column_name"), type,
                         r.getString("is_nullable").equals("YES")));
