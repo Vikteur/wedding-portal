@@ -126,3 +126,11 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 ## 2026-10-08 — TASK-35 image job on main only
 
 - The `image` job runs only on a push to main (after a merge), not on pull requests or feature branches; PRs are verified by `build` only. Requested by the user to keep image builds off PR pushes.
+
+## 2026-10-08 — TASK-5.2 error envelope mapper
+
+- `ErrorEnvelopeMapper` (package `app.rekord.application.error`) answers every refusal as `{"detail":{"code","message"}}` with `application/json`, like rekord-api. Fixtures in `application/src/test/resources/fixtures/error-*.json` were recorded from rekord-api at commit `ec65ae35c182e6e25f571c76d45b15a78f183c10` (a scratch copy plus a probe resource; rekord-api itself was not edited). The 413 answer is Vert.x's own: no body and no `Content-Type`.
+- There is no mapper for `io.quarkus.security.ForbiddenException`; the authentication and authorization mappers cover `AuthenticationFailedException`, `UnauthorizedException` and `jakarta.ws.rs.ForbiddenException`.
+- The 422 `VALIDATION_FAILED` message joins `<last path segment> <message>` with `"; "`, distinct, in the order the violation set gives. Sorting them is TASK-5.6's deviation, not done here.
+- The Throwable catch-all logs once per 500 answer: logger `app.rekord.application.error.ErrorEnvelopeMapper`, level ERROR, message `Unhandled exception`, no parameters, and a `RedactedCause` as the throwable (class names and frames of the cause chain and suppressed exceptions, no messages). Nothing is logged for a 4xx. rekord-api logs the original exception with its messages; this deliberately differs to keep personal data and UD-19.f values out of the log.
+- New dependencies in `application/build.gradle.kts`: `io.quarkus.security:quarkus-security` and `io.quarkus:quarkus-hibernate-validator`. `application.properties` sets `quarkus.http.limits.max-body-size=10240K` explicitly.
