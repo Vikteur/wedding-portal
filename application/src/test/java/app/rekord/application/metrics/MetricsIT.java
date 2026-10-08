@@ -8,13 +8,19 @@ import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
+import jakarta.inject.Inject;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -25,9 +31,13 @@ import org.junit.jupiter.api.Test;
 class MetricsIT {
 
     private static final int BODY_LIMIT = 10240 * 1024;
+    private static final Duration DEADLINE = Duration.ofSeconds(15);
 
     @TestHTTPResource("/api/no-such-route")
     URL noSuchRoute;
+
+    @Inject
+    HeldRequests held;
 
     private static String scrape() {
         Response response = given().accept("text/plain").when().get("/q/metrics");
@@ -47,6 +57,14 @@ class MetricsIT {
             }
             return true;
         });
+    }
+
+    /** The summed count of the http.server requests that ended in a reset. */
+    private static double resetCount(String scrape) {
+        return scrape.lines()
+                .filter(l -> l.startsWith("http_server_requests_seconds_count") && l.contains("status=\"RESET\""))
+                .mapToDouble(l -> Double.parseDouble(l.substring(l.lastIndexOf(' ') + 1)))
+                .sum();
     }
 
     @Test
@@ -129,5 +147,36 @@ class MetricsIT {
                 .as("a count line tagged UNKNOWN for the 413")
                 .isTrue();
         assertThat(scrape).doesNotContain(id);
+    }
+
+    @Test
+    void a_request_reset_before_routing_is_tagged_unknown_never_its_path() throws Exception {
+        // Given: a request to a path no resource matches, held in flight before routing
+        String id = UUID.randomUUID().toString();
+        String path = "/api/no-such-route/" + id;
+        double resetsBefore = resetCount(scrape());
+
+        // When: the client resets the connection (a close with linger 0 sends RST) while the server waits
+        try (Socket socket = new Socket(noSuchRoute.getHost(), noSuchRoute.getPort())) {
+            socket.setSoLinger(true, 0);
+            String head = "POST " + path + " HTTP/1.1\r\nHost: localhost\r\n" + HeldRequests.HEADER + ": 1\r\n"
+                    + "Content-Type: application/json\r\nContent-Length: 1000000\r\n\r\n";
+            socket.getOutputStream().write(head.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            held.arrival(path).get(DEADLINE.toSeconds(), TimeUnit.SECONDS);
+        }
+        String scrape = scrape();
+        Instant deadline = Instant.now().plus(DEADLINE);
+        while (resetCount(scrape) <= resetsBefore && Instant.now().isBefore(deadline)) {
+            Thread.sleep(50);
+            scrape = scrape();
+        }
+
+        // Then
+        assertThat(resetCount(scrape)).as("a reset counted within " + DEADLINE).isGreaterThan(resetsBefore);
+        assertThat(scrape).as("the scrape of a reset request").doesNotContain(id);
+        assertThat(hasLine(scrape, "http_server_requests_seconds_count", "uri=\"UNKNOWN\"", "status=\"RESET\""))
+                .as("a count line tagged UNKNOWN for the reset")
+                .isTrue();
     }
 }
