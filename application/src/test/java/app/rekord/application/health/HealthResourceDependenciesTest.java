@@ -3,6 +3,7 @@ package app.rekord.application.health;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import app.rekord.adapter.web.health.HealthResource;
+import app.rekord.adapter.web.health.SamePackageHelperFixture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
@@ -51,6 +52,21 @@ class HealthResourceDependenciesTest {
         assertThat(result.hasViolation()).isTrue();
         String details = String.join("\n", result.getFailureReport().getDetails());
         assertThat(details).contains("javax.sql.DataSource").contains("jakarta.persistence.EntityManager");
+    }
+
+    @Test
+    void the_rule_refuses_a_helper_of_the_health_package_that_could_reach_a_datasource() {
+        // Given a resource in the health resource's own package that reaches a datasource through a helper there
+        JavaClasses classes = new ClassFileImporter().importClasses(SamePackageHelperFixture.ResourceWithAHelper.class);
+
+        // When
+        EvaluationResult result = onlyTheContractAndCdi(SamePackageHelperFixture.ResourceWithAHelper.class.getName())
+                .evaluate(classes);
+
+        // Then
+        assertThat(result.hasViolation()).isTrue();
+        String details = String.join("\n", result.getFailureReport().getDetails());
+        assertThat(details).contains(SamePackageHelperFixture.DatabaseHelper.class.getName());
     }
 
     /** Never a bean (no scope annotation): it only gives the rule something to refuse. */
