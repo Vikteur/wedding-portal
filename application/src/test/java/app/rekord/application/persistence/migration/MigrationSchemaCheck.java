@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
  */
 abstract class MigrationSchemaCheck {
 
+    private static final String PRODUCTION_LOCATION = "classpath:db/migration";
+
     /** The version of the migration this class tests, as in the V file name (dots for underscores). */
     protected abstract String version();
 
@@ -26,29 +28,35 @@ abstract class MigrationSchemaCheck {
             throws Exception {
         // Given an empty container of its own
         try (MigrationDatabase database = new MigrationDatabase()) {
-            assertThat(database.snapshot()).as("empty container").isEqualTo(SchemaSnapshot.empty());
-
-            // When the history is migrated up to and including this version
-            database.migrateTo(version());
-
-            // Then every resolved version up to it was applied in order, none skipped
-            MigrationVersion target = MigrationVersion.fromVersion(version());
-            var resolved = Arrays.stream(Flyway.configure()
-                            .dataSource(database.container().getJdbcUrl(), database.container().getUsername(),
-                                    database.container().getPassword())
-                            .locations("classpath:db/migration")
-                            .load()
-                            .info()
-                            .all())
-                    .map(info -> info.getVersion())
-                    .filter(v -> v != null && v.compareTo(target) <= 0)
-                    .map(MigrationVersion::getVersion)
-                    .toList();
-            assertThat(resolved).as("resolved versions include " + version()).contains(target.getVersion());
-            assertThat(database.historyVersions()).as("applied history").isEqualTo(resolved);
-
-            // And the schema is the declared one
-            assertThat(database.snapshot()).isEqualTo(expected());
+            check(database, PRODUCTION_LOCATION, version(), expected());
         }
+    }
+
+    /** The check itself, on any location, so {@code MigrationSchemaCheckIT} can show it fail on the fixtures. */
+    static void check(MigrationDatabase database, String location, String version, SchemaSnapshot expected)
+            throws Exception {
+        assertThat(database.snapshot()).as("empty container").isEqualTo(SchemaSnapshot.empty());
+
+        // When the history is migrated up to and including this version
+        database.migrateTo(version, location);
+
+        // Then every resolved version up to it was applied in order, none skipped
+        MigrationVersion target = MigrationVersion.fromVersion(version);
+        var resolved = Arrays.stream(Flyway.configure()
+                        .dataSource(database.container().getJdbcUrl(), database.container().getUsername(),
+                                database.container().getPassword())
+                        .locations(location)
+                        .load()
+                        .info()
+                        .all())
+                .map(info -> info.getVersion())
+                .filter(v -> v != null && v.compareTo(target) <= 0)
+                .map(MigrationVersion::getVersion)
+                .toList();
+        assertThat(resolved).as("resolved versions include " + version).contains(target.getVersion());
+        assertThat(database.historyVersions()).as("applied history").isEqualTo(resolved);
+
+        // And the schema is the declared one
+        assertThat(database.snapshot()).isEqualTo(expected);
     }
 }
