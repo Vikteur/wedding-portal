@@ -137,6 +137,13 @@ public class ErrorEnvelopeProbeResource {
         throw new jakarta.ws.rs.ServiceUnavailableException("upstream said member@example.com tok-example-123");
     }
 
+    /** Exactly 500: the first status the catch-all treats as a server fault rather than a client refusal. */
+    @GET
+    @Path("/internal-server-error")
+    public String internalServerError() {
+        throw new jakarta.ws.rs.InternalServerErrorException("upstream said member@example.com tok-example-123");
+    }
+
     /** NO_WEDDING is a NotFound code, so as a Rejected it has no ErrorStatusTable row. */
     @GET
     @Path("/pair-without-row")

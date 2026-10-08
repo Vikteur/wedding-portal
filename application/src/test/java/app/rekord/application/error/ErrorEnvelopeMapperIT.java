@@ -174,6 +174,16 @@ class ErrorEnvelopeMapperIT {
     }
 
     @Test
+    void a_web_application_exception_of_exactly_500_answers_the_500_fixture_and_logs_once() throws Exception {
+        // When
+        Response response = given().when().get(PROBE + "/internal-server-error");
+
+        // Then: 500 is a server fault, so it is logged like the 503, not kept as a quiet client refusal
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/internal-server-error");
+    }
+
+    @Test
     void a_family_error_without_a_table_row_answers_the_500_fixture_and_logs_once() throws Exception {
         Response response = given().when().get(PROBE + "/pair-without-row");
 

@@ -228,4 +228,28 @@ class ErrorEnvelopeMapperTest {
                 "UNKNOWN",
                 "Something went wrong at our end.");
     }
+
+    @Test
+    void a_web_application_exception_of_exactly_500_answers_500_unknown_not_a_client_refusal() {
+        // Given: 500 is the first status the catch-all treats as a server fault
+        var e = new jakarta.ws.rs.InternalServerErrorException();
+
+        // When
+        RestResponse<Error> response = mapper.onThrowable(e);
+
+        // Then
+        assertEnvelope(response, 500, "UNKNOWN", "Something went wrong at our end.");
+    }
+
+    @Test
+    void a_web_application_exception_of_499_keeps_its_status_with_code_unknown() {
+        // Given: 499 is the last status below the server-fault line
+        var e = new jakarta.ws.rs.WebApplicationException(499);
+
+        // When
+        RestResponse<Error> response = mapper.onThrowable(e);
+
+        // Then
+        assertEnvelope(response, 499, "UNKNOWN", "That request could not be handled.");
+    }
 }
