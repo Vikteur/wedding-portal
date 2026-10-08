@@ -112,4 +112,25 @@ final class Workflows {
         });
         return uses;
     }
+
+    private static final Pattern STATUS_FUNCTION = Pattern.compile("(?<![A-Za-z0-9_])(always|failure|cancelled) *[(]");
+
+    /**
+     * Whether the job could still run when a job it needs failed: its {@code if:} calls {@code always()},
+     * {@code failure()} or {@code cancelled()}, or a job it needs has {@code continue-on-error: true}.
+     */
+    static boolean runsAfterAFailedNeed(JsonNode workflow, String job) {
+        JsonNode node = workflow.path("jobs").path(job);
+        if (STATUS_FUNCTION.matcher(node.path("if").asText("")).find()) {
+            return true;
+        }
+        JsonNode needs = node.path("needs");
+        List<String> needed = new ArrayList<>();
+        if (needs.isArray()) {
+            needs.forEach(n -> needed.add(n.asText()));
+        } else if (needs.isTextual()) {
+            needed.add(needs.asText());
+        }
+        return needed.stream().anyMatch(n -> workflow.path("jobs").path(n).path("continue-on-error").asBoolean(false));
+    }
 }
