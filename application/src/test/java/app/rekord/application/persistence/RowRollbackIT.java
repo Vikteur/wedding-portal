@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.jar.JarFile;
 import javax.sql.DataSource;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexReader;
@@ -119,6 +120,27 @@ class RowRollbackIT {
                     Index index = new IndexReader(in).read();
                     assertThat(index.getClassByName(DotName.createSimple(type.getName()))).isNotNull();
                 }
+            }
+        }
+    }
+
+    @Test
+    void no_index_dependency_or_beans_xml_offers_another_discovery_path() throws Exception {
+        // Given the configuration of this application and the two tests jars
+        // When / Then no quarkus.index-dependency entry indexes a module instead of its own Jandex index
+        assertThat(ConfigProvider.getConfig().getPropertyNames())
+                .noneMatch(name -> name.startsWith("quarkus.index-dependency."));
+
+        // And neither jar carries a beans.xml, which would make Quarkus index it without META-INF/jandex.idx
+        for (String module : List.of("rekord-adapter", "rekord-usecase")) {
+            List<Path> jars = Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator))
+                    .map(Path::of)
+                    .filter(e -> e.getFileName().toString().startsWith(module)
+                            && e.getFileName().toString().endsWith("-tests.jar"))
+                    .toList();
+            assertThat(jars).hasSize(1);
+            try (JarFile jarFile = new JarFile(jars.get(0).toFile())) {
+                assertThat(jarFile.getEntry("META-INF/beans.xml")).as("beans.xml in " + jars.get(0)).isNull();
             }
         }
     }

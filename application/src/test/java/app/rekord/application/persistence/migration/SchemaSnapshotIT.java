@@ -148,6 +148,27 @@ class SchemaSnapshotIT {
     }
 
     @Test
+    void a_user_schema_is_listed_and_an_enum_or_array_column_is_typed_by_its_udt_name() throws SQLException {
+        // Given a schema of its own, and an enum and an array column in public
+        try (Connection c = freshDatabase()) {
+            execute(c, """
+                    create schema audit;
+                    create type mood as enum ('calm', 'busy');
+                    create table tagged (state mood not null, tags text[])
+                    """);
+
+            // When the schema is read
+            SchemaSnapshot snapshot = SchemaSnapshot.read(c);
+
+            // Then
+            assertThat(snapshot.schemas()).containsExactly("audit");
+            assertThat(snapshot.columns()).containsExactly(
+                    new SchemaSnapshot.Column("tagged", "state", "mood", false),
+                    new SchemaSnapshot.Column("tagged", "tags", "_text", true));
+        }
+    }
+
+    @Test
     void an_empty_database_has_the_empty_snapshot() throws SQLException {
         // Given a fresh database, even with a Flyway history table
         try (Connection c = freshDatabase()) {

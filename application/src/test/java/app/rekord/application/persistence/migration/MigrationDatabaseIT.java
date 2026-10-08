@@ -1,6 +1,7 @@
 package app.rekord.application.persistence.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import app.rekord.application.persistence.FreshDatabase;
 import java.sql.Connection;
@@ -62,6 +63,25 @@ class MigrationDatabaseIT {
             // Then both tables exist, with two history rows
             assertThat(second.snapshot().tables()).containsExactly("fixture_first", "fixture_second");
             assertThat(second.historyVersions()).isEqualTo(List.of("1", "2"));
+        }
+    }
+
+    @Test
+    void history_versions_refuses_a_history_with_a_failed_row() throws Exception {
+        // Given a migrated fixture history with a failed row added after it
+        try (MigrationDatabase database = new MigrationDatabase()) {
+            database.migrateTo("1", FIXTURES);
+            try (Connection c = database.connection(); Statement s = c.createStatement()) {
+                s.execute("""
+                        insert into flyway_schema_history
+                          (installed_rank, version, description, type, script, installed_by, execution_time, success)
+                        values (2, '2', 'fixture second', 'SQL', 'V2__fixture_second.sql', 'test', 0, false)""");
+            }
+
+            // When / Then
+            assertThatThrownBy(database::historyVersions)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("migration 2 failed");
         }
     }
 
