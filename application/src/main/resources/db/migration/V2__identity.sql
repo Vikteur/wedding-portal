@@ -7,13 +7,15 @@
 -- Deviations from the oracle (UD-13: the database is empty, nothing is imported):
 --   * memberships.role also accepts ADMIN (UD-14.a): ADMIN, PLANNER, DJ.
 --   * users has no failed_login_count and no locked_until (S20 UX-13).
---   * no dj_invites (TASK-8.1), no auth_attempts and no audit_log.
+--   * no dj_invites (TASK-8.1), no auth_attempts and no audit_log: auth_attempts and the sign-in throttle come with
+--     TASK-7.5 (P1-E01-T05), audit_log with TASK-15.10 (P1-E09-T10).
 --
 -- BR-ID-09: a session stores only sha256(token) as token_hash; the token itself is never stored.
 -- BR-DM-03: every instant is timestamptz.
 -- BR-DM-08, BR-DM-09: a live address and a live slug are unique, case-insensitively.
 -- BR-DM-10: a member holds each role once per organisation.
--- BR-DM-12: a session belongs to an account or to a portal, never both and never neither.
+-- BR-DM-12: a session belongs to an account or to a portal, never both and never neither; a portal session is
+-- always scoped to one wedding.
 
 create table organizations (
     id          uuid primary key,
@@ -63,6 +65,7 @@ create table memberships (
 
 -- A person may hold several roles in an organisation, but not the same one twice.
 create unique index ux_memberships_org_user_role on memberships (org_id, user_id, role);
+-- Resolving a session lists a member's roles on every request; that read gets its own index (oracle V9).
 create index ix_memberships_org_user on memberships (org_id, user_id);
 create index ix_memberships_user on memberships (user_id) where status = 'ACTIVE';
 
