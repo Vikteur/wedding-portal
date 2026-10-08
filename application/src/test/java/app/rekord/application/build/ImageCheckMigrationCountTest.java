@@ -49,8 +49,14 @@ class ImageCheckMigrationCountTest {
 
         // When it runs under bash with repo_root set to the repo
         String script = "repo_root='" + REPO_ROOT.toString().replace('\\', '/') + "'\n" + line + "\necho \"$migrations\"\n";
-        Process process = new ProcessBuilder(bashExecutable(), "-c", script).redirectErrorStream(true).start();
+        // Through a file: Windows argument quoting would mangle the quotes of a -c script
+        Path scriptFile = Files.createTempFile("migration-count", ".sh");
+        Files.writeString(scriptFile, script);
+        Process process = new ProcessBuilder(bashExecutable(), scriptFile.toString().replace('\\', '/'))
+                .redirectErrorStream(true)
+                .start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        Files.delete(scriptFile);
         assertThat(process.waitFor()).as(output).isZero();
 
         // Then it prints the number of V*__*.sql files that Java lists
