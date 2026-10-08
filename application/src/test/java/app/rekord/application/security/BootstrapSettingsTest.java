@@ -14,14 +14,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-/** The bootstrap address and password come from the deployment secrets only (D6): no file in git names a value. */
+/**
+ * The bootstrap address and password come from the deployment secrets only (D6): no shipped resource, image, compose
+ * file or CI workflow in git names a value.
+ */
 class BootstrapSettingsTest {
 
     private static final Path REPO_ROOT = Path.of(System.getProperty("wedding.repoRoot"));
     private static final Path PROPERTIES = REPO_ROOT.resolve("application/src/main/resources/application.properties");
+
+    /**
+     * {@code app.bootstrap.email} or {@code app.bootstrap.password}, or their environment variables, followed by a value:
+     * {@code KEY=v}, {@code KEY: v}, Docker's {@code ENV KEY v}, {@code -Dkey=v}. A reference such as
+     * {@code ${{ secrets.KEY }}} or {@code $KEY} names no value and passes.
+     */
+    private static final Pattern DEPLOYMENT_SETTING = Pattern.compile(
+            "(?i)(\\benv\\s+app_bootstrap_(email|password)\\s+|app[._]bootstrap[._](email|password)\\s*[=:]\\s*)"
+                    + "(?!\\$)[^\\s,)}]");
 
     @Test
     void no_shipped_file_sets_the_bootstrap_address_or_password() throws IOException {
@@ -35,6 +48,37 @@ class BootstrapSettingsTest {
             }
         }
         assertThat(hits).as("lines that set app.bootstrap.email or app.bootstrap.password").isEmpty();
+    }
+
+    @Test
+    void no_image_compose_file_or_ci_workflow_sets_the_bootstrap_address_or_password() throws IOException {
+        List<String> hits = new ArrayList<>();
+        for (Path file : deploymentFiles()) {
+            String name = REPO_ROOT.relativize(file).toString().replace('\\', '/');
+            for (String line : Files.readAllLines(file, StandardCharsets.ISO_8859_1)) {
+                if (!line.strip().startsWith("#") && DEPLOYMENT_SETTING.matcher(line).find()) {
+                    hits.add(name + ": " + line.trim());
+                }
+            }
+        }
+        assertThat(deploymentFiles()).contains(REPO_ROOT.resolve("Dockerfile"));
+        assertThat(hits).as("lines that give the bootstrap address or password a value").isEmpty();
+    }
+
+    @Test
+    void the_deployment_check_sees_every_form_of_a_value_and_lets_a_secret_reference_pass() {
+        assertThat(List.of(
+                        "ENV APP_BOOTSTRAP_PASSWORD=made-up-pass-1234",
+                        "ENV APP_BOOTSTRAP_PASSWORD made-up-pass-1234",
+                        "  APP_BOOTSTRAP_EMAIL: admin@example.com",
+                        "ENV JAVA_OPTS=\"-Dapp.bootstrap.password=made-up-pass-1234\"",
+                        "APP_BOOTSTRAP_PASSWORD=\"made-up-pass-1234\""))
+                .allMatch(line -> DEPLOYMENT_SETTING.matcher(line).find());
+        assertThat(List.of(
+                        "  APP_BOOTSTRAP_PASSWORD: ${{ secrets.APP_BOOTSTRAP_PASSWORD }}",
+                        "  - APP_BOOTSTRAP_EMAIL=$APP_BOOTSTRAP_EMAIL",
+                        "Set APP_BOOTSTRAP_EMAIL, APP_BOOTSTRAP_PASSWORD (secrets)."))
+                .noneMatch(line -> DEPLOYMENT_SETTING.matcher(line).find());
     }
 
     @Test
@@ -65,6 +109,23 @@ class BootstrapSettingsTest {
             return false;
         }
         return text.matches("(%[\\w-]+[.])?app[.]bootstrap[.]" + key + "\\s*[=:].*");
+    }
+
+    /** The image, any compose or {@code .env} file at the root, and every file of the CI workflows and actions. */
+    private static List<Path> deploymentFiles() throws IOException {
+        List<Path> files = new ArrayList<>();
+        try (Stream<Path> root = Files.list(REPO_ROOT)) {
+            root.filter(Files::isRegularFile)
+                    .filter(file -> {
+                        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+                        return name.startsWith("dockerfile") || name.contains("compose") || name.startsWith(".env");
+                    })
+                    .forEach(files::add);
+        }
+        try (Stream<Path> github = Files.walk(REPO_ROOT.resolve(".github"))) {
+            github.filter(Files::isRegularFile).forEach(files::add);
+        }
+        return files;
     }
 
     /** Every regular file under a {@code src/main/resources} folder of the repository: what the build ships. */
