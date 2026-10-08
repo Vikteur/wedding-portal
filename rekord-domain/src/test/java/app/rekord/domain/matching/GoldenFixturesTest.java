@@ -8,7 +8,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -244,6 +246,31 @@ class GoldenFixturesTest {
 
         // Then it is the placeholder (a boolean, so a failure never shows the title)
         assertThat(placeholder.equals(title)).as("title of track %s is %s", id, placeholder).isTrue();
+    }
+
+    /**
+     * Pins each fixture by its SHA-256 over the LF-normalised bytes (review L9): a deliberate change to a fixture also
+     * updates the pin. Git stores LF, but a Windows checkout with core.autocrlf=true holds CRLF, so a hash over the raw
+     * bytes would differ between machines; CRLF is replaced with LF before hashing. A failure shows hashes, never content.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "golden-set.json, a7372668c9cef6449c1156e6bdc3ea05f40285167805686251b97dba0dd2a2f5",
+            "golden-library.json, 3fb1afccdb18a49244d9404912870b1356e90081b60988820fff878d79f5888d"})
+    void a_golden_fixture_matches_its_sha256_over_its_lf_bytes(String name, String sha256) throws Exception {
+        // Given a fixture file read as bytes, with CRLF replaced by LF (ISO-8859-1 maps every byte one to one)
+        byte[] lf;
+        try (InputStream in = GoldenFixturesTest.class.getResourceAsStream("/golden/" + name)) {
+            assertThat(in).as("classpath resource %s", name).isNotNull();
+            lf = new String(in.readAllBytes(), StandardCharsets.ISO_8859_1)
+                    .replace("\r\n", "\n").getBytes(StandardCharsets.ISO_8859_1);
+        }
+
+        // When it is hashed
+        String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(lf));
+
+        // Then it is the pinned hash
+        assertThat(actual).as("SHA-256 of %s over its LF bytes", name).isEqualTo(sha256);
     }
 
     private static final List<String> TRACK_KEYS = List.of("id", "artist", "title", "duration_sec");
