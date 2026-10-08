@@ -36,4 +36,9 @@ else
   fi
   commit=$(git -C "$home" rev-parse --short HEAD)
 fi
+# Update and commit the token and cost reports (TASK-41). Only a warning when it fails: it never fails this script, and its
+# JSON line goes to stderr so that the line printed below stays the last one on stdout.
+if [ -f "$home/scripts/tokenomics/commit-reports.sh" ]; then
+  "$home/scripts/tokenomics/commit-reports.sh" "$home" >&2 || echo "warning: the token reports were not committed." >&2
+fi
 node -e 'console.log(JSON.stringify({ commit: process.argv[1] }))' "$commit"

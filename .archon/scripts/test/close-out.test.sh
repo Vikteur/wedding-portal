@@ -121,5 +121,37 @@ d=$(dirname "$main_dir"); mkdir "$d/empty-beside-main"
 out=$( (cd "$main_dir" && PATH="$root/bin:$PATH" STUB_HEAD="$head" ARCHON_LOG="$log"   bash "$script" "" https://github.com/o/repo/pull/7 "$main_dir") 2>&1 ); rc=$?
 check "7 empty folder beside the main checkout survives" $([ -d "$d/empty-beside-main" ]; echo $?)
 
+# 8. The token report script is called with the umbrella dir when it exists, and the JSON line stays the only stdout line.
+stub_reports() { # stub_reports <exit code>: a commit-reports.sh stub that records its arguments
+  mkdir -p "$main_dir/scripts/tokenomics"
+  printf '#!/usr/bin/env bash
+echo "$*" > "%s/reports.args"
+echo {\\"commit\\":\\"abc\\"}
+exit %s
+' "$(dirname "$main_dir")" "$1" > "$main_dir/scripts/tokenomics/commit-reports.sh"
+  chmod +x "$main_dir/scripts/tokenomics/commit-reports.sh"
+}
+run_split() { # like run, but keeps stdout apart: sets out (stderr and stdout), json (stdout), rc
+  json=$( (cd "$wt" && PATH="$root/bin:$PATH" STUB_HEAD="$head" ARCHON_LOG="$log"     bash "$script" "" https://github.com/o/repo/pull/7 "$main_dir") 2> "$root/stderr.txt" ); rc=$?
+  out="$json
+$(cat "$root/stderr.txt")"
+}
+scenario eight; stub_reports 0; run_split
+check "8 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "8 report script called with the umbrella dir" $([ "$(cat "$(dirname "$main_dir")/reports.args")" = "$main_dir" ]; echo $?)
+check "8 stdout is the unchanged JSON line" $([ "$json" = '{"backlog":"","branch":"deleted","worktree":"removed"}' ]; echo $?)
+
+# 9. A failing report script is only a warning.
+scenario nine; stub_reports 1; run_split
+check "9 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "9 report script was called" $([ -f "$(dirname "$main_dir")/reports.args" ]; echo $?)
+check "9 warning on stderr" $(grep -q "token reports were not committed" "$root/stderr.txt"; echo $?)
+check "9 stdout is the unchanged JSON line" $([ "$json" = '{"backlog":"","branch":"deleted","worktree":"removed"}' ]; echo $?)
+
+# 10. Without the report script nothing is called and nothing is said about it.
+scenario ten; run_split
+check "10 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "10 no mention of the token reports" $(! grep -q "token reports" "$root/stderr.txt"; echo $?)
+
 echo "close-out tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

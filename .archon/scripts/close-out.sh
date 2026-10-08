@@ -66,6 +66,12 @@ else
   echo "$main is not on main; not pulled." >&2
 fi
 
+# Update and commit the token and cost reports (TASK-41). Only a warning when it fails: it never fails this node, and its
+# JSON line goes to stderr so that the line printed below stays the only one on stdout.
+if [ -f "$home/scripts/tokenomics/commit-reports.sh" ]; then
+  "$home/scripts/tokenomics/commit-reports.sh" "$home" >&2 || echo "warning: the token reports were not committed." >&2
+fi
+
 # 3. Delete the pull request's own branch and the run's worktree. This node runs inside the still-running workflow, so
 # plain `archon complete` always refuses ("running workflow"); `--force` is needed, but it also skips archon's other
 # checks (commits not pushed, commits unique to the branch, uncommitted changes). So this script does its own guard
