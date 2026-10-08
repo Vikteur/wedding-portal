@@ -108,9 +108,31 @@ class TrackMatcherTest {
         assertThat(result.autoSelectedId()).isEqualTo("f");
         ScoredCandidate only = result.candidates().get(0);
         assertThat(only.score()).isEqualTo(1.0);
+        // AC #3: the delta is file minus query, 322 - 320.
+        assertThat(only.durationDeltaSec()).isEqualTo(2.0);
         assertThat(only.parts()).containsExactly(
                 java.util.Map.entry("title", 1.0), java.util.Map.entry("artist", 1.0),
                 java.util.Map.entry("version", 1.0), java.util.Map.entry("duration", 1.0));
+    }
+
+    // AC #3 (BR-MX-14, PIN-14-0369): half-even to one decimal, each file matched alone.
+    @Test
+    void the_duration_delta_is_rounded_half_even_to_one_decimal() {
+        MatchResult low = match(320.0, daftPunk("f", "One More Time", 320.25));
+        MatchResult high = match(320.0, daftPunk("f", "One More Time", 320.75));
+
+        assertThat(low.candidates().get(0).durationDeltaSec()).isEqualTo(0.2);
+        assertThat(high.candidates().get(0).durationDeltaSec()).isEqualTo(0.8);
+    }
+
+    // AC #3: no delta when either duration is unknown.
+    @Test
+    void the_duration_delta_is_null_when_either_duration_is_unknown() {
+        MatchResult noQuery = match(null, daftPunk("f", "One More Time", 322.0));
+        MatchResult noFile = match(320.0, daftPunk("f", "One More Time", null));
+
+        assertThat(noQuery.candidates().get(0).durationDeltaSec()).isNull();
+        assertThat(noFile.candidates().get(0).durationDeltaSec()).isNull();
     }
 
     // AC #4 and AC #7
