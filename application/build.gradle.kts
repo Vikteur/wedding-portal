@@ -19,6 +19,7 @@ dependencies {
     implementation("io.quarkus:quarkus-narayana-jta")
     implementation("io.quarkus.security:quarkus-security")
     implementation("io.quarkus:quarkus-hibernate-validator")
+    implementation("io.quarkus:quarkus-smallrye-health")
 
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-junit-internal")
