@@ -66,11 +66,31 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         // When it is refused
         Outcome outcome = capturing(() -> em.persist(session));
 
-        // Then the refusal names its constraint and was logged, and the token hash is in no record or message, in hex or in PostgreSQL's \x form
+        // Then the refusal names its constraint and was logged, and the token hash is in no record or message,
+        // in hex or in PostgreSQL's \x form
         outcome.assertRefusedOn("ck_sessions_subject");
-        String hex = HexFormat.of().formatHex(IdentityRows.tokenHash(1));
-        outcome.assertNoneContains(hex);
-        outcome.assertNoneContains("\\x" + hex);
+        outcome.assertNoTokenHash(IdentityRows.tokenHash(1));
+    }
+
+    @Test
+    void a_refused_duplicate_token_hash_shows_the_hash_in_no_record_and_no_message() {
+        // Given an organisation, a user and a stored session with a token hash
+        OrganizationEntity org = IdentityRows.organization();
+        UserEntity user = IdentityRows.planner();
+        inNewTransaction(() -> {
+            em.persist(org);
+            em.persist(user);
+            em.persist(IdentityRows.userSession(1, org, user));
+        });
+
+        // When another session with the same token hash is refused on the unique index
+        SessionEntity duplicate = IdentityRows.userSession(2, org, user);
+        duplicate.setTokenHash(IdentityRows.tokenHash(1));
+        Outcome outcome = capturing(() -> em.persist(duplicate));
+
+        // Then the index is named, and the hash is in no record or message, in hex or in PostgreSQL's \x form
+        outcome.assertRefusedOn("ux_sessions_token");
+        outcome.assertNoTokenHash(IdentityRows.tokenHash(1));
     }
 
     /** Runs the action in a new transaction under log capture; the action must be refused. */
@@ -96,6 +116,18 @@ class IdentityRefusalLoggingIT extends AbstractRepositoryTest {
         void assertRefusedOn(String constraint) {
             assertThat(Refusals.constraintOf(refused)).as("constraint named by the refusal").isEqualTo(constraint);
             assertThat(records).anyMatch(record -> LogCapture.text(record).contains(constraint));
+        }
+
+        /**
+         * The token hash is in no record or message, in hex or in PostgreSQL's {@code \x} form, whole or as a prefix:
+         * the server cuts a long field value in a "Failing row contains" line, so a refused row would show only the
+         * start of the hash.
+         */
+        void assertNoTokenHash(byte[] tokenHash) {
+            String hex = HexFormat.of().formatHex(tokenHash);
+            assertNoneContains(hex);
+            assertNoneContains("\\x" + hex);
+            assertNoneContains(hex.substring(0, 16));
         }
 
         void assertNoneContains(String value) {
