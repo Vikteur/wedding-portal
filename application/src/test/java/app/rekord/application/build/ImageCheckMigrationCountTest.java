@@ -10,6 +10,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -80,15 +81,17 @@ class ImageCheckMigrationCountTest {
 
     /**
      * Plain {@code bash} on Linux and macOS. On Windows a bare {@code bash} can be the launcher of WSL, which does not
-     * read a Windows path, so the Git Bash that sits with {@code git.exe} is used. The test fails, and is never skipped,
-     * when there is none.
+     * read a Windows path, so the Git Bash that sits with {@code git.exe} is used. The test fails, and is never
+     * skipped, when there is none.
      */
     private static String bashExecutable() {
         if (!System.getProperty("os.name").startsWith("Windows")) {
             return "bash";
         }
         List<Path> candidates = new ArrayList<>();
-        for (String dir : System.getenv().getOrDefault("PATH", "").split(File.pathSeparator)) {
+        // getenv(String), not the getenv() map: on Windows only the first is case-insensitive, and PowerShell and cmd
+        // name the variable Path
+        for (String dir : Objects.requireNonNullElse(System.getenv("PATH"), "").split(File.pathSeparator)) {
             try {
                 Path git = Path.of(dir, "git.exe");
                 if (Files.isRegularFile(git)) {
