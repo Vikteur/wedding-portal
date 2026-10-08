@@ -174,4 +174,15 @@ public class ErrorEnvelopeProbeResource {
     public String cyclicCause() {
         throw chain(true);
     }
+
+    /**
+     * The same chain, thrown by another interceptor before this body runs (TASK-5.7): the guard keeps Quarkus REST from
+     * looping on it only while it is the outermost interceptor of the method.
+     */
+    @ThrowsCyclicChain
+    @GET
+    @Path("/cyclic-from-interceptor")
+    public String cyclicFromInterceptor() {
+        return "not reached: CyclicChainInterceptor throws first";
+    }
 }
