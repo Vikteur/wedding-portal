@@ -148,3 +148,10 @@ Module layout: follows architecture-conventions §2.2 and §14.1. Library beans 
 - **Supersedes** the TASK-24.3 bullet that left remembered choices unported. The step (BR-MX-18, `Matcher.java:92-124` in rekord-api) now lives in `TrackMatcher.matchOne` as a fourth argument, a map from `Signature.signatureId(artist, title)` to a file id; the two- and three-argument forms and a null map mean no choice. The golden gate proved the gap: the 9 `preference` cases could not pass without it. The owner approved building it here (option A).
 - A choice whose file is in the index goes first (scored and inserted when scoring did not list it, the list re-capped at 8), becomes `autoSelectedId` and sets `MatchResult.fromPreference`. The bucket is left as scoring set it, so UD-19.c is evaluated on scoring's leader before the choice is applied.
 - TASK-25.2 keeps the storage, the `rememberPreference` endpoint, reading choices per match and the wiring.
+
+## 2026-10-08 — TASK-24.4 golden-set acceptance gate
+
+- The gate is `MatcherGoldenSetTest` plus the helper `GoldenGate` in `rekord-domain/src/test/java/app/rekord/domain/matching`. It reads the fixtures from the classpath (`src/test/resources/golden/`, provenance in its `README.md`: rekord-api `ec65ae35c182e6e25f571c76d45b15a78f183c10`) and runs in the normal `test` task, with no database or network. `GoldenGateRunsInTheFastSetTest` keeps it there (no `IT` suffix, no `@Disabled`/`@Tag`, no JDBC driver or Testcontainers).
+- `GoldenGate.differences` returns one line per difference, naming the case position, family, query, candidate track id and both values; `assertNoDifferences` throws with all of them.
+- Deviations from rekord-api's recorded files: `source.database` is `/music/golden-src.db` (UD-19.m3, RISK-15), and the 18 UD-19.c cases and the summary block expect ambiguous with no pick. Both are the only edits to the recorded values.
+- The gate found one port gap: the remembered-choice step (see the TASK-24.4 remembered-choice entry above), built in the same ticket with the owner's approval.
