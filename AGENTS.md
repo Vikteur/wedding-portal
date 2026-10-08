@@ -2,6 +2,8 @@
 
 This repo's tickets live in the Backlog.md backlog of the sibling `weddingapp` checkout (`../weddingapp`), not here. Run every `backlog` command against it: from `../weddingapp`, or with `BACKLOG_CWD=../weddingapp`. Groma's Backlog task links (below) therefore name files of this repo in a ticket of that one. The Groma architecture map lives here, under `groma/`. Open it with `bash scripts/groma-web.sh` (not plain `groma web`): it attaches the weddingapp backlog, so the To Do and In Progress tickets that reference map elements or name changed files of this repo show on the map. Switch on the versioned pre-push hook once per clone with `bash scripts/install-hooks.sh`: it runs `.github/scripts/groma-check.sh` before every push (linked worktrees included) and stops the push when the map is out of step with the code.
 
+Docs: read `docs/README.md` before you write any doc. It says what goes where (decisions in `docs/memory.md`, project facts per skill in `docs/code-maps/<skill>.md`; retros, follow-ups and ticket specs in `../weddingapp`).
+
 <!-- groma:start -->
 ## Groma
 
