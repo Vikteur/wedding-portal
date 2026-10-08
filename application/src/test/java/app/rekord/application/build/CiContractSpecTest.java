@@ -32,6 +32,7 @@ class CiContractSpecTest {
     private static final String SPEC_FILE = "dist/openapi.yaml";
     private static final String SPEC_PROPERTY = "-Pcontract.spec=";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
+    private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
     private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
     private static final Pattern GRADLE = Pattern.compile("(.*/)?gradlew(\\.bat)?|gradle");
     /** What may stand in front of the wrapper without making it a mere argument. */
@@ -503,10 +504,13 @@ class CiContractSpecTest {
                 && !List.of(path.split("/")).contains("..");
     }
 
-    /** The commands of a script, one list of words each: continued lines joined, split at {@code && || ; |}. */
+    /**
+     * The commands of a script, one list of words each: the text after a {@code #} that starts a word dropped, continued
+     * lines joined, split at {@code && || ; |}.
+     */
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
-        for (String part : SEPARATOR.split(script.replaceAll("\\\\\\R", " "))) {
+        for (String part : SEPARATOR.split(COMMENT.matcher(script).replaceAll("$1").replaceAll("\\\\\\R", " "))) {
             List<String> words = Arrays.stream(part.trim().split("\\s+"))
                     .map(word -> word.replace("\"", "").replace("'", ""))
                     .filter(word -> !word.isEmpty())
