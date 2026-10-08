@@ -170,6 +170,17 @@ class CodeMapLeavesTest {
         assertThat(section).contains("MigrationCoverageTest", "RowRollbackIT", "probe_row", "testArtifacts", "FreshDatabase");
     }
 
+    @Test
+    void jvm_testing_states_what_else_the_migration_gate_and_the_snapshot_refuse() throws IOException {
+        // TASK-4.2 review: the gate's stray folders and skipped checks, the snapshot's shared constraint names
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "strayMigrationFolders",
+                "overrides the inherited check",
+                "MigrationSchemaCheckIT",
+                "table-specific constraint name");
+    }
+
     private static void assertLeaf(Path relative, String... phrases) throws IOException {
         Path file = REPO_ROOT.resolve(relative);
         assertThat(file).as("the leaf %s", relative).isRegularFile();
