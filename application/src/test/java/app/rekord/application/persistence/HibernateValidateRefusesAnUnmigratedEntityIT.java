@@ -47,7 +47,7 @@ class HibernateValidateRefusesAnUnmigratedEntityIT {
     void start_up_fails_and_hibernate_sent_no_ddl() {
         // When: the failed start-up is over
 
-        // Then: Flyway ran V1 and Hibernate created nothing
+        // Then: Flyway ran V1 and V2 and Hibernate created nothing
         assertThat(DB.column("select table_name from information_schema.tables where table_name = 'stray_entity'"))
                 .isEmpty();
         assertThat(DB.column("select version from flyway_schema_history")).containsExactly("1", "2");
