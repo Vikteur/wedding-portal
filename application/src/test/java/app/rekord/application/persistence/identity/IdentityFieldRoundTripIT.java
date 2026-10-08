@@ -14,7 +14,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,10 @@ import org.junit.jupiter.api.Test;
  * Every mapped field of an identity entity reaches its own column and comes back from it. A field written to the wrong
  * column, a column left unwritten and a value changed on the way each fail here. Every value in a row is distinct, so a
  * swap of two columns of the same type shows.
+ *
+ * <p>Every expectation is a literal or a constant of this test, never a getter of the entity under test: the entities
+ * use field access, so an accessor wired to the wrong field would give the same wrong value on both sides of a
+ * comparison and the test would stay green.
  *
  * <p>Sessions and users are read back over JDBC by column name, which catches two fields whose column names are
  * swapped (the persistence layer would swap them back on its own read). Organisations and memberships are persisted,
@@ -52,27 +58,15 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
             em.persist(org);
             em.persist(user);
         });
-        SessionEntity session = new SessionEntity();
-        session.setId(IdentityRows.id(701));
-        session.setSubjectKind("USER");
-        session.setUserId(user.getId());
-        session.setPortalId(null);
-        session.setWeddingId(IdentityRows.id(702));
-        session.setOrgId(org.getId());
-        session.setRoles(new String[] {"PLANNER", "DJ", "ADMIN"});
-        session.setTokenHash(TOKEN_HASH);
-        session.setCreatedAt(CREATED_AT);
-        session.setLastSeenAt(UPDATED_AT);
-        session.setIdleExpiresAt(FIRST);
-        session.setAbsoluteExpiresAt(THIRD);
-        session.setRevokedAt(SECOND);
-        session.setUserAgent("Example Browser 2.1");
+        SessionRow row = new SessionRow(IdentityRows.id(701), "USER", user.getId(), null, IdentityRows.id(702),
+                org.getId(), List.of("PLANNER", "DJ", "ADMIN"), TOKEN_HASH, CREATED_AT, UPDATED_AT, FIRST, THIRD,
+                SECOND, "Example Browser 2.1");
 
         // When it is stored
-        inNewTransaction(() -> em.persist(session));
+        inNewTransaction(() -> em.persist(row.toEntity()));
 
         // Then each column holds the value of its own field
-        assertSessionRow(session);
+        assertSessionRow(row);
     }
 
     @Test
@@ -80,39 +74,33 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
         // Given an organisation and a portal session with a distinct value in every field but the account
         OrganizationEntity org = IdentityRows.organization();
         inNewTransaction(() -> em.persist(org));
-        SessionEntity session = new SessionEntity();
-        session.setId(IdentityRows.id(711));
-        session.setSubjectKind("PORTAL");
-        session.setUserId(null);
-        session.setPortalId(IdentityRows.id(712));
-        session.setWeddingId(IdentityRows.id(713));
-        session.setOrgId(org.getId());
-        session.setRoles(new String[] {"COUPLE", "GUEST"});
-        session.setTokenHash(TOKEN_HASH);
-        session.setCreatedAt(CREATED_AT);
-        session.setLastSeenAt(UPDATED_AT);
-        session.setIdleExpiresAt(SECOND);
-        session.setAbsoluteExpiresAt(FOURTH);
-        session.setRevokedAt(FIRST);
-        session.setUserAgent("Example Browser 3.4");
+        SessionRow row = new SessionRow(IdentityRows.id(711), "PORTAL", null, IdentityRows.id(712),
+                IdentityRows.id(713), org.getId(), List.of("COUPLE", "GUEST"), TOKEN_HASH, CREATED_AT, UPDATED_AT,
+                SECOND, FOURTH, FIRST, "Example Browser 3.4");
 
         // When it is stored
-        inNewTransaction(() -> em.persist(session));
+        inNewTransaction(() -> em.persist(row.toEntity()));
 
         // Then each column holds the value of its own field (user_id is null: a portal session has no account)
-        assertSessionRow(session);
+        assertSessionRow(row);
     }
 
     @Test
     void a_user_returns_every_field_from_its_own_column() throws SQLException {
         // Given a user with a distinct value in every field
+        UUID id = IdentityRows.id(721);
+        String email = "Round.Trip@example.com";
+        String passwordHash = "$argon2id$made-up-hash-for-the-round-trip";
+        String displayName = "Rae Roundtrip";
+        String phone = "+12025550100";
+        String status = "DISABLED";
         UserEntity user = new UserEntity();
-        user.setId(IdentityRows.id(721));
-        user.setEmail("Round.Trip@example.com");
-        user.setPasswordHash("$argon2id$made-up-hash-for-the-round-trip");
-        user.setDisplayName("Rae Roundtrip");
-        user.setPhone("+12025550100");
-        user.setStatus("DISABLED");
+        user.setId(id);
+        user.setEmail(email);
+        user.setPasswordHash(passwordHash);
+        user.setDisplayName(displayName);
+        user.setPhone(phone);
+        user.setStatus(status);
         user.setLastLoginAt(FIRST);
         user.setPasswordChangedAt(SECOND);
         user.setCreatedAt(CREATED_AT);
@@ -125,23 +113,21 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
         // Then each column holds the value of its own field
         try (Connection c = dataSource.getConnection();
                 PreparedStatement s = c.prepareStatement("select * from users where id = ?")) {
-            s.setObject(1, user.getId());
+            s.setObject(1, id);
             try (ResultSet rs = s.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 SoftAssertions softly = new SoftAssertions();
-                softly.assertThat(rs.getObject("id", UUID.class)).as("id").isEqualTo(user.getId());
-                softly.assertThat(rs.getString("email")).as("email").isEqualTo(user.getEmail());
-                softly.assertThat(rs.getString("password_hash")).as("password_hash").isEqualTo(user.getPasswordHash());
-                softly.assertThat(rs.getString("display_name")).as("display_name").isEqualTo(user.getDisplayName());
-                softly.assertThat(rs.getString("phone")).as("phone").isEqualTo(user.getPhone());
-                softly.assertThat(rs.getString("status")).as("status").isEqualTo(user.getStatus());
-                softly.assertThat(instant(rs, "last_login_at")).as("last_login_at").isEqualTo(user.getLastLoginAt());
-                softly.assertThat(instant(rs, "password_changed_at"))
-                        .as("password_changed_at")
-                        .isEqualTo(user.getPasswordChangedAt());
-                softly.assertThat(instant(rs, "created_at")).as("created_at").isEqualTo(user.getCreatedAt());
-                softly.assertThat(instant(rs, "updated_at")).as("updated_at").isEqualTo(user.getUpdatedAt());
-                softly.assertThat(instant(rs, "deleted_at")).as("deleted_at").isEqualTo(user.getDeletedAt());
+                softly.assertThat(rs.getObject("id", UUID.class)).as("id").isEqualTo(id);
+                softly.assertThat(rs.getString("email")).as("email").isEqualTo(email);
+                softly.assertThat(rs.getString("password_hash")).as("password_hash").isEqualTo(passwordHash);
+                softly.assertThat(rs.getString("display_name")).as("display_name").isEqualTo(displayName);
+                softly.assertThat(rs.getString("phone")).as("phone").isEqualTo(phone);
+                softly.assertThat(rs.getString("status")).as("status").isEqualTo(status);
+                softly.assertThat(instant(rs, "last_login_at")).as("last_login_at").isEqualTo(FIRST);
+                softly.assertThat(instant(rs, "password_changed_at")).as("password_changed_at").isEqualTo(SECOND);
+                softly.assertThat(instant(rs, "created_at")).as("created_at").isEqualTo(CREATED_AT);
+                softly.assertThat(instant(rs, "updated_at")).as("updated_at").isEqualTo(UPDATED_AT);
+                softly.assertThat(instant(rs, "deleted_at")).as("deleted_at").isEqualTo(THIRD);
                 softly.assertAll();
             }
         }
@@ -150,11 +136,15 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
     @Test
     void an_organization_is_loaded_again_with_every_field_it_was_stored_with() {
         // Given an organisation with a distinct value in every field (a zone other than the column default)
+        UUID id = IdentityRows.id(731);
+        String name = "Round Trip Weddings";
+        String slug = "round-trip-weddings";
+        String timezone = "Pacific/Auckland";
         OrganizationEntity stored = new OrganizationEntity();
-        stored.setId(IdentityRows.id(731));
-        stored.setName("Round Trip Weddings");
-        stored.setSlug("round-trip-weddings");
-        stored.setTimezone("Pacific/Auckland");
+        stored.setId(id);
+        stored.setName(name);
+        stored.setSlug(slug);
+        stored.setTimezone(timezone);
         stored.setCreatedAt(CREATED_AT);
         stored.setUpdatedAt(UPDATED_AT);
         stored.setDeletedAt(THIRD);
@@ -164,19 +154,19 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
             em.persist(stored);
             em.flush();
             em.clear();
-            return em.find(OrganizationEntity.class, stored.getId());
+            return em.find(OrganizationEntity.class, id);
         });
 
         // Then every field is the one that was stored
         SoftAssertions softly = new SoftAssertions();
         softly.assertThat(loaded).as("a new instance, read from the row").isNotSameAs(stored);
-        softly.assertThat(loaded.getId()).as("id").isEqualTo(stored.getId());
-        softly.assertThat(loaded.getName()).as("name").isEqualTo(stored.getName());
-        softly.assertThat(loaded.getSlug()).as("slug").isEqualTo(stored.getSlug());
-        softly.assertThat(loaded.getTimezone()).as("timezone").isEqualTo(stored.getTimezone());
-        softly.assertThat(loaded.getCreatedAt()).as("createdAt").isEqualTo(stored.getCreatedAt());
-        softly.assertThat(loaded.getUpdatedAt()).as("updatedAt").isEqualTo(stored.getUpdatedAt());
-        softly.assertThat(loaded.getDeletedAt()).as("deletedAt").isEqualTo(stored.getDeletedAt());
+        softly.assertThat(loaded.getId()).as("id").isEqualTo(id);
+        softly.assertThat(loaded.getName()).as("name").isEqualTo(name);
+        softly.assertThat(loaded.getSlug()).as("slug").isEqualTo(slug);
+        softly.assertThat(loaded.getTimezone()).as("timezone").isEqualTo(timezone);
+        softly.assertThat(loaded.getCreatedAt()).as("createdAt").isEqualTo(CREATED_AT);
+        softly.assertThat(loaded.getUpdatedAt()).as("updatedAt").isEqualTo(UPDATED_AT);
+        softly.assertThat(loaded.getDeletedAt()).as("deletedAt").isEqualTo(THIRD);
         softly.assertAll();
     }
 
@@ -189,12 +179,15 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
             em.persist(org);
             em.persist(user);
         });
+        UUID id = IdentityRows.id(741);
+        String role = "DJ";
+        String status = "DISABLED";
         MembershipEntity stored = new MembershipEntity();
-        stored.setId(IdentityRows.id(741));
+        stored.setId(id);
         stored.setOrgId(org.getId());
         stored.setUserId(user.getId());
-        stored.setRole("DJ");
-        stored.setStatus("DISABLED");
+        stored.setRole(role);
+        stored.setStatus(status);
         stored.setCreatedAt(CREATED_AT);
         stored.setUpdatedAt(UPDATED_AT);
 
@@ -203,54 +196,77 @@ class IdentityFieldRoundTripIT extends AbstractRepositoryTest {
             em.persist(stored);
             em.flush();
             em.clear();
-            return em.find(MembershipEntity.class, stored.getId());
+            return em.find(MembershipEntity.class, id);
         });
 
         // Then every field is the one that was stored
         SoftAssertions softly = new SoftAssertions();
         softly.assertThat(loaded).as("a new instance, read from the row").isNotSameAs(stored);
-        softly.assertThat(loaded.getId()).as("id").isEqualTo(stored.getId());
-        softly.assertThat(loaded.getOrgId()).as("orgId").isEqualTo(stored.getOrgId());
-        softly.assertThat(loaded.getUserId()).as("userId").isEqualTo(stored.getUserId());
-        softly.assertThat(loaded.getRole()).as("role").isEqualTo(stored.getRole());
-        softly.assertThat(loaded.getStatus()).as("status").isEqualTo(stored.getStatus());
-        softly.assertThat(loaded.getCreatedAt()).as("createdAt").isEqualTo(stored.getCreatedAt());
-        softly.assertThat(loaded.getUpdatedAt()).as("updatedAt").isEqualTo(stored.getUpdatedAt());
+        softly.assertThat(loaded.getId()).as("id").isEqualTo(id);
+        softly.assertThat(loaded.getOrgId()).as("orgId").isEqualTo(org.getId());
+        softly.assertThat(loaded.getUserId()).as("userId").isEqualTo(user.getId());
+        softly.assertThat(loaded.getRole()).as("role").isEqualTo(role);
+        softly.assertThat(loaded.getStatus()).as("status").isEqualTo(status);
+        softly.assertThat(loaded.getCreatedAt()).as("createdAt").isEqualTo(CREATED_AT);
+        softly.assertThat(loaded.getUpdatedAt()).as("updatedAt").isEqualTo(UPDATED_AT);
         softly.assertAll();
     }
 
-    /** Reads the sessions row of the entity over JDBC, every column by name, and compares it field by field. */
-    private void assertSessionRow(SessionEntity expected) throws SQLException {
+    /** The values of one sessions row, written down before the entity is built: the expectation of the read. */
+    private record SessionRow(UUID id, String subjectKind, UUID userId, UUID portalId, UUID weddingId, UUID orgId,
+            List<String> roles, byte[] tokenHash, Instant createdAt, Instant lastSeenAt, Instant idleExpiresAt,
+            Instant absoluteExpiresAt, Instant revokedAt, String userAgent) {
+
+        SessionEntity toEntity() {
+            SessionEntity session = new SessionEntity();
+            session.setId(id);
+            session.setSubjectKind(subjectKind);
+            session.setUserId(userId);
+            session.setPortalId(portalId);
+            session.setWeddingId(weddingId);
+            session.setOrgId(orgId);
+            session.setRoles(roles.toArray(String[]::new));
+            session.setTokenHash(tokenHash);
+            session.setCreatedAt(createdAt);
+            session.setLastSeenAt(lastSeenAt);
+            session.setIdleExpiresAt(idleExpiresAt);
+            session.setAbsoluteExpiresAt(absoluteExpiresAt);
+            session.setRevokedAt(revokedAt);
+            session.setUserAgent(userAgent);
+            return session;
+        }
+    }
+
+    /** Reads the sessions row over JDBC, every column by name, and compares it with the values written down. */
+    private void assertSessionRow(SessionRow expected) throws SQLException {
         try (Connection c = dataSource.getConnection();
                 PreparedStatement s = c.prepareStatement("select * from sessions where id = ?")) {
-            s.setObject(1, expected.getId());
+            s.setObject(1, expected.id());
             try (ResultSet rs = s.executeQuery()) {
                 assertThat(rs.next()).isTrue();
                 SoftAssertions softly = new SoftAssertions();
-                softly.assertThat(rs.getObject("id", UUID.class)).as("id").isEqualTo(expected.getId());
-                softly.assertThat(rs.getString("subject_kind")).as("subject_kind").isEqualTo(expected.getSubjectKind());
-                softly.assertThat(rs.getObject("user_id", UUID.class)).as("user_id").isEqualTo(expected.getUserId());
-                softly.assertThat(rs.getObject("portal_id", UUID.class))
-                        .as("portal_id")
-                        .isEqualTo(expected.getPortalId());
+                softly.assertThat(rs.getObject("id", UUID.class)).as("id").isEqualTo(expected.id());
+                softly.assertThat(rs.getString("subject_kind")).as("subject_kind").isEqualTo(expected.subjectKind());
+                softly.assertThat(rs.getObject("user_id", UUID.class)).as("user_id").isEqualTo(expected.userId());
+                softly.assertThat(rs.getObject("portal_id", UUID.class)).as("portal_id").isEqualTo(expected.portalId());
                 softly.assertThat(rs.getObject("wedding_id", UUID.class))
                         .as("wedding_id")
-                        .isEqualTo(expected.getWeddingId());
-                softly.assertThat(rs.getObject("org_id", UUID.class)).as("org_id").isEqualTo(expected.getOrgId());
-                softly.assertThat((String[]) rs.getArray("roles").getArray())
+                        .isEqualTo(expected.weddingId());
+                softly.assertThat(rs.getObject("org_id", UUID.class)).as("org_id").isEqualTo(expected.orgId());
+                softly.assertThat(Arrays.asList((String[]) rs.getArray("roles").getArray()))
                         .as("roles")
-                        .containsExactly(expected.getRoles());
-                softly.assertThat(rs.getBytes("token_hash")).as("token_hash").isEqualTo(expected.getTokenHash());
-                softly.assertThat(instant(rs, "created_at")).as("created_at").isEqualTo(expected.getCreatedAt());
-                softly.assertThat(instant(rs, "last_seen_at")).as("last_seen_at").isEqualTo(expected.getLastSeenAt());
+                        .containsExactlyElementsOf(expected.roles());
+                softly.assertThat(rs.getBytes("token_hash")).as("token_hash").isEqualTo(expected.tokenHash());
+                softly.assertThat(instant(rs, "created_at")).as("created_at").isEqualTo(expected.createdAt());
+                softly.assertThat(instant(rs, "last_seen_at")).as("last_seen_at").isEqualTo(expected.lastSeenAt());
                 softly.assertThat(instant(rs, "idle_expires_at"))
                         .as("idle_expires_at")
-                        .isEqualTo(expected.getIdleExpiresAt());
+                        .isEqualTo(expected.idleExpiresAt());
                 softly.assertThat(instant(rs, "absolute_expires_at"))
                         .as("absolute_expires_at")
-                        .isEqualTo(expected.getAbsoluteExpiresAt());
-                softly.assertThat(instant(rs, "revoked_at")).as("revoked_at").isEqualTo(expected.getRevokedAt());
-                softly.assertThat(rs.getString("user_agent")).as("user_agent").isEqualTo(expected.getUserAgent());
+                        .isEqualTo(expected.absoluteExpiresAt());
+                softly.assertThat(instant(rs, "revoked_at")).as("revoked_at").isEqualTo(expected.revokedAt());
+                softly.assertThat(rs.getString("user_agent")).as("user_agent").isEqualTo(expected.userAgent());
                 softly.assertAll();
             }
         }
