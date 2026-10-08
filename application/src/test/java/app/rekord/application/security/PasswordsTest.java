@@ -81,6 +81,11 @@ class PasswordsTest {
     }
 
     @Test
+    void verify_refuses_a_stored_value_without_a_key() {
+        assertThat(passwords.verify(PASSWORD, "scrypt$16384$8$1$" + HexFormat.of().formatHex(SALT) + "$")).isFalse();
+    }
+
+    @Test
     void two_hashes_of_one_password_differ_with_different_salts() {
         byte[] other = HexFormat.of().parseHex("ffeeddccbbaa99887766554433221100");
 

@@ -11,6 +11,7 @@ import app.rekord.usecase.identity.port.FirstAdminRepository;
 import app.rekord.usecase.identity.port.NewFirstAdmin;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import jakarta.persistence.PersistenceException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -206,6 +207,18 @@ class DefaultFirstAdminRepositoryIT extends AbstractRepositoryTest {
                     assertThat(refused.getCause()).isNull();
                     assertThat(refused.getMessage()).doesNotContain("example.com");
                 });
+        assertThat(count("users")).isZero();
+    }
+
+    @Test
+    void another_violation_is_no_refusal_and_stores_nothing() {
+        NewFirstAdmin unknownStatus = new NewFirstAdmin(id(1), "Rekord Match", "rekord-match", "Europe/Amsterdam",
+                id(2), "admin@example.com", "The planner", HASH, id(3), "UNKNOWN", "ADMIN", "ACTIVE", NOW);
+
+        assertThatThrownBy(() -> inNewTransaction(() -> repository.saveFirstAdmin(unknownStatus)))
+                .isInstanceOf(PersistenceException.class)
+                .isNotInstanceOf(RejectedException.class);
+        assertThat(count("organizations")).isZero();
         assertThat(count("users")).isZero();
     }
 
