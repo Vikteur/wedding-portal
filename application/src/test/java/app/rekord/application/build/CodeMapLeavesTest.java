@@ -181,6 +181,80 @@ class CodeMapLeavesTest {
                 "table-specific constraint name");
     }
 
+    @Test
+    void jvm_testing_states_that_the_repository_files_tests_read_are_inputs_of_the_test_task() throws IOException {
+        // TASK-40: an edit to a file a test reads runs the test again without --rerun
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "wedding.repoRoot",
+                "inputs of the",
+                "repoFiles",
+                "contractFiles",
+                "contract.spec",
+                "smoke/pom.xml",
+                "--rerun");
+
+        // TASK-40 review: the git state outside the tree, the residual generated sources, untracked files, how to extend it
+        assertLeaf(
+                CODE_MAPS.resolve("jvm-testing.md"),
+                "- **Test task inputs.**",
+                "any depth",
+                "untracked files under the root",
+                "a new tracked file the defaults drop",
+                "or `TestTaskInputsTest` fails",
+                "git ls-files",
+                ".git/info/attributes",
+                "git config",
+                "GeneratedContractTest",
+                "rekord-adapter/build/generated/openapi");
+        assertThat(Files.readString(REPO_ROOT.resolve(CODE_MAPS.resolve("jvm-testing.md"))))
+                .as("git check-attr reads the working-tree .gitattributes, not only the index")
+                .doesNotContain("the git index (");
+    }
+
+    @Test
+    void memory_supersedes_the_task_2_4_rerun_bullet_and_leaves_it_unedited() throws IOException {
+        // Given the append-only memory file
+        String memory = Files.readString(REPO_ROOT.resolve(Path.of("docs", "memory.md")));
+
+        // When the TASK-40 section is cut out
+        String section = task40Section(memory);
+
+        // Then it supersedes the TASK-2.4 bullet by name, in the house form, and points to the code map
+        assertThat(section).contains("TASK-2.4", "--rerun", "docs/code-maps/jvm-testing.md");
+        assertThat(section)
+                .contains("- **Supersedes** the TASK-2.4 bullet \"To see a test that reads `ci.yml` or another repo file go red");
+
+        // And the old bullet is still there, word for word
+        assertThat(memory)
+                .contains("- To see a test that reads `ci.yml` or another repo file go red after a temporary edit,"
+                        + " run it with `--rerun`: those files are not inputs of the Gradle `test` task, so a"
+                        + " cached pass hides the edit.");
+    }
+
+    @Test
+    void memory_records_the_residuals_and_the_review_decisions_of_the_test_task_inputs() throws IOException {
+        // Given the TASK-40 section of memory
+        String section = task40Section(Files.readString(REPO_ROOT.resolve(Path.of("docs", "memory.md"))));
+
+        // Then the residuals name the git state outside the tree and the generated sources, not "the index" alone
+        assertThat(section)
+                .contains("state outside the tree", ".git/info/attributes", "GeneratedContractTest")
+                .doesNotContain("ask git about the index");
+
+        // And the review decisions are written down: what the check refuses, tool state at any depth, the Gradle copy
+        assertThat(section).contains("refuses what it cannot read", "any depth", "9.8.0");
+    }
+
+    /** The TASK-40 section of memory: from its heading to the next one, found by the heading pattern the other tests use. */
+    private static String task40Section(String memory) {
+        java.util.regex.Matcher heading =
+                java.util.regex.Pattern.compile("(?m)^## .*TASK-40\\b.*$").matcher(memory);
+        assertThat(heading.find()).as("docs/memory.md has a TASK-40 section").isTrue();
+        int end = memory.indexOf("\n## ", heading.end());
+        return memory.substring(heading.end(), end < 0 ? memory.length() : end);
+    }
+
     private static void assertLeaf(Path relative, String... phrases) throws IOException {
         Path file = REPO_ROOT.resolve(relative);
         assertThat(file).as("the leaf %s", relative).isRegularFile();
