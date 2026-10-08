@@ -277,6 +277,23 @@ class ErrorEnvelopeMapperIT {
     }
 
     /**
+     * The guard also has to catch what another interceptor of the method throws, which only holds while it is the
+     * outermost one. {@code CyclicChainInterceptor} stands for validation or a transaction and runs after it.
+     */
+    @Test
+    @Timeout(60)
+    void a_cyclic_chain_thrown_by_another_interceptor_answers_the_500_fixture_and_logs_one_redacted_error()
+            throws Exception {
+        // When
+        Response response = getWithinTwentySeconds(PROBE + "/cyclic-from-interceptor");
+
+        // Then
+        assertAnswersAsFixture(response, "error-unhandled-500");
+        assertLoggedOnceRedacted("/test-only/error-envelope/cyclic-from-interceptor");
+        assertRedactedCyclicTraceLogged();
+    }
+
+    /**
      * The {@code @Path} can also sit on an abstract superclass of the class that serves it; the guard has to reach that
      * shape too.
      */
