@@ -13,7 +13,7 @@ groma:
 description: Maps each error code and family to its HTTP status.
 ---
 
-The only place where a domain error becomes an HTTP status, with the statuses `rekord-api` answers today (404, 400 to 429, 401/403, 502/503). A code can map to different statuses in different families. Building the table refuses a duplicate pair, and every new error code needs its row here. The exception mapper that will use it to write the error envelope is not built yet.
+The only place where a domain error becomes an HTTP status, with the statuses `rekord-api` answers today (404, 400 to 429, 401/403, 502/503). A code can map to different statuses in different families. Building the table refuses a duplicate pair, and every new error code needs its row here. The error envelope mapper looks each family error up here to write its answer; a pair without a row answers 500.
 
 ## Relationships
 

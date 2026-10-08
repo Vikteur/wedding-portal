@@ -17,6 +17,8 @@ dependencies {
     implementation("io.quarkus:quarkus-flyway-postgresql")
     implementation("io.quarkus:quarkus-hibernate-orm")
     implementation("io.quarkus:quarkus-narayana-jta")
+    implementation("io.quarkus.security:quarkus-security")
+    implementation("io.quarkus:quarkus-hibernate-validator")
 
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-junit-internal")
@@ -25,6 +27,9 @@ dependencies {
     testImplementation("io.rest-assured:rest-assured")
     testImplementation(libs.assertj.core)
     testImplementation(libs.archunit.junit5)
+    testImplementation(project(path = ":rekord-adapter", configuration = "testArtifacts"))
+    testImplementation(project(path = ":rekord-usecase", configuration = "testArtifacts"))
+    testImplementation("io.smallrye:jandex")
 }
 
 tasks.test {

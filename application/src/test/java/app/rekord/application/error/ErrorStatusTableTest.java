@@ -9,6 +9,7 @@ import app.rekord.domain.shared.error.NotPermittedException;
 import app.rekord.domain.shared.error.RejectedException;
 import app.rekord.domain.shared.error.RekordException;
 import app.rekord.domain.shared.error.UpstreamUnavailableException;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -115,9 +116,18 @@ class ErrorStatusTableTest {
 
     @Test
     void every_error_code_has_at_least_one_row() {
+        // Given: a code with no row in any family could only ever be answered by the 500 catch path, so it is caught
+        // here, at build time. No domain code is meant to be without a row (UNKNOWN is the contract's catch-all code
+        // and is not in the domain enum), so there is no list of exceptions.
         Set<ErrorCode> covered = ErrorStatusTable.rows().stream()
                 .map(ErrorStatusTable.Row::code).collect(Collectors.toSet());
-        assertThat(covered).containsExactlyInAnyOrder(ErrorCode.values());
+        Set<ErrorCode> withoutRow = EnumSet.allOf(ErrorCode.class);
+
+        // When
+        withoutRow.removeAll(covered);
+
+        // Then
+        assertThat(withoutRow).as("ErrorCode constants with no row in ErrorStatusTable, in any family").isEmpty();
     }
 
     @Test
