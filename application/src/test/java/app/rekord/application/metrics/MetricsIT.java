@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 class MetricsIT {
 
     private static String scrape() {
-        Response response = given().when().get("/q/metrics");
+        Response response = given().accept("text/plain").when().get("/q/metrics");
         assertThat(response.statusCode()).as("scrape status").isEqualTo(200);
         return response.asString();
     }
@@ -40,7 +40,7 @@ class MetricsIT {
     @Test
     void q_metrics_answers_200_in_the_prometheus_text_format_with_a_type_line() {
         // When
-        Response response = given().when().get("/q/metrics");
+        Response response = given().accept("text/plain").when().get("/q/metrics");
 
         // Then
         assertThat(response.statusCode()).isEqualTo(200);
@@ -70,8 +70,8 @@ class MetricsIT {
         String scrape = scrape();
 
         // Then
-        assertThat(hasLine(scrape, "http_server_requests_seconds_count", "uri=\"/api/test-only/metrics/{id}\""))
-                .as("a count line tagged with the template")
+        assertThat(hasLine(scrape, "http_server_requests_seconds_count", "uri=\"/test-only/metrics/{id}\""))
+                .as("a count line tagged with the template (Micrometer leaves the /api application path out)")
                 .isTrue();
         assertThat(scrape).doesNotContain(id);
     }
