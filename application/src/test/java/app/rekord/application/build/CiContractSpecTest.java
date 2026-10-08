@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -34,9 +35,17 @@ class CiContractSpecTest {
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
     private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
     private static final Pattern SEPARATOR = Pattern.compile("&&|\\|\\||[;|]|\\R");
-    private static final Pattern GRADLE = Pattern.compile("(.*/)?gradlew(\\.bat)?|gradle");
+    private static final Pattern GRADLE = Pattern.compile("(.*[/\\\\])?gradlew(\\.bat)?|gradle");
     /** What may stand in front of the wrapper without making it a mere argument. */
     private static final Set<String> PREFIXES = Set.of("RUN", "exec", "sudo", "time", "nohup", "env", "bash", "sh");
+    /** Shell keywords that may stand in front of a command, as in {@code if ./gradlew build; then}. */
+    private static final Set<String> KEYWORDS = Set.of("if", "then", "elif", "else", "do", "while", "until", "!");
+    /** Wrappers that run the command after them, with the options of theirs that take a value as the next word. */
+    private static final Map<String, Set<String>> WRAPPERS = Map.of(
+            "timeout", Set.of("-s", "--signal", "-k", "--kill-after"),
+            "nice", Set.of("-n"),
+            "xvfb-run", Set.of("-n", "-w", "-f", "-e", "-p"));
+    private static final Pattern DURATION = Pattern.compile("\\d+(\\.\\d+)?[smhd]?");
     /** Tasks that only report. A bare word after one is another task Gradle runs (help build builds). */
     private static final Set<String> DIAGNOSTIC_TASKS = Set.of(
             "help", "tasks", "projects", "properties", "dependencies", "dependencyInsight", "buildEnvironment",
@@ -453,14 +462,15 @@ class CiContractSpecTest {
                 for (List<String> words : commands(step.path("run").asText(""))) {
                     var gradle = gradleArguments(words);
                     if (gradle.isPresent() && !startedTasks(gradle.get()).isEmpty()) {
-                        checkSpec(where, gradle.get(), path, violations);
+                        checkSpec(where, wrapperWord(words, gradle.get()), gradle.get(), path, violations);
                     } else if (buildsImage(words) && namesAnotherDockerfile(words)) {
                         violations.add(where + "`" + String.join(" ", words)
                                 + "` builds from a Dockerfile this test does not read");
                     } else if (buildsImage(words)) {
                         for (List<String> line : commands(dockerfile)) {
                             var arguments = gradleArguments(line).filter(a -> !startedTasks(a).isEmpty());
-                            arguments.ifPresent(a -> checkSpec(where + "Dockerfile ", a, path, violations));
+                            arguments.ifPresent(
+                                    a -> checkSpec(where + "Dockerfile ", wrapperWord(line, a), a, path, violations));
                         }
                     }
                 }
@@ -469,8 +479,9 @@ class CiContractSpecTest {
         return violations;
     }
 
-    private static void checkSpec(String where, List<String> arguments, String path, List<String> violations) {
-        String command = "./gradlew " + String.join(" ", arguments);
+    private static void checkSpec(String where, String wrapper, List<String> arguments, String path,
+            List<String> violations) {
+        String command = wrapper + " " + String.join(" ", arguments);
         String spec = null;
         for (String argument : arguments) {
             if (argument.startsWith(SPEC_PROPERTY)) {
@@ -559,13 +570,28 @@ class CiContractSpecTest {
         return argumentsOf(words, word -> GRADLE.matcher(word).matches());
     }
 
+    /** The word the Gradle run is started with, as written: the one in front of its arguments. */
+    private static String wrapperWord(List<String> words, List<String> arguments) {
+        return words.get(words.size() - arguments.size() - 1);
+    }
+
     private static Optional<List<String>> argumentsOf(List<String> words, Predicate<String> program) {
+        Set<String> valueOptions = Set.of();
+        boolean duration = false;
         for (int i = 0; i < words.size(); i++) {
             String word = words.get(i);
             if (program.test(word)) {
                 return Optional.of(words.subList(i + 1, words.size()));
             }
-            if (!PREFIXES.contains(word) && !word.startsWith("-") && !word.contains("=")) {
+            if (WRAPPERS.containsKey(word)) {
+                valueOptions = WRAPPERS.get(word);
+                duration = word.equals("timeout");
+            } else if (valueOptions.contains(word)) {
+                i++;
+            } else if (duration && DURATION.matcher(word).matches()) {
+                duration = false;
+            } else if (!PREFIXES.contains(word) && !KEYWORDS.contains(word) && !word.startsWith("-")
+                    && !word.contains("=")) {
                 return Optional.empty();
             }
         }
