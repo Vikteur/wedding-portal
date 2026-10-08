@@ -27,7 +27,7 @@ class HealthResourceDependenciesTest {
                 .should()
                 .onlyDependOnClassesThat()
                 .resideInAnyPackage(ALLOWED)
-                .as(resourceName + " depends only on the generated contract, the CDI scope annotations and java.lang itself");
+                .as(resourceName + " depends only on the generated contract, the CDI scope annotations and java.lang");
     }
 
     @Test
