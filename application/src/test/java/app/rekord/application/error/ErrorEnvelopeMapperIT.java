@@ -48,4 +48,21 @@ class ErrorEnvelopeMapperIT {
         // Then
         assertAnswersAsFixture(response, fixture);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        "/test-only/error-envelope/auth-failed,error-authentication-failed-401",
+        "/test-only/error-envelope/unauthorized,error-authentication-failed-401",
+        "/test-only/error-envelope/forbidden,error-forbidden-403",
+        "/no-such-route,error-unknown-route-404",
+        "/q/metrics,error-q-metrics-404",
+        "/test-only/error-envelope/uuid/not-a-uuid,error-malformed-uuid-404"
+    })
+    void the_framework_refusals_answer_exactly_what_rekord_api_answers(String path, String fixture) throws Exception {
+        // When
+        Response response = given().when().get("/api" + path);
+
+        // Then
+        assertAnswersAsFixture(response, fixture);
+    }
 }

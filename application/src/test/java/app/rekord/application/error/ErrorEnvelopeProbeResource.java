@@ -5,10 +5,14 @@ import app.rekord.domain.shared.error.NotFoundException;
 import app.rekord.domain.shared.error.NotPermittedException;
 import app.rekord.domain.shared.error.RejectedException;
 import app.rekord.domain.shared.error.UpstreamUnavailableException;
+import io.quarkus.security.AuthenticationFailedException;
+import io.quarkus.security.UnauthorizedException;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
+import java.util.UUID;
 
 /** Test-only: throws what rekord-api's probe threw, with the oracle's messages. */
 @Path("/test-only/error-envelope")
@@ -39,5 +43,29 @@ public class ErrorEnvelopeProbeResource {
     public String upstreamUnavailable() {
         throw new UpstreamUnavailableException(
                 ErrorCode.SEARCH_UNAVAILABLE, "Song search is offline \u2014 your text is saved exactly as typed.");
+    }
+
+    @GET
+    @Path("/auth-failed")
+    public String authFailed() {
+        throw new AuthenticationFailedException();
+    }
+
+    @GET
+    @Path("/unauthorized")
+    public String unauthorized() {
+        throw new UnauthorizedException();
+    }
+
+    @GET
+    @Path("/forbidden")
+    public String forbidden() {
+        throw new jakarta.ws.rs.ForbiddenException("No organisation on this session.");
+    }
+
+    @GET
+    @Path("/uuid/{id}")
+    public String uuid(@PathParam("id") UUID id) {
+        return id.toString();
     }
 }
