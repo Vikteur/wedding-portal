@@ -1,6 +1,7 @@
 package app.rekord.application.persistence.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -118,6 +119,31 @@ class SchemaSnapshotIT {
             execute(c, "alter table priced alter column amount type numeric(10,2)");
             execute(c, "alter table priced alter column paid_at type timestamp(6) with time zone");
             assertThat(SchemaSnapshot.read(c)).isNotEqualTo(snapshot);
+        }
+    }
+
+    @Test
+    void a_check_or_foreign_key_name_used_on_two_tables_is_refused_by_name() throws SQLException {
+        // information_schema keys a check clause and a delete rule by schema and name only, so it cannot tell them apart
+        for (String ddl : List.of(
+                """
+                create table first_amount (n integer constraint amount_positive check (n > 0));
+                create table second_amount (n integer constraint amount_positive check (n > 1));
+                """,
+                """
+                create table target (id bigint primary key);
+                create table first_ref (t bigint constraint ref_target references target (id));
+                create table second_ref (t bigint constraint ref_target references target (id) on delete cascade);
+                """)) {
+            // Given two tables whose constraints share one name
+            try (Connection c = freshDatabase()) {
+                execute(c, ddl);
+
+                // When the schema is read, then it is refused with the shared name
+                assertThatThrownBy(() -> SchemaSnapshot.read(c))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining(ddl.contains("amount_positive") ? "amount_positive" : "ref_target");
+            }
         }
     }
 
