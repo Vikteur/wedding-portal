@@ -20,7 +20,8 @@ import java.util.Map;
  * normalised artist and core title (UD-19.c, {@link Signature#songOf}), so a query without an artist is never
  * auto. Last, a remembered choice (BR-MX-18) is looked up by the query's signature id: its file goes first
  * (scored and inserted when scoring did not list it, the list re-capped at 8) and is picked with
- * {@code fromPreference}, without touching the bucket. Storing and reading choices is P3-E05-T02.
+ * {@code fromPreference}, without touching the bucket: an AUTO bucket then describes scoring's leader, which is
+ * not necessarily the remembered file. Storing and reading choices is TASK-25.2 (P3-E05-T02).
  */
 public final class TrackMatcher {
 
@@ -46,9 +47,14 @@ public final class TrackMatcher {
     }
 
     /**
+     * @param candidates     at most 8, best first; with a remembered choice its file is first and may score under
+     *                       the 0.45 floor (it is scored even when scoring did not list it)
+     * @param autoSelectedId the preselected file: scoring's auto pick, or the remembered file in any bucket (so it
+     *                       can be set for ambiguous and unmatched too); null when neither applies
      * @param fromPreference true when {@code autoSelectedId} is the file remembered for the query's signature id
      *                       (BR-MX-18); the bucket is left as scoring set it, so a remembered choice never turns
-     *                       ambiguous or unmatched into auto
+     *                       ambiguous or unmatched into auto, and an AUTO bucket then describes scoring's leader,
+     *                       not necessarily the remembered pick
      */
     public record MatchResult(MatchQuery input, Versions.TitleParts inputVersion, Bucket bucket,
                               List<ScoredCandidate> candidates, String autoSelectedId, boolean fromPreference) {
@@ -57,11 +63,14 @@ public final class TrackMatcher {
     private TrackMatcher() {
     }
 
+    /** No playlists and no remembered choice. */
     public static MatchResult matchOne(MatchQuery query, LibraryIndex index) {
         return matchOne(query, index, Map.of());
     }
 
     /**
+     * No remembered choice.
+     *
      * @param playlistsByTrackId a track id to the names of the imported playlists holding that file, in order;
      *                           a missing id, or a null map, means no playlist; values and names must not be
      *                           null
@@ -72,7 +81,10 @@ public final class TrackMatcher {
     }
 
     /**
-     * @param preferredBySignatureId the remembered file id per {@link Signature#signatureId}; null means none
+     * @param preferredBySignatureId the remembered file id per {@link Signature#signatureId} of the query's artist
+     *                               and title as given, version included (so "Strobe" and "Strobe (Radio Edit)"
+     *                               have separate choices); a missing key, a null map, or an id that is not in
+     *                               {@code index} means no choice
      */
     public static MatchResult matchOne(MatchQuery query, LibraryIndex index,
                                        Map<String, List<String>> playlistsByTrackId,
@@ -102,6 +114,9 @@ public final class TrackMatcher {
         String preferredId = preferredBySignatureId == null ? null
                 : preferredBySignatureId.get(Signature.signatureId(query.artist(), query.title()));
         LibraryIndex.IndexedTrack preferred = preferredId == null ? null : index.byId(preferredId);
+        // A remembered choice is the same song the DJ already decided about, so it is honoured even when this
+        // wording scored its file under the floor. The bucket stays scoring's: auto would claim a confidence the
+        // scoring never had (rekord-api Matcher.java).
         if (preferred != null) {
             ScoredCandidate chosen = null;
             for (ScoredCandidate c : scored) {
