@@ -159,7 +159,7 @@ class CiWorkflowTest {
 
         // When / Then
         assertThat(text).contains("docker build", "image-check.sh");
-        assertThat(text).doesNotContain("docker push").doesNotContain("docker login");
+        assertThat(text).doesNotContain("docker push");
         assertThat(texts(ci.path("jobs").path("image").path("needs"))).containsExactly("build");
     }
 
@@ -224,18 +224,70 @@ class CiWorkflowTest {
     }
 
     @Test
-    void no_workflow_falls_back_to_the_workflows_own_token() throws IOException {
+    void the_workflows_own_token_is_used_only_to_sign_in_to_the_registry() throws IOException {
         // Given
         var workflows = Workflows.files(REPO_ROOT);
         Pattern fallback = Pattern.compile("\\$\\{\\{[^}]*\\|\\|[^}]*}}");
+        int occurrences = 0;
 
-        // When / Then
+        // When
         assertThat(workflows).isNotEmpty();
         for (Path file : workflows) {
             String text = Files.readString(file);
-            assertThat(text).as("%s", file).doesNotContain("GITHUB_TOKEN").doesNotContain("github.token");
+            assertThat(text).as("%s", file).doesNotContain("GITHUB_TOKEN");
             assertThat(fallback.matcher(text).find()).as("a || fallback in %s", file).isFalse();
+            occurrences += text.split("github\\.token", -1).length - 1;
         }
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+        var steps = Workflows.steps(ci, "image");
+        int signIn = indexOfStep(steps, step -> step.path("run").asText().contains("docker login ghcr.io"));
+
+        // Then
+        assertThat(occurrences).as("github.token references across all workflows").isEqualTo(1);
+        assertThat(signIn).as("the sign-in step in the image job").isNotNegative();
+        JsonNode step = steps.get(signIn);
+        assertThat(step.path("env").size()).isEqualTo(1);
+        String variable = step.path("env").fieldNames().next();
+        assertThat(step.path("env").path(variable).asText()).isEqualTo("${{ github.token }}");
+        String run = step.path("run").asText();
+        assertThat(run).contains("--password-stdin", "$" + variable);
+        assertThat(run).doesNotContain("github.token").doesNotContain("secrets.");
+        assertThat(run).doesNotContain(" -p ").doesNotContain("--password ");
+    }
+
+    @Test
+    void only_the_image_job_may_write_packages() throws IOException {
+        // Given
+        JsonNode ci = Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml"));
+
+        // When / Then
+        assertThat(fields(ci.path("permissions"))).containsExactly("contents=read");
+        assertThat(fields(ci.path("jobs").path("image").path("permissions")))
+                .containsExactlyInAnyOrder("contents=read", "packages=write");
+        ci.path("jobs").fields().forEachRemaining(job -> {
+            if (!"image".equals(job.getKey())) {
+                assertThat(job.getValue().has("permissions"))
+                        .as("permissions of job %s", job.getKey())
+                        .isFalse();
+            }
+        });
+    }
+
+    @Test
+    void the_registry_sign_in_comes_after_the_image_check_and_is_signed_out_always() throws IOException {
+        // Given
+        var steps = Workflows.steps(Workflows.read(REPO_ROOT.resolve(".github/workflows/ci.yml")), "image");
+
+        // When
+        int check = indexOfStep(steps, step -> step.path("run").asText().contains("image-check.sh"));
+        int signIn = indexOfStep(steps, step -> step.path("run").asText().contains("docker login ghcr.io"));
+        JsonNode last = steps.get(steps.size() - 1);
+
+        // Then
+        assertThat(check).as("the image check").isNotNegative();
+        assertThat(signIn).as("the sign-in").isGreaterThan(check);
+        assertThat(last.path("run").asText().trim()).isEqualTo("docker logout ghcr.io");
+        assertThat(last.path("if").asText().trim()).isEqualTo("always()");
     }
 
     @Test
@@ -412,6 +464,12 @@ class CiWorkflowTest {
         // Then
         assertThat(running.stream().map(step -> step.path("name").asText()))
                 .containsExactly("Check out rekord-contract");
+    }
+
+    private static List<String> fields(JsonNode node) {
+        List<String> fields = new ArrayList<>();
+        node.fields().forEachRemaining(field -> fields.add(field.getKey() + "=" + field.getValue().asText()));
+        return fields;
     }
 
     private static List<String> texts(JsonNode node) {
