@@ -52,6 +52,11 @@ class CiContractSpecTest {
             "nice", Set.of("-n"),
             "xvfb-run", Set.of("-n", "-w", "-f", "-e", "-p"));
     private static final Pattern DURATION = Pattern.compile("\\d+(\\.\\d+)?[smhd]?");
+    /** Options of docker build that take their value as the next word (--opt=value is one word). */
+    private static final Set<String> BUILD_VALUE_OPTIONS = Set.of(
+            "-t", "--tag", "--build-arg", "--target", "--platform", "--label", "--secret", "--ssh", "--cache-from",
+            "--cache-to", "-o", "--output", "--network", "--progress", "--iidfile", "--metadata-file",
+            "--build-context", "--add-host", "--shm-size", "--ulimit", "--builder");
     /** Tasks that only report. A bare word after one is another task Gradle runs (help build builds). */
     private static final Set<String> DIAGNOSTIC_TASKS = Set.of(
             "help", "tasks", "projects", "properties", "dependencies", "dependencyInsight", "buildEnvironment",
@@ -730,17 +735,43 @@ class CiContractSpecTest {
         return tasks;
     }
 
+    /**
+     * An image build that does not read the Dockerfile at the repository root: another one with -f, bake, or a docker
+     * build whose context is not exactly one positional word, {@code .} or {@code ./}.
+     */
     private static boolean namesAnotherDockerfile(List<String> words) {
         return words.contains("-f")
                 || words.contains("--file")
-                || words.stream().anyMatch(word -> word.startsWith("--file="));
+                || words.stream().anyMatch(word -> word.startsWith("--file="))
+                || argumentsOf(words, "docker"::equals).map(CiContractSpecTest::buildsFromAnotherContext).orElse(false);
+    }
+
+    private static boolean buildsFromAnotherContext(List<String> arguments) {
+        List<String> subcommands = arguments.stream().takeWhile(word -> !word.startsWith("-")).limit(3).toList();
+        if (subcommands.contains("bake")) {
+            return true;
+        }
+        if (!subcommands.contains("build")) {
+            return false;
+        }
+        List<String> positional = new ArrayList<>();
+        List<String> options = arguments.subList(arguments.indexOf("build") + 1, arguments.size());
+        for (int i = 0; i < options.size(); i++) {
+            String word = options.get(i);
+            if (BUILD_VALUE_OPTIONS.contains(word)) {
+                i++;
+            } else if (word.equals("-") || !word.startsWith("-")) {
+                positional.add(word);
+            }
+        }
+        return !(positional.size() == 1 && (positional.get(0).equals(".") || positional.get(0).equals("./")));
     }
 
     /** An image build: {@code docker [image|buildx|builder] build}, {@code docker compose up|run}. */
     private static boolean buildsImage(List<String> words) {
         return argumentsOf(words, "docker"::equals)
                 .map(arguments -> arguments.stream().takeWhile(word -> !word.startsWith("-")).limit(3).toList())
-                .map(subcommands -> subcommands.contains("build")
+                .map(subcommands -> subcommands.contains("build") || subcommands.contains("bake")
                         || (subcommands.contains("compose")
                                 && (subcommands.contains("up") || subcommands.contains("run"))))
                 .orElse(false);
