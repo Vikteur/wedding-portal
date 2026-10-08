@@ -5,12 +5,17 @@ jandex = "2.1.0"
 wiremock = "3.13.2"
 openapi-generator = "7.25.0"
 archunit = "1.5.1"
+# Must equal the version the Quarkus BOM manages for bcprov-jdk18on: `application` uses enforcedPlatform(quarkus-bom),
+# so the BOM wins and a different value here would be silently ignored. Recheck on every Quarkus bump with
+# `./gradlew :application:dependencyInsight --dependency bcprov-jdk18on --configuration runtimeClasspath`.
+bouncycastle = "1.85.2"
 
 [libraries]
 quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 wiremock = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }

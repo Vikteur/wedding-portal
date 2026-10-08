@@ -22,6 +22,7 @@ class HibernateValidateRefusesAnUnmigratedEntityIT {
             .overrideConfigKey("quarkus.datasource.password", DB.password())
             .overrideConfigKey("quarkus.hibernate-orm.mapping-files", "stray-entity-orm.xml")
             .withApplicationRoot(jar -> jar.addPackages(true, "app.rekord.adapter")
+                    .addPackages(true, "app.rekord.application.config", "app.rekord.application.security")
                     .addClass(StrayEntity.class)
                     .addAsResource("stray-entity-orm.xml")
                     .addAsResource("application.properties")
