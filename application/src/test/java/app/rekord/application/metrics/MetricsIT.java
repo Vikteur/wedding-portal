@@ -4,9 +4,16 @@ import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import app.rekord.application.ResourceTestProfile;
+import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
+import java.net.URI;
+import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Arrays;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -16,6 +23,11 @@ import org.junit.jupiter.api.Test;
 @TestProfile(ResourceTestProfile.class)
 @Tag("resource-test")
 class MetricsIT {
+
+    private static final int BODY_LIMIT = 10240 * 1024;
+
+    @TestHTTPResource("/api/no-such-route")
+    URL noSuchRoute;
 
     private static String scrape() {
         Response response = given().accept("text/plain").when().get("/q/metrics");
@@ -88,6 +100,33 @@ class MetricsIT {
         // Then
         assertThat(hasLine(scrape, "http_server_requests_seconds_count", "uri=\"NOT_FOUND\"", "status=\"404\""))
                 .as("a count line tagged NOT_FOUND")
+                .isTrue();
+        assertThat(scrape).doesNotContain(id);
+    }
+
+    @Test
+    void an_untemplated_refusal_is_tagged_unknown_never_its_path() throws Exception {
+        // Given: a body over quarkus.http.limits.max-body-size, sent to a path no resource matches
+        String id = UUID.randomUUID().toString();
+        byte[] body = new byte[BODY_LIMIT + 1];
+        Arrays.fill(body, (byte) 'a');
+        HttpRequest request = HttpRequest.newBuilder(URI.create(noSuchRoute + "/" + id))
+                .header("Content-Type", "application/json")
+                .expectContinue(true)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                .build();
+
+        // When
+        HttpResponse<byte[]> response = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build()
+                .send(request, HttpResponse.BodyHandlers.ofByteArray());
+        String scrape = scrape();
+
+        // Then
+        assertThat(response.statusCode()).isEqualTo(413);
+        assertThat(hasLine(scrape, "http_server_requests_seconds_count", "uri=\"UNKNOWN\"", "status=\"413\""))
+                .as("a count line tagged UNKNOWN for the 413")
                 .isTrue();
         assertThat(scrape).doesNotContain(id);
     }
