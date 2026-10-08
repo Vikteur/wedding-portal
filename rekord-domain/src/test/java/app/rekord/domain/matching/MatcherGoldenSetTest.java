@@ -6,13 +6,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import app.rekord.domain.matching.TrackMatcher.MatchResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.BooleanNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * The matcher's acceptance gate (TASK-24.4, UX-07): rekord-api's golden set, with the ticket's two changes, run
@@ -175,6 +181,88 @@ class MatcherGoldenSetTest {
         assertThat(GoldenGate.differences(copy))
                 .anyMatch(line -> line.startsWith("case 85 ") && line.contains("score expected NaN"))
                 .anyMatch(line -> line.startsWith("case 85 ") && line.contains("facet title expected NaN"));
+    }
+
+    /** A value of the same kind as {@code current} that is certainly not equal to it. */
+    private static JsonNode different(JsonNode current) {
+        if (current.isBoolean()) {
+            return BooleanNode.valueOf(!current.asBoolean());
+        }
+        if (current.isIntegralNumber()) {
+            return IntNode.valueOf(current.asInt() + 1);
+        }
+        if (current.isNumber()) {
+            return DoubleNode.valueOf(current.asDouble() + 1.0);
+        }
+        if (current.isArray()) {
+            ArrayNode longer = ((ArrayNode) current).deepCopy();
+            longer.add("changed");
+            return longer;
+        }
+        return TextNode.valueOf(current.isTextual() ? current.asText() + " changed" : "changed");
+    }
+
+    @ParameterizedTest(name = "{1} of {0}")
+    @CsvSource(delimiter = '|', value = {
+            "/cases/85/expected                       | bucket              | bucket expected",
+            "/cases/85/expected                       | auto_selected_id    | auto_selected_id expected",
+            "/cases/85/expected                       | from_preference     | from_preference expected",
+            "/cases/85/expected                       | candidate_count     | candidate_count expected",
+            "/cases/85/expected/input_version         | descriptors         | input_version.descriptors expected",
+            "/cases/85/expected/input_version         | remixer             | input_version.remixer expected",
+            "/cases/85/expected/candidates/0          | track_id            | candidate ids expected",
+            "/cases/85/expected/candidates/0          | score               | score expected",
+            "/cases/85/expected/candidates/0          | artist              | artist expected",
+            "/cases/85/expected/candidates/0          | title               | title expected",
+            "/cases/85/expected/candidates/0          | duration_delta_sec  | duration_delta_sec expected",
+            "/cases/85/expected/candidates/0          | playlists           | playlists expected",
+            "/cases/85/expected/candidates/0/version  | descriptors         | version.descriptors expected",
+            "/cases/85/expected/candidates/0/version  | remixer             | version.remixer expected"})
+    void a_copy_with_one_recorded_field_changed_names_that_field(String parent, String key, String reported) {
+        // Given a copy of the golden set with one recorded value of case 85 changed
+        JsonNode copy = GoldenGate.set();
+        ObjectNode holder = (ObjectNode) copy.at(parent);
+        assertThat(holder.has(key)).as("%s holds %s", parent, key).isTrue();
+        holder.set(key, different(holder.get(key)));
+
+        // When the copy is compared
+        List<String> lines = GoldenGate.differences(copy);
+
+        // Then case 85, and only case 85, reports a difference that names the field
+        assertThat(lines).as("changing %s of %s", key, parent)
+                .isNotEmpty()
+                .allMatch(line -> line.startsWith("case 85 ("))
+                .anyMatch(line -> line.contains(" " + reported));
+    }
+
+    @Test
+    void a_copy_with_one_facet_value_changed_names_that_facet() {
+        // Given a copy with the value of the first recorded facet of case 85's leader changed
+        JsonNode copy = GoldenGate.set();
+        ObjectNode parts = (ObjectNode) copy.at("/cases/85/expected/candidates/0/parts");
+        String facet = parts.fieldNames().next();
+        parts.set(facet, different(parts.get(facet).isNull() ? DoubleNode.valueOf(0.5) : parts.get(facet)));
+
+        // When the copy is compared, then the difference names the facet
+        assertThat(GoldenGate.differences(copy))
+                .isNotEmpty()
+                .allMatch(line -> line.startsWith("case 85 ("))
+                .anyMatch(line -> line.contains(" facet " + facet + " expected"));
+    }
+
+    @Test
+    void a_copy_with_a_facet_added_or_removed_names_the_facet_names() {
+        // Given a copy with a facet more recorded on case 85's leader, and another with the first facet removed
+        JsonNode added = GoldenGate.set();
+        ((ObjectNode) added.at("/cases/85/expected/candidates/0/parts")).put("extra", 0.5);
+        JsonNode removed = GoldenGate.set();
+        ObjectNode parts = (ObjectNode) removed.at("/cases/85/expected/candidates/0/parts");
+        parts.remove(parts.fieldNames().next());
+
+        // When each copy is compared, then the difference names the facet names
+        assertThat(GoldenGate.differences(added)).anyMatch(line -> line.contains(" facet names expected"));
+        assertThat(GoldenGate.differences(removed)).singleElement().asString()
+                .startsWith("case 85 (").contains(" facet names expected");
     }
 
     @Test
