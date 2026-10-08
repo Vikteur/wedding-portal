@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -15,16 +16,26 @@ class BaselineMigrationTest {
     private static final Path MIGRATIONS =
             Path.of(System.getProperty("wedding.repoRoot")).resolve("application/src/main/resources/db/migration");
     private static final Path BASELINE = MIGRATIONS.resolve("V1__baseline.sql");
+    private static final Pattern VERSIONED = Pattern.compile("V[0-9]+__[A-Za-z0-9_]+\\.sql");
     private static final Pattern STATEMENT =
             Pattern.compile("\\b(create|alter|drop|insert)\\b|;", Pattern.CASE_INSENSITIVE);
 
     @Test
-    void db_migration_holds_only_v1_baseline() throws IOException {
+    void db_migration_starts_with_v1_baseline_and_holds_only_versioned_migrations() throws IOException {
         // Given the migration directory
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
-            // Then it lists exactly the baseline
-            assertThat(files.map(path -> path.getFileName().toString())).containsExactly("V1__baseline.sql");
+            List<String> names = files.map(path -> path.getFileName().toString())
+                    .sorted(Comparator.comparingInt(BaselineMigrationTest::version))
+                    .toList();
+
+            // Then the first file by version is the baseline, and every file is a versioned migration
+            assertThat(names).first().isEqualTo("V1__baseline.sql");
+            assertThat(names).allMatch(name -> VERSIONED.matcher(name).matches());
         }
+    }
+
+    private static int version(String fileName) {
+        return Integer.parseInt(fileName.substring(1, fileName.indexOf("__")));
     }
 
     @Test

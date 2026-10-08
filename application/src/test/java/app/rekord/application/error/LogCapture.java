@@ -14,24 +14,24 @@ import java.util.logging.Logger;
  * but records below a logger's enabled level (INFO by default) are dropped before they reach it; DEBUG capture is
  * TASK-6.5.
  */
-final class LogCapture extends Handler {
+public final class LogCapture extends Handler {
 
     private final List<LogRecord> records = new CopyOnWriteArrayList<>();
     private final Logger root = Logger.getLogger("");
 
-    LogCapture() {
+    public LogCapture() {
         setLevel(Level.ALL);
     }
 
-    void start() {
+    public void start() {
         root.addHandler(this);
     }
 
-    void stop() {
+    public void stop() {
         root.removeHandler(this);
     }
 
-    List<LogRecord> records() {
+    public List<LogRecord> records() {
         return List.copyOf(records);
     }
 
@@ -50,7 +50,7 @@ final class LogCapture extends Handler {
     }
 
     /** Message, parameters and the rendered stack trace of a record. */
-    static String text(LogRecord r) {
+    public static String text(LogRecord r) {
         StringWriter out = new StringWriter();
         PrintWriter pw = new PrintWriter(out);
         pw.println(r.getMessage());

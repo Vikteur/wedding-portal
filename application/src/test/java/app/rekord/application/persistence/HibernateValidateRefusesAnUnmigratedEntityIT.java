@@ -25,7 +25,8 @@ class HibernateValidateRefusesAnUnmigratedEntityIT {
                     .addClass(StrayEntity.class)
                     .addAsResource("stray-entity-orm.xml")
                     .addAsResource("application.properties")
-                    .addAsResource("db/migration/V1__baseline.sql"))
+                    .addAsResource("db/migration/V1__baseline.sql")
+                    .addAsResource("db/migration/V2__identity.sql"))
             .assertException(e -> {
                 // Then: Hibernate's schema validation rejects the missing table
                 StringBuilder chain = new StringBuilder();
@@ -49,6 +50,6 @@ class HibernateValidateRefusesAnUnmigratedEntityIT {
         // Then: Flyway ran V1 and Hibernate created nothing
         assertThat(DB.column("select table_name from information_schema.tables where table_name = 'stray_entity'"))
                 .isEmpty();
-        assertThat(DB.column("select version from flyway_schema_history")).containsExactly("1");
+        assertThat(DB.column("select version from flyway_schema_history")).containsExactly("1", "2");
     }
 }
