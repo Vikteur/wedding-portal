@@ -39,7 +39,7 @@ class IdentitySchemaIT {
             // Given a database that this run started
             FreshDatabase.assertStartedAfterThisJvm(c);
 
-            // Then the history holds V1 and then V2, each successful
+            // Then the history starts with V1 and then V2, each successful; a later migration may follow
             List<String> history = new ArrayList<>();
             try (Statement s = c.createStatement();
                     ResultSet rs = s.executeQuery(
@@ -49,7 +49,7 @@ class IdentitySchemaIT {
                     history.add(rs.getString("version") + " " + rs.getString("script"));
                 }
             }
-            assertThat(history).containsExactly("1 db/migration/V1__baseline.sql", "2 db/migration/V2__identity.sql");
+            assertThat(history).startsWith("1 db/migration/V1__baseline.sql", "2 db/migration/V2__identity.sql");
         }
     }
 
