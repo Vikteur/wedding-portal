@@ -42,7 +42,6 @@ class CiContractSpecTest {
     /** What every refusal ends with: a shape the test does not read is reported, never passed. */
     private static final String EXTEND = "extend CiContractSpecTest to read it";
     private static final Pattern PIN_SCRIPT = Pattern.compile("contract-pin\\.sh\\s+gradle\\.properties\\b");
-    private static final Pattern COMMENT = Pattern.compile("(^|\\s)#.*$", Pattern.MULTILINE);
     private static final Pattern EXEC_RUN =
             Pattern.compile("^(\\s*RUN(?:\\s+--\\S+)*)\\s*(\\[.*\\])\\s*$", Pattern.MULTILINE);
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -948,7 +947,7 @@ class CiContractSpecTest {
      */
     private static List<List<String>> commands(String script) {
         List<List<String>> commands = new ArrayList<>();
-        String text = shellForm(COMMENT.matcher(script).replaceAll("$1").replaceAll("\\\\\\R", " "));
+        String text = shellForm(withoutComments(script).replaceAll("\\\\\\R", " "));
         for (String part : SEPARATOR.split(text)) {
             List<String> words = Arrays.stream(part.trim().split("\\s+"))
                     .map(word -> word.replace("\"", "").replace("'", ""))
@@ -975,8 +974,39 @@ class CiContractSpecTest {
             } catch (IOException e) {
                 return Matcher.quoteReplacement(run.group());
             }
-            return Matcher.quoteReplacement(run.group(1) + " " + String.join(" ", words));
+            return Matcher.quoteReplacement(run.group(1) + " " + withoutComments(String.join(" ", words)));
         });
+    }
+
+    /**
+     * The script with each shell comment dropped: from a {@code #} that starts a word outside quotes to the end of its
+     * line, so {@code echo "Build #1" && ./gradlew build} keeps its build. A quote closes with its own kind, and a
+     * backslash escapes the next character outside quotes and inside double ones.
+     */
+    private static String withoutComments(String script) {
+        StringBuilder kept = new StringBuilder();
+        char quote = 0;
+        boolean comment = false;
+        for (int i = 0; i < script.length(); i++) {
+            char c = script.charAt(i);
+            if (c == '\n' || c == '\r') {
+                comment = false;
+            } else if (comment) {
+                continue;
+            } else if (c == '\\' && quote != '\'' && i + 1 < script.length()) {
+                kept.append(c);
+                c = script.charAt(++i);
+            } else if (quote != 0) {
+                quote = c == quote ? 0 : quote;
+            } else if (c == '"' || c == '\'') {
+                quote = c;
+            } else if (c == '#' && (i == 0 || Character.isWhitespace(script.charAt(i - 1)))) {
+                comment = true;
+                continue;
+            }
+            kept.append(c);
+        }
+        return kept.toString();
     }
 
     /**
