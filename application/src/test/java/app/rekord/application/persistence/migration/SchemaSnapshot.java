@@ -5,22 +5,30 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The shape of schema {@code public} as {@code information_schema} shows it, sorted deterministically, so a migration
  * test can compare it with the shape the migration declares: base tables, columns (type and nullability) and PRIMARY
  * KEY, UNIQUE, FOREIGN KEY and CHECK constraints, the column defaults and identity settings (generation, start,
- * increment, minimum, maximum and cycle), plus the names of the other non-system schemas, and the indexes that back no
- * constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them.
+ * increment, minimum, maximum and cycle), plus the names of the other non-system schemas, the indexes that back no
+ * constraint of their own table (partial and expression indexes included) as {@code pg_index} shows them, and the enum
+ * types of {@code public} with their labels in order as {@code pg_enum} shows them.
  * {@code flyway_schema_history} is never part of it.
  * <p>
  * Defaults and identity are read from {@code information_schema.columns}: {@code column_default} as PostgreSQL renders
  * it, and {@code identity_generation} with {@code identity_start}, {@code identity_increment},
- * {@code identity_minimum}, {@code identity_maximum} and {@code identity_cycle}. Not covered: the position of an
- * identity sequence ({@code restart}, a {@code nextval}), which is data and no schema shape; generated columns
- * (PostgreSQL leaves their {@code column_default} empty), sequences, views, functions, triggers and extensions, enum
- * labels, collation, exclusion constraints, foreign key on-update, match and deferrability, and the content of other
+ * {@code identity_minimum}, {@code identity_maximum} and {@code identity_cycle}. The columns of a key are listed in
+ * the order of the key (a composite primary key or unique key declared {@code (b, a)} lists {@code b} before
+ * {@code a}); the columns a foreign key references are listed in the order of the foreign key's mapping, so the nth
+ * referenced column is the one the nth column of the foreign key points at, whatever order the referenced unique key
+ * declares them in. A foreign key whose target is a unique index that backs no constraint is refused, since
+ * {@code information_schema} cannot name its target. Not covered: the position of an identity sequence
+ * ({@code restart}, a {@code nextval}), which is data and no schema shape; generated columns (PostgreSQL leaves their
+ * {@code column_default} empty), sequences, views, functions, triggers and extensions, enum types of other schemas,
+ * collation, exclusion constraints, foreign key on-update, match and deferrability, and the content of other
  * schemas.
  */
 public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Column> columns, List<Constraint> constraints,
@@ -32,7 +40,11 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
      */
     public record Column(String table, String name, String type, boolean nullable) {}
 
-    /** {@code detail}: the check clause, {@code references <table>(<cols>) on delete <rule>} for a foreign key, else empty. */
+    /**
+     * {@code detail}: the check clause, {@code references <table>(<cols>) on delete <rule>} for a foreign key, else
+     * empty. The referenced {@code <cols>} of a foreign key follow its mapping: the nth one is referenced by the nth of
+     * {@code columns}.
+     */
     public record Constraint(String table, String name, String type, List<String> columns, String detail) {}
 
     /**
@@ -73,8 +85,20 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
 
     private static final String HISTORY = "flyway_schema_history";
     private static final int DEFAULT_TIME_PRECISION = 6;
-    // PostgreSQL 17 lists every NOT NULL as a CHECK named <oid>_<oid>_<n>_not_null; nullability lives on the column.
+    // A NOT NULL is no CHECK here: nullability lives on the column. PostgreSQL 17 lists every NOT NULL as a CHECK named
+    // <oid>_<oid>_<n>_not_null, which this pattern matches. PostgreSQL 18 keeps it in pg_constraint (type 'n') under a
+    // real name, <table>_<column>_not_null, which a pattern cannot tell from a CHECK of that name: NOT_NULL_ROW asks
+    // pg_constraint instead. Checked on PostgreSQL 17 (postgres:17-alpine) and PostgreSQL 18 (postgres:18) by
+    // SchemaSnapshotIT.does_not_report_not_null_as_a_check_constraint; check again on the next major version.
     private static final String NOT_NULL = "^[0-9]+_[0-9]+_[0-9]+_not_null$";
+
+    /** True for the row of {@code tc} ({@code information_schema.table_constraints}) that is a NOT NULL. */
+    private static final String NOT_NULL_ROW = """
+            (tc.constraint_name ~ '%s' or exists (select 1 from pg_constraint pc
+                join pg_class pt on pt.oid = pc.conrelid
+                join pg_namespace pn on pn.oid = pt.relnamespace
+               where pc.contype = 'n' and pc.conname = tc.constraint_name
+                 and pn.nspname = tc.table_schema and pt.relname = tc.table_name))""".formatted(NOT_NULL);
 
     public static SchemaSnapshot empty() {
         return new SchemaSnapshot(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
@@ -82,7 +106,7 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
 
     public static SchemaSnapshot read(Connection connection) throws SQLException {
         return new SchemaSnapshot(schemas(connection), tables(connection), columns(connection), constraints(connection),
-                indexes(connection), defaults(connection), List.of());
+                indexes(connection), defaults(connection), enums(connection));
     }
 
     private static List<String> schemas(Connection c) throws SQLException {
@@ -134,6 +158,7 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
         List<String> shared = strings(c, """
                 select constraint_name from information_schema.check_constraints
                 where constraint_schema = 'public' and constraint_name !~ '%s'
+                  and constraint_name not in (select conname from pg_constraint where contype = 'n')
                 group by constraint_name having count(*) > 1
                 union
                 select constraint_name from information_schema.referential_constraints
@@ -159,22 +184,33 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
                      join information_schema.key_column_usage k2
                        on k2.constraint_schema = rc.unique_constraint_schema and k2.constraint_name = rc.unique_constraint_name
                     where rc.constraint_schema = tc.constraint_schema and rc.constraint_name = tc.constraint_name) as ref_table,
-                  (select string_agg(k2.column_name, ',' order by k2.ordinal_position)
-                     from information_schema.referential_constraints rc
+                  (select string_agg(k2.column_name, ',' order by k.ordinal_position)
+                     from information_schema.key_column_usage k
+                     join information_schema.referential_constraints rc
+                       on rc.constraint_schema = k.constraint_schema and rc.constraint_name = k.constraint_name
                      join information_schema.key_column_usage k2
                        on k2.constraint_schema = rc.unique_constraint_schema and k2.constraint_name = rc.unique_constraint_name
-                    where rc.constraint_schema = tc.constraint_schema and rc.constraint_name = tc.constraint_name) as ref_cols
+                      and k2.ordinal_position = k.position_in_unique_constraint
+                    where k.constraint_schema = tc.constraint_schema and k.constraint_name = tc.constraint_name
+                      and k.table_name = tc.table_name) as ref_cols
                 from information_schema.table_constraints tc
                 join information_schema.tables t
                   on t.table_schema = tc.table_schema and t.table_name = tc.table_name and t.table_type = 'BASE TABLE'
                 where tc.table_schema = 'public' and tc.table_name <> '%s'
                   and tc.constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
-                  and tc.constraint_name !~ '%s'
-                order by tc.table_name, tc.constraint_name""".formatted(HISTORY, NOT_NULL));
+                  and not %s
+                order by tc.table_name, tc.constraint_name""".formatted(HISTORY, NOT_NULL_ROW));
                 ResultSet r = s.executeQuery()) {
             while (r.next()) {
                 String type = r.getString("constraint_type");
                 String cols = r.getString("cols");
+                if (type.equals("FOREIGN KEY") && r.getString("ref_table") == null) {
+                    // information_schema names the target of a foreign key by its PRIMARY KEY or UNIQUE constraint only
+                    throw new IllegalStateException("foreign key " + r.getString("constraint_name") + " of table "
+                            + r.getString("table_name") + " references a unique index that backs no constraint;"
+                            + " information_schema cannot name its target, so declare the target columns as a"
+                            + " PRIMARY KEY or UNIQUE constraint");
+                }
                 String detail = switch (type) {
                     case "CHECK" -> r.getString("clause");
                     case "FOREIGN KEY" -> "references %s(%s) on delete %s"
@@ -238,6 +274,29 @@ public record SchemaSnapshot(List<String> schemas, List<String> tables, List<Col
         return "%s start %s increment %s min %s max %s %s".formatted(generation, r.getString("identity_start"),
                 r.getString("identity_increment"), r.getString("identity_minimum"), r.getString("identity_maximum"),
                 "YES".equals(r.getString("identity_cycle")) ? "cycle" : "no cycle");
+    }
+
+    private static List<EnumType> enums(Connection c) throws SQLException {
+        // left join: an enum type without a label is still a type
+        Map<String, List<String>> labelsByType = new LinkedHashMap<>();
+        try (PreparedStatement s = c.prepareStatement("""
+                select t.typname, e.enumlabel
+                from pg_type t
+                join pg_namespace n on n.oid = t.typnamespace
+                left join pg_enum e on e.enumtypid = t.oid
+                where n.nspname = 'public' and t.typtype = 'e'
+                order by t.typname, e.enumsortorder""");
+                ResultSet r = s.executeQuery()) {
+            while (r.next()) {
+                List<String> labels = labelsByType.computeIfAbsent(r.getString("typname"), name -> new ArrayList<>());
+                if (r.getString("enumlabel") != null) {
+                    labels.add(r.getString("enumlabel"));
+                }
+            }
+        }
+        List<EnumType> result = new ArrayList<>();
+        labelsByType.forEach((name, labels) -> result.add(new EnumType(name, List.copyOf(labels))));
+        return result;
     }
 
     private static List<String> strings(Connection c, String sql) throws SQLException {
