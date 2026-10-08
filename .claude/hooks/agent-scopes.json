@@ -1,0 +1,319 @@
+{
+  "_comment": "Per-agent write/command fences, ported from the Copilot agents' allowedFilePaths/commandAllowlist. Enforced by scripts/scope-guard.sh (PreToolUse). allowedFilePaths absent = any path; [] = no writes. Entry ending in '/' = directory prefix; otherwise exact path or bash glob. commandAllowlist = allowed command prefixes.",
+  "agents": {
+    "analyst": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "architecture-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/20-architecture-analyst.md",
+        "docs/layer-model.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "build-ci-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/50-build-ci-analyst.md",
+        "docs/workflow.new-feature.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "capability-mapper": {
+      "allowedFilePaths": [
+        "docs/_inventory/60-capability-mapper.md",
+        "docs/capability-register.backend.md",
+        "docs/capability-register.frontend.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "closeout": {
+      "allowedFilePaths": [
+        "docs/",
+        "CHANGELOG.md"
+      ],
+      "commandAllowlist": [
+        "scripts/cleanup-parts.sh",
+        "git status",
+        "git log",
+        "git branch",
+        "gh pr view",
+        ".archon/scripts/retro-commit.sh",
+        "git diff",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "contract-agent": {
+      "allowedFilePaths": [
+        "openapi.yaml",
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "git add",
+        "git commit",
+        "git push",
+        "git status",
+        "git diff",
+        "npx spectral",
+        "scripts/open-pr.sh",
+        "scripts/contract-slice.sh",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "debugger": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "git log",
+        "git diff",
+        "git status",
+        "git blame",
+        "git bisect",
+        "gh run view",
+        "gh run download",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "dependency-integration-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/70-dependency-integration-analyst.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "design-critic": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "developer": {
+      "commandAllowlist": [
+        "git add",
+        "git commit",
+        "git push",
+        "git status",
+        "git diff",
+        "git log",
+        "./gradlew",
+        "npm",
+        "scripts/worktree-consumer.sh",
+        "gh run view"
+      ]
+    },
+    "onboarding-orchestrator": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "scripts/scope-skills.sh",
+        "scripts/check-inventory.sh",
+        "scripts/assemble-inventory.sh",
+        "git status",
+        "git log",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "orchestrator": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "scripts/worktree-part.sh",
+        "scripts/worktree-consumer.sh",
+        "scripts/plan-slice.sh",
+        "scripts/contract-slice.sh",
+        "scripts/resolve-modules.sh",
+        "scripts/gen-capability-register.sh",
+        "scripts/scope-skills.sh",
+        "scripts/integrate-part.sh",
+        "scripts/cleanup-parts.sh",
+        "scripts/check-handoff.sh",
+        "scripts/open-pr.sh",
+        "scripts/start-feature.sh",
+        "scripts/apm.sh",
+        "git status",
+        "git log",
+        "git branch",
+        "gh run view",
+        "gh pr view",
+        "git diff",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "pattern-scanner": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "scripts/scan-patterns.sh",
+        "git log",
+        "git rev-parse",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "repo-structure-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/10-repo-structure-analyst.md",
+        "docs/project-profile.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "retro": {
+      "allowedFilePaths": [
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "gh pr view",
+        "gh run view",
+        "gh run list",
+        "git log",
+        "git show",
+        "git status",
+        "git diff"
+      ]
+    },
+    "reviewer": {
+      "allowedFilePaths": [],
+      "commandAllowlist": [
+        "git diff",
+        "git status",
+        "gh run view",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "skill-author": {
+      "allowedFilePaths": [
+        "skills/",
+        "templates/skills.manifest.yaml",
+        "docs/",
+        ".claude/skills/"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "stack-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/30-stack-analyst.md",
+        "docs/code-maps/README.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "test-architecture-analyst": {
+      "allowedFilePaths": [
+        "docs/_inventory/40-test-architecture-analyst.md"
+      ],
+      "commandAllowlist": [
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    },
+    "test-writer": {
+      "allowedFilePaths": [
+        "*/src/test/*",
+        "*/test/*",
+        "test/*",
+        "docs/"
+      ],
+      "commandAllowlist": [
+        "git add",
+        "git commit",
+        "git push",
+        "git status",
+        "git diff",
+        "gh run view",
+        "./gradlew test",
+        "./gradlew integrationTest",
+        "./gradlew check",
+        "npm test",
+        "npm run test"
+      ]
+    }
+  }
+}
