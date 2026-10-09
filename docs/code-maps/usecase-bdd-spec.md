@@ -65,7 +65,7 @@ Expected: the behavior change is asserted through a collaborator interaction, no
 - Naming shape: `*UseCaseTest`, methods named `given<Setup>_when<Action>_then<Outcome>`.
 - Required collaborators / base types: `@ExtendWith(MockitoExtension.class)`, `@Mock` for every
   collaborator port, `@InjectMocks` for the use case under test.
-- Config / wiring: none — pure unit test, no Spring context.
+- Config / wiring: none — pure unit test, no Quarkus application started.
 
 ## Frequency & coverage (why this earned a skill)
 - Occurrences: 90 `*UseCaseTest` files across 14 modules (as of `abc1234`), against 180 `*UseCase`

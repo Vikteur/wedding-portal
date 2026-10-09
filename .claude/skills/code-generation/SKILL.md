@@ -27,6 +27,8 @@ truth and your job is to conform to it.
   same bytes out. Wire it into the build graph and re-run in CI to catch drift.
 - **Review generated output like any code.** Diff what codegen produces; a bad template ships bugs at scale.
 - **Customize via the generator, not the artifact** — templates, config, hooks — so customization survives regen.
+- **Scaffold templates are the exception to "never edit output"**: a one-shot template renders the base case of
+  hand-maintained code, which is then committed and extended. Render it once, never over an existing file.
 
 ## Pattern signals (discovery cues — how the scanner recognizes this in any codebase)
 - A generator plugin/CLI in the build wired to a source-of-truth input (spec/schema/IDL/template).

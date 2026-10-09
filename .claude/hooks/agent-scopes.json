@@ -96,6 +96,7 @@
         "./gradlew",
         "npm",
         "scripts/worktree-consumer.sh",
+        "scripts/scaffold.sh",
         "gh run view"
       ]
     },
@@ -171,6 +172,7 @@
         "git status",
         "git diff",
         "gh run view",
+        "scripts/scaffold.sh --test",
         "./gradlew test",
         "./gradlew integrationTest",
         "./gradlew check",

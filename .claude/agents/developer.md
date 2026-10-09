@@ -16,6 +16,7 @@ tools:
   - "Bash(./gradlew *)"
   - "Bash(npm *)"
   - "Bash(scripts/worktree-consumer.sh *)"
+  - "Bash(scripts/scaffold.sh *)"
   - "Bash(gh run view *)"
   - "mcp__codegraph__*"
 model: claude-sonnet-5-5

@@ -69,7 +69,7 @@ Expected: one test shape covers every excluded enum constant without repeated bo
 - JUnit 5 is the default unit-test runner, paired with Mockito and AssertJ.
 - Given/When/Then intent lives in method names instead of `@DisplayName` or comment blocks.
 - `@ParameterizedTest` is preferred when the same assertion shape must cover a closed enum set.
-- Tests stay outside Spring unless they are deliberately slice or integration tests.
+- Tests stay outside Quarkus unless they are deliberately `@QuarkusTest` integration tests.
 
 ## Frequency & coverage (why this earned a skill)
 - JUnit 5 is present across the unit-test corpus; the same repository conventions described in

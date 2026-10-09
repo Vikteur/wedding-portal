@@ -9,6 +9,9 @@ Backing a use-case's repository **port** (interface in the inner layer) with a r
 adapter that turns domain aggregates into rows and back.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - The **port** (interface) lives in the use-case/inner layer; the adapter class **implements** it
   (a thin `Default<X>Repository` delegating to a package-private Panache repository).
 - Use the Panache **repository** pattern, not active-record: behaviour on entities would leak
@@ -28,9 +31,11 @@ A use-case-layer `*Repository` interface implemented by an adapter `Default*Repo
 - Code map (port↔impl pairs, entity mapping, query conventions) → `docs/code-maps/persistence-repository.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't let `@Entity` / persistence types cross into domain or use-case code.
 - Don't own the transaction in the repository — the use-case does.
 - Don't return entities to callers — return domain types.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] Port in the inner layer, `@ApplicationScoped` adapter implements it; domain↔entity mapped at the edge; returns domain types; a Testcontainers test covers a query.

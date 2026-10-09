@@ -13,22 +13,23 @@ kind: worked-example
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-The single central `@ControllerAdvice` in the `application` module that all capability adapters'
-controllers fall back to (there is a second, narrower one — `RestResponseEntityExceptionHandler` in
-the same package — plus one capability-local advice in `vendor-relation-adapter`).
+The single central class of global `@ServerExceptionMapper` methods in the `application` module that all
+capability adapters' controllers fall back to (there is a second, narrower one — `RestResponseEntityExceptionHandler` in
+the same package — plus one capability-local mapper class in `vendor-relation-adapter`).
 
 ## Domain exception → HTTP status mapping {#exception-to-http}
 **Serves:** [`exception-to-http`](../exception-to-http.md)
 
-One `@ExceptionHandler` method per exception type, each returning
-`ResponseEntity<Map<String, List<String>>>` with body shape `{"errors": [...]}` and an explicit
-`HttpStatus` — domain exceptions (`ConsentTransitionException`, `InvoiceCollectionAlreadyExistsException`) map to
-`409`, authorization failures map to `403`, framework exceptions (`HttpMessageNotReadableException`,
-`MethodArgumentTypeMismatchException`) map to `400`, `RequestNotPermitted` (resilience4j rate
-limiter) maps to `429`. The catch-all `@ExceptionHandler(Exception.class)` re-throws when the
-exception already carries a `@ResponseStatus` (so Spring's default handling still applies) and
-otherwise returns `500`. `BindException`/`MethodArgumentNotValidException` are deliberately
-re-thrown, not translated — Spring's own validation-error body format is kept as-is.
+One `@ServerExceptionMapper` method per exception type, each returning
+`RestResponse<Map<String, List<String>>>` with body shape `{"errors": [...]}` and an explicit
+`Response.Status` — domain exceptions (`ConsentTransitionException`, `InvoiceCollectionAlreadyExistsException`) map to
+`409`, authorization failures (`io.quarkus.security.ForbiddenException`) map to `403`, framework exceptions
+(Jackson `JsonProcessingException`, `jakarta.ws.rs.BadRequestException`) map to `400`, `RateLimitException`
+(SmallRye Fault Tolerance `@RateLimit`) maps to `429`. The catch-all `Exception` mapper returns a
+`WebApplicationException`'s own response unchanged (status and entity) and
+otherwise returns `500`. `jakarta.validation.ConstraintViolationException` deliberately has no mapper here —
+Quarkus's built-in Hibernate Validator mapper is more specific than the catch-all, so its own
+validation-error body format is kept as-is.
 
 ### Source (pseudonymized)
 ```java
@@ -41,110 +42,103 @@ import com.acme.shop.invoice.adapter.exception.InvoiceForbiddenException;
 import com.acme.shop.invoice.domain.collection.InvoiceCollectionAlreadyExistsException;
 import com.acme.shop.invoice.domain.collection.InvoiceCollectionNotFoundException;
 import com.acme.shop.partner.exception.PartnerBadRequestException;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.quarkus.security.ForbiddenException;
+import io.smallrye.faulttolerance.api.RateLimitException;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
+import org.jboss.resteasy.reactive.RestResponse;
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.authorization.AuthorizationDeniedException;
-import org.springframework.validation.BindException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 import java.util.Map;
 
-@ControllerAdvice
 public class RestExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RestExceptionHandler.class);
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<Map<String, List<String>>> handleHttpMessageNotReadable(final HttpMessageNotReadableException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleJsonProcessing(final JsonProcessingException ex) {
         LOGGER.warn("A message not readable exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of("Request body could not be read")), HttpStatus.BAD_REQUEST);
+        return RestResponse.status(Status.BAD_REQUEST, Map.of("errors", List.of("Request body could not be read")));
     }
 
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<Map<String, List<String>>> handleMethodArgumentTypeMismatchException(final MethodArgumentTypeMismatchException ex) {
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getName() + " does not match required type")), HttpStatus.BAD_REQUEST);
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleBadRequest(final BadRequestException ex) {
+        return RestResponse.status(Status.BAD_REQUEST, Map.of("errors", List.of("Request parameter does not match required type")));
     }
 
-    @ExceptionHandler({BindException.class, MethodArgumentNotValidException.class})
-    public void handleValidation(final BindException ex) throws BindException {
-        LOGGER.warn("A validation exception occurred");
-        throw ex;
-    }
-
-    @ExceptionHandler(RequestNotPermitted.class)
-    public ResponseEntity<Map<String, List<String>>> handleRequestNotPermitted(final RequestNotPermitted ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleRateLimit(final RateLimitException ex) {
         LOGGER.warn("A rate limit exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of("Rate limit exceeded, please try again later")), HttpStatus.TOO_MANY_REQUESTS);
+        return RestResponse.status(Status.TOO_MANY_REQUESTS, Map.of("errors", List.of("Rate limit exceeded, please try again later")));
     }
 
-    @ExceptionHandler(AuthorizationDeniedException.class)
-    public ResponseEntity<Map<String, List<String>>> handleAuthorizationDeniedException(final AuthorizationDeniedException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleForbiddenException(final ForbiddenException ex) {
         LOGGER.warn("An authorization exception occurred", ex);
-        if (ex.getMessage().contains("Access Denied")) {
-            return new ResponseEntity<>(Map.of("errors", List.of("Access Denied")), HttpStatus.FORBIDDEN);
+        if (ex.getMessage() == null || ex.getMessage().contains("Access Denied")) {
+            return RestResponse.status(Status.FORBIDDEN, Map.of("errors", List.of("Access Denied")));
         }
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.FORBIDDEN);
+        return RestResponse.status(Status.FORBIDDEN, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(PartnerBadRequestException.class)
-    public ResponseEntity<Map<String, List<String>>> handlePartnerBadRequest(final PartnerBadRequestException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handlePartnerBadRequest(final PartnerBadRequestException ex) {
         LOGGER.warn("Partner platform returned bad request", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of("Partner platform returned bad request")), HttpStatus.BAD_REQUEST);
+        return RestResponse.status(Status.BAD_REQUEST, Map.of("errors", List.of("Partner platform returned bad request")));
     }
 
-    @ExceptionHandler(ConsentTransitionException.class)
-    public ResponseEntity<Map<String, List<String>>> handleConsentTransition(final ConsentTransitionException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleConsentTransition(final ConsentTransitionException ex) {
         LOGGER.warn("A consent transition exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.CONFLICT);
+        return RestResponse.status(Status.CONFLICT, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(ConsentTypeUnavailableException.class)
-    public ResponseEntity<Map<String, List<String>>> handleConsentTypeUnavailable(final ConsentTypeUnavailableException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleConsentTypeUnavailable(final ConsentTypeUnavailableException ex) {
         LOGGER.warn("A consent type unavailable exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.NOT_FOUND);
+        return RestResponse.status(Status.NOT_FOUND, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(InvoiceException.class)
-    public ResponseEntity<Map<String, List<String>>> handleInvoiceException(final InvoiceException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleInvoiceException(final InvoiceException ex) {
         LOGGER.warn("An invoice exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.BAD_REQUEST);
+        return RestResponse.status(Status.BAD_REQUEST, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(InvoiceForbiddenException.class)
-    public ResponseEntity<Map<String, List<String>>> handleInvoiceForbiddenException(final InvoiceForbiddenException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleInvoiceForbiddenException(final InvoiceForbiddenException ex) {
         LOGGER.warn("An invoice forbidden exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.FORBIDDEN);
+        return RestResponse.status(Status.FORBIDDEN, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(InvoiceCollectionNotFoundException.class)
-    public ResponseEntity<Map<String, List<String>>> handleInvoiceCollectionNotFoundException(final InvoiceCollectionNotFoundException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleInvoiceCollectionNotFoundException(final InvoiceCollectionNotFoundException ex) {
         LOGGER.warn("An invoice collection not found exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.NOT_FOUND);
+        return RestResponse.status(Status.NOT_FOUND, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(InvoiceCollectionAlreadyExistsException.class)
-    public ResponseEntity<Map<String, List<String>>> handleInvoiceCollectionAlreadyExistsException(final InvoiceCollectionAlreadyExistsException ex) {
+    @ServerExceptionMapper
+    public RestResponse<Map<String, List<String>>> handleInvoiceCollectionAlreadyExistsException(final InvoiceCollectionAlreadyExistsException ex) {
         LOGGER.warn("An invoice collection already exists exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of(ex.getMessage())), HttpStatus.CONFLICT);
+        return RestResponse.status(Status.CONFLICT, Map.of("errors", List.of(ex.getMessage())));
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, List<String>>> handleDefault(final Exception ex) throws Exception {
-        if (ex.getClass().getAnnotation(ResponseStatus.class) != null) {
+    @ServerExceptionMapper
+    public Response handleDefault(final Exception ex) {
+        if (ex instanceof WebApplicationException wae) {
             LOGGER.error("An exception occurred", ex);
-            throw ex;
+            return wae.getResponse();
         }
         LOGGER.error("An unknown exception occurred", ex);
-        return new ResponseEntity<>(Map.of("errors", List.of("An unknown exception occurred")), HttpStatus.INTERNAL_SERVER_ERROR);
+        return Response.status(Status.INTERNAL_SERVER_ERROR)
+                .entity(Map.of("errors", List.of("An unknown exception occurred")))
+                .build();
     }
 }
 ```
@@ -152,24 +146,25 @@ public class RestExceptionHandler {
 ### Edge cases
 Framework validation exception:
 ```java
-assertThatThrownBy(() -> handler.handleValidation(bindException))
-        .isSameAs(bindException);
+given().contentType(JSON).body("{\"customerName\": \"\"}")
+        .when().post("api/delegation")
+        .then().statusCode(400).body("violations", notNullValue());
 ```
-Expected: validation exceptions are re-thrown so Spring keeps its built-in validation response shape.
+Expected: `ConstraintViolationException` has no mapper in this class, so Quarkus keeps its built-in validation response shape.
 
 Partner request rejected upstream:
 ```java
 var response = handler.handlePartnerBadRequest(new PartnerBadRequestException("example.invalid rejected the payload"));
-assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+assertThat(response.getStatus()).isEqualTo(400);
 ```
 Expected: callers receive a normalized partner-platform error body, not the raw upstream payload.
 
-Exception already annotated with `@ResponseStatus`:
+Exception that is a `WebApplicationException` carrying its own status:
 ```java
-assertThatThrownBy(() -> handler.handleDefault(annotatedException))
-        .isSameAs(annotatedException);
+var response = handler.handleDefault(new NotFoundException());
+assertThat(response.getStatus()).isEqualTo(404);
 ```
-Expected: the advice rethrows so Spring can honor the explicit annotation.
+Expected: the catch-all keeps the exception's own status instead of turning it into a `500`.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg '@ControllerAdvice'` (3 files / 2 modules), `rg '@ExceptionHandler'` (11 matches / 3 files)
+- Scanned at: `abc1234` · tool/query: `rg -l '@ServerExceptionMapper'` (3 files / 2 modules), `rg '@ServerExceptionMapper'` (11 matches / 3 files)

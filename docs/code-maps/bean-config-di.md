@@ -13,59 +13,67 @@ kind: worked-example
 ## Where this pattern lives (exemplars)
 | Exemplar | What it shows | Layer / module |
 |----------|---------------|----------------|
-| [`WebServiceConfig.java`](exemplars/web-service-config.md#bean-config-di) | Named `@Configuration`, `@Bean` factory methods composing a project-local factory helper | adapter (`partner-gateway`) |
+| [`WebServiceConfig.java`](exemplars/web-service-config.md#bean-config-di) | `@ApplicationScoped` config class, `@Produces` + `@Named` methods composing a project-local factory helper | adapter (`partner-gateway`) |
 
 ### Excerpts
-Named configuration plus declarative bean creation (full source in the [exemplar leaf](exemplars/web-service-config.md#bean-config-di)):
+Config class plus declarative bean production (full source in the [exemplar leaf](exemplars/web-service-config.md#bean-config-di)):
 ```java
-@Configuration("partnerWebServiceConfig")
+@ApplicationScoped
 public class WebServiceConfig {
-    @Bean
-    public RegistryPortType registryPortType(Interceptor<SoapMessage> sessionTokenSecurityOutInterceptor) {
-        return (RegistryPortType) wsFactory.createProxyFactoryBean(...).create();
+    @Produces
+    @Singleton
+    @Named("partnerSessionTokenOutInterceptor")
+    Interceptor<SoapMessage> partnerSessionTokenOutInterceptor() {
+        return wsFactory.createSessionTokenOutInterceptor();
     }
 }
 ```
+The SOAP port clients are declared in `application.properties` (`quarkus.cxf.client."registry".*`) and
+injected with `@CXFClient("registry")`.
 
 ### Edge cases
 Two modules define `WebServiceConfig`:
 ```java
-@Configuration("partnerWebServiceConfig")
-class WebServiceConfig { ... }
+@ApplicationScoped
+class WebServiceConfig { ... }   // com.acme.shop.partner.config and com.acme.shop.fulfilment.config
 ```
-Expected: the explicit bean name prevents ambiguous configuration beans with the same class name.
+Expected: no ambiguity — CDI resolves by type and qualifier; the module-prefixed `@Named` values on the
+producers are what must stay unique.
 
 Shared helper bean is absent:
 ```java
-new WebServiceConfig("https://registry.example.invalid", "https://auth.example.invalid", "https://customer.example.invalid", null, bus);
+public WebServiceConfig(WSFactory wsFactory) { ... }   // no WSFactory bean on the classpath
 ```
-Expected: startup fails immediately; bean methods do not hide absent collaborators.
+Expected: the build/startup fails immediately with an unsatisfied dependency; producer methods do not
+hide absent collaborators.
 
-A bean method starts hand-building proxies:
+A producer method starts hand-building proxies:
 ```java
-@Bean
-public RegistryPortType registryPortType(...) {
+@Produces
+RegistryPortType registryPortType() {
     return new JaxWsProxyFactoryBean().create(RegistryPortType.class);
 }
 ```
-Expected: reject the change and move the construction logic back into `WSFactory`.
+Expected: reject the change — declare the client under `quarkus.cxf.client."<name>".*`, inject it with
+`@CXFClient`, and keep interceptor construction in `WSFactory`.
 
 ## Local conventions (the project facts the skill omits)
 - Package root: `<module>/.../config/`.
 - Naming shape: `*Config` (for example `WebServiceConfig`, `SalesRegionCacheConfig`,
-  `PartnerRestClientConfig`); an explicit bean name (`@Configuration("partnerWebServiceConfig")`)
-  when the class name could otherwise collide across modules.
-- Required collaborators / base types: constructor injection of `@Value`-sourced config and shared
-  infra beans (for example CXF `Bus`); `@Bean` methods stay declarative, delegating actual construction
-  logic to a helper class.
-- Config / wiring: `@Profile` is used on scheduler configs to disable jobs under `!test`.
+  `PartnerRestClientConfig`); produced beans carry a module-prefixed `@Named("partner...")` (or a custom
+  qualifier) when the same type is produced in more than one module.
+- Required collaborators / base types: constructor injection of `@ConfigProperty`/`@ConfigMapping`-sourced
+  config and shared infra beans (the CXF `Bus` is managed by the Quarkus CXF extension, not injected);
+  `@Produces` methods stay declarative, delegating actual construction logic to a helper class.
+- Config / wiring: properties live in `application.properties` with `%dev.`/`%test.`/`%prod.` prefixes;
+  scheduler configs use `@IfBuildProfile`/`@UnlessBuildProfile("test")` to disable jobs under test.
 
 ## Frequency & coverage (why this earned a skill)
-- Occurrences: `@Configuration` — 70 matches / 67 files / 24 modules; `@Bean` — 90 matches / 43
-  files / 24 modules (as of `abc1234`).
+- Occurrences: config classes (`@ApplicationScoped` in `*Config.java`) — 70 matches / 67 files / 24
+  modules; `@Produces` — 90 matches / 43 files / 24 modules (as of `abc1234`).
 
 ## Drift / exceptions
-- None observed beyond the explicit-bean-name convention noted above.
+- None observed beyond the module-prefixed `@Named` convention noted above.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg '@Configuration'`, `rg '@Bean'` (both `--glob '*.java'`)
+- Scanned at: `abc1234` · tool/query: `rg '@ApplicationScoped' --glob '*Config.java'`, `rg '@Produces' --glob '*.java'`

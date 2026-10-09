@@ -6,10 +6,6 @@
 }}
 package {{package}}.usecase;
 
-{{#authenticated}}
-import com.acme.shop.authentication.domain.AuthenticatedCustomer;
-import com.acme.shop.authentication.repository.AuthenticationFacade;
-{{/authenticated}}
 import {{package}}.domain.{{Result}}Mother;
 import {{package}}.repository.{{Repository}};
 import org.junit.jupiter.api.Test;
@@ -25,14 +21,6 @@ import static org.mockito.Mockito.when;
 class {{Name}}UseCaseTest {
     @Mock
     private {{Repository}} {{repository}};
-{{#authenticated}}
-
-    @Mock
-    private AuthenticationFacade authenticationFacade;
-
-    @Mock
-    private AuthenticatedCustomer customer;
-{{/authenticated}}
 
     @InjectMocks
     private {{Name}}UseCase {{name}}UseCase;
@@ -40,10 +28,7 @@ class {{Name}}UseCaseTest {
     @Test
     void givenExisting{{Result}}_when{{Name}}_thenReturn{{Result}}() {
         var expected = {{Result}}Mother.{{fixture}}();
-{{#authenticated}}
-        when(authenticationFacade.getAuthentication()).thenReturn(customer);
-{{/authenticated}}
-        when({{repository}}.{{method}}({{#authenticated}}customer{{/authenticated}})).thenReturn(expected);
+        when({{repository}}.{{method}}()).thenReturn(expected);
 
         assertThat({{name}}UseCase.execute()).isEqualTo(expected);
     }

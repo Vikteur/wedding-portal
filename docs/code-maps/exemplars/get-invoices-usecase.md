@@ -19,7 +19,7 @@ custom `@UseCase` annotation.
 ## Plain `*UseCase` class, one `execute()` entry point {#usecase-orchestration}
 **Serves:** [`usecase-orchestration`](../usecase-orchestration.md)
 
-`public class GetInvoicesUseCase` has no interface and no annotation beyond
+`public class GetInvoicesUseCase` has no interface and no annotation beyond `@ApplicationScoped` +
 `@RequiredArgsConstructor` + `@Transactional`; a single public `execute()` method resolves the
 current principal via `AuthenticationFacade.getAuthentication()` and delegates to a repository port.
 Filtering rules (`EXCLUDED_DOCUMENT_TYPES`) live in the use case, not the repository or controller.
@@ -34,11 +34,13 @@ import com.acme.shop.storefront.usecase.GetFeatureFlagUseCase;
 import com.acme.shop.invoice.domain.InvoiceDocumentType;
 import com.acme.shop.invoice.domain.InvoiceInfo;
 import com.acme.shop.invoice.repository.InvoicesRepository;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Set;
 
+@ApplicationScoped
 @Transactional
 @RequiredArgsConstructor
 public class GetInvoicesUseCase {

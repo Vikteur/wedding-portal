@@ -21,3 +21,29 @@ How to add an entry:
   with conflict markers left.
 - Keep each section self-contained: a union merge can interleave two sections' lines if both edit the same spot, so
   append a new section, never edit an older one (the append-only rule above).
+
+## 2026-10-09 — (no ticket) Scaffold templates render the base case
+- The base case of a domain type, Mother, factory test, controller, mapper, JPA entity/repository, port and use case is
+  rendered from `docs/Moustache scripts/<layer>/*.mustache` by `scripts/scaffold.sh` (`mustache@4.2.0` pinned by the lockfile
+  `scripts/scaffold/package-lock.json`, installed with `npm ci`; the test-writer may run it only with `--test`); agents hand-write only the edge cases. Why: deterministic boilerplate over model tokens (P2). Owner
+  decision, 2026-10-09.
+- Skills say "scaffold first" generically; the template list and variables live in each leaf's `## Scaffold` section
+  (P3). The script never overwrites an existing file, and a wrong base case is fixed in the template, not the output.
+- Variables are passed as one-line inline JSON, not a heredoc: `scope-guard.sh` splits commands on newlines.
+
+## 2026-10-09 — (no ticket) Scaffold templates target Quarkus
+- The adapter templates were ported from Spring to Quarkus: a REST resource implementing the generated JAX-RS
+  interface, `Default<Name>Repository` over a package-private `PanacheRepository`, `@QuarkusTest` + `@InjectMock`
+  controller tests and a Dev Services repository test. Why: the skills (`bean-config-di`, `persistence-repository`,
+  `testcontainers`) target Quarkus; the worked-example leaves are Spring and give structure only. Owner decision.
+- Use cases are `@ApplicationScoped` classes, not produced beans: CDI interceptors (`@Transactional`) do not apply to
+  beans from a producer method. Factories stay framework-free and are produced by the bean config.
+
+## 2026-10-09 — (no ticket) Worked examples target Quarkus
+- Every worked-example leaf and exemplar under `docs/code-maps/` now shows Quarkus 3 instead of Spring Boot: Quarkus
+  REST resources, `@ServerExceptionMapper`, CDI producers, Panache repositories, CDI `Event` + `@Observes(during =
+  AFTER_SUCCESS)`, SmallRye Fault Tolerance, Quarkus CXF, `quarkus-openapi-generator`, Dev Services. Why: the leaves
+  should match the skills and the scaffold templates. Owner decision.
+- Controllers return what the generated `jaxrs-spec` interface declares (`returnResponse=false`): a fixed
+  `Cache-Control` via `@Cache`, a non-200 body via a thrown `WebApplicationException`, which the central catch-all
+  mapper passes through unchanged.

@@ -44,7 +44,7 @@ when(featureFlagUseCase.execute()).thenReturn(List.of());
 assertThat(getInvoicesUseCase.execute()).isEqualTo(new InvoiceInfo(List.of(invoice), false, List.of()));
 verifyNoInteractions(invoiceCollectionEnricher);
 ```
-Expected: the unit test proves observable behavior without starting Spring.
+Expected: the unit test proves observable behavior without starting Quarkus.
 
 Excluded document types stay filtered:
 ```java
@@ -68,8 +68,8 @@ Expected: mocks sit at ports; domain and DTO values are real instances.
 - Assertions: AssertJ `assertThat`; plain JUnit assertions are the exception.
 - Repetition: `@ParameterizedTest` (+ `@EnumSource` for exhaustive enum coverage) and occasional
   `@Nested` grouping when it helps readability.
-- Fast units: plain JUnit 5 + Mockito + AssertJ; anything needing Spring context or containers
-  moves to the integration-test tier.
+- Fast units: plain JUnit 5 + Mockito + AssertJ; anything needing the Quarkus application
+  (`@QuarkusTest`) or containers moves to the integration-test tier.
 - Test sources sit in `<module>/src/test/java`, mirroring the production package.
 
 ## Frequency & coverage (why this earned a skill)

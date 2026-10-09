@@ -9,6 +9,9 @@ Adding a new domain entity or value object, introducing creation rules / invaria
 an anaemic data holder into a real domain type. The core modelling skill for the inner layer.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - Keep the domain **framework-free**: no persistence, web, DI or transaction imports — plain language
   types only. The domain must compile and be testable with no container.
 - Make fields **final**; set them once at construction. Expose getters, not blanket setters. State
@@ -35,12 +38,14 @@ an anaemic data holder into a real domain type. The core modelling skill for the
 - Code map (entities, factories, create-requests, validators, creation-result helper, exemplars) → `docs/code-maps/domain-modeling.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't import a framework/persistence/web type into a domain class (hook: archunit/dependency gate).
 - Don't expose a public constructor or open setters that let callers bypass invariants.
 - Don't throw on the first validation error when the caller expects all problems at once.
 - Don't scatter the same rule across callers — keep it on the entity/factory.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] Entity is framework-free; fields final; created only via its factory.
 - [ ] Invariants enforced at construction; validation outcome returned with the object.
 - [ ] Value objects immutable with value equality; behaviour sits with its data.

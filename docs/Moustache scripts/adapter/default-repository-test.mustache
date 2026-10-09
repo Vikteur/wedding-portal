@@ -1,0 +1,48 @@
+{{!
+  Repository spec against the real database: @QuarkusTest with Dev Services (Testcontainers), schema
+  from the Flyway migrations, each test rolled back by @TestTransaction.
+  Target: <capability>-adapter/src/test/java/<package path>/adapter/repository/Default<Name>RepositoryTest.java
+  Vars:   package, Name, Key, keyExample (Java literal, equal to the key field's example), fields[name, example]
+}}
+package {{package}}.adapter.repository;
+
+import {{package}}.domain.{{Name}};
+import io.quarkus.test.TestTransaction;
+import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@QuarkusTest
+class Default{{Name}}RepositoryTest {
+
+    @Inject
+    {{Name}}PanacheRepository panacheRepository;
+
+    @Inject
+    Default{{Name}}Repository repository;
+
+    @Test
+    @TestTransaction
+    void givenPersisted{{Name}}_whenFindBy{{Key}}_thenReturnDomain() {
+        panacheRepository.persist({{Name}}Entity.builder()
+{{#fields}}
+                .{{name}}({{{example}}})
+{{/fields}}
+                .build());
+
+        assertThat(repository.findBy{{Key}}({{{keyExample}}}))
+                .contains({{Name}}.builder()
+{{#fields}}
+                        .{{name}}({{{example}}})
+{{/fields}}
+                        .build());
+    }
+
+    @Test
+    @TestTransaction
+    void givenNo{{Name}}_whenFindBy{{Key}}_thenReturnEmpty() {
+        assertThat(repository.findBy{{Key}}({{{keyExample}}})).isEmpty();
+    }
+}

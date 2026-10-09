@@ -12,3 +12,6 @@
 
 # The audit-log hook (.claude/hooks) writes here.
 /.apm-audit/
+
+# The scaffold renderer (scripts/scaffold.sh) installs here from its lockfile.
+/scripts/scaffold/node_modules/

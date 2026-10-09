@@ -25,8 +25,10 @@ carries the project's own `@BatchJob` logging annotation (and vice versa).
 scans the *entire* production codebase from one test class in `application` (the module that already
 depends on everything) rather than one ArchUnit suite per module. Four rules here, each a
 `classes()` or `noClasses()` one-liner with a `.because(...)` explaining the rule in the failure message:
-`*UseCase` classes in `..usecase..` must carry `jakarta.transaction.Transactional` and must **not** carry
-Spring's `@Transactional`; domain and controller classes must carry neither. Local convention: keep each
+`*UseCase` classes in `..usecase..` must carry `jakarta.transaction.Transactional` and must be annotated
+`@ApplicationScoped` directly (CDI interceptors such as `@Transactional` do not apply to beans returned by
+`@Produces` methods); domain classes must carry no `@Transactional` and depend on no `jakarta.enterprise` /
+`jakarta.ws.rs` / `io.quarkus` type; controllers must not carry `@Transactional`. Local convention: keep each
 rule to one assertion with a `.because()`, and put new architecture rules in this package rather than
 starting a second suite.
 
@@ -56,12 +58,12 @@ class TransactionalConventionTest {
     }
 
     @ArchTest
-    void givenUseCaseClasses_whenCheckingAnnotations_thenNotUseSpringTransactional(JavaClasses classes) {
-        noClasses()
+    void givenUseCaseClasses_whenCheckingAnnotations_thenAreApplicationScopedBeans(JavaClasses classes) {
+        classes()
                 .that().haveSimpleNameEndingWith("UseCase")
                 .and().resideInAPackage("..usecase..")
-                .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
-                .because("Use Jakarta @Transactional (jakarta.transaction.Transactional), not Spring")
+                .should().beAnnotatedWith(jakarta.enterprise.context.ApplicationScoped.class)
+                .because("Use cases are annotated beans, not producer-method beans, so the @Transactional interceptor applies")
                 .check(classes);
     }
 
@@ -70,8 +72,8 @@ class TransactionalConventionTest {
         noClasses()
                 .that().resideInAPackage("..domain..")
                 .should().beAnnotatedWith(jakarta.transaction.Transactional.class)
-                .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
-                .because("@Transactional belongs on the use case layer, not in domain")
+                .orShould().dependOnClassesThat().resideInAnyPackage("jakarta.enterprise..", "jakarta.ws.rs..", "io.quarkus..")
+                .because("@Transactional belongs on the use case layer, and the domain stays free of CDI, JAX-RS and Quarkus")
                 .check(classes);
     }
 
@@ -80,7 +82,6 @@ class TransactionalConventionTest {
         noClasses()
                 .that().resideInAPackage("..adapter..controller..")
                 .should().beAnnotatedWith(jakarta.transaction.Transactional.class)
-                .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
                 .because("@Transactional belongs on the use case layer, not on controllers")
                 .check(classes);
     }
@@ -88,12 +89,12 @@ class TransactionalConventionTest {
 ```
 
 ### Edge cases
-Use-case marked with the wrong transaction annotation:
+Use-case with `@Transactional` but wired from a producer method instead of annotated `@ApplicationScoped`:
 ```java
-@org.springframework.transaction.annotation.Transactional
+@jakarta.transaction.Transactional
 class SubmitOrderUseCase { }
 ```
-Expected: the ArchUnit suite fails with the Spring-annotation prohibition.
+Expected: the ArchUnit suite fails with the `@ApplicationScoped` rule — a producer-method bean would silently run without a transaction.
 
 Domain record marked transactional:
 ```java

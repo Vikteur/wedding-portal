@@ -10,6 +10,9 @@ behavior, or when deciding what to mock, how to name a test, and where a slow te
 test-writer's default; developers use it to keep tests green and meaningful.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - **Given-When-Then** — three visible phases per test; establish state, invoke one action, assert the outcome. No logic branches in the test body.
 - **One behavior per test** — a single reason to fail. A second assertion group means a second test.
 - **Name the test as a behavior spec** — read it as a sentence about *what the unit does*, not the method called (`returns_empty_when_no_match`, not `testFind`).
@@ -30,6 +33,7 @@ test-writer's default; developers use it to keep tests green and meaningful.
 - Code map (test layout, helpers/fixtures, naming, exemplars, generated) → `docs/code-maps/jvm-testing.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't mock internal collaborators or the class under test — mock only its owned ports.
 - Don't assert on implementation detail (call counts, private state) when an outcome assertion would do.
 - Don't pack multiple behaviors into one test, or branch/loop inside a test body.
@@ -37,6 +41,7 @@ test-writer's default; developers use it to keep tests green and meaningful.
 - Don't boot a framework context or touch I/O in a unit test — that belongs in the integration set.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] Each test is one behavior, GWT-structured, named as a behavior spec.
 - [ ] Mocks sit at ports/boundaries; assertions target outcomes, not internals; repetitive cases parameterized.
 - [ ] Tests deterministic; edge and failure paths covered; units run with no framework boot or I/O; slow tests live in the separate set.

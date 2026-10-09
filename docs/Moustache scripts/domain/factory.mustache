@@ -1,12 +1,12 @@
 {{!
   Builds and validates an aggregate. Exemplar: authentication-domain BlockedAudienceFactory.
-  No annotation needed: the capability's BeanConfig registers every class ending in "Factory".
+  Framework-free: the capability's bean config produces it (@Produces @ApplicationScoped).
   Target: <capability>-domain/src/main/java/<package path>/domain/<Name>Factory.java
-  Vars:   package, Name, name (camelCase of Name)
+  Vars:   package, basePackage (root holding common/), Name, name (camelCase of Name)
 }}
 package {{package}}.domain;
 
-import com.acme.shop.common.domain.validation.Creation;
+import {{basePackage}}.common.domain.validation.Creation;
 
 public class {{Name}}Factory {
     public Creation<{{Name}}> create(Create{{Name}}Request request) {

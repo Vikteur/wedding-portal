@@ -13,19 +13,23 @@ kind: worked-example
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-A `@RestController` implementing a generated OpenAPI `*Api` interface (`AccountApi`) — the
-contract-first shape used across every capability adapter.
+A plain Quarkus REST resource class implementing a generated OpenAPI `*Api` interface (`AccountApi`,
+JAX-RS, from openapi-generator `jaxrs-spec`) — the contract-first shape used across every capability adapter.
 
 ## Contract-first controller {#api-first-controller}
 **Serves:** [`api-first-controller`](../api-first-controller.md)
 
 `public class CustomerController implements AccountApi` — endpoint methods are `@Override`s of the
-generated interface (no `@GetMapping`/`@RequestBody` annotations re-declared on those methods; the
-generated interface carries them). Constructor-injected use-cases, one per endpoint
+generated interface (no `@Path`/`@GET`/`@PathParam` annotations re-declared on those methods; the
+generated interface carries them). Methods return what the generated interface declares (the DTO, or
+`void` for an operation without a response body); a fixed `Cache-Control` comes from RESTEasy Reactive's
+`@Cache`, and a non-200 status with a body is thrown as a `WebApplicationException` carrying its response,
+which the central exception handler passes through unchanged.
+Constructor-injected use-cases, one per endpoint
 (`GetDelegationsUseCase`, `GetCustomerInformationUseCase`, ...); the controller's own job is only to call
 `.execute(...)` and map the domain result to the generated DTO via a small static `*ToDTOMapper`
 (for example `DelegationToDTOMapper::map`), never building DTOs inline. One extra non-generated endpoint
-(`verifyDelegationForTopic`, plain `@GetMapping`) shows the pattern also tolerates a controller-owned
+(`verifyDelegationForTopic`, hand-annotated `@GET @Path`) shows the pattern also tolerates a controller-owned
 route alongside the generated ones when the contract does not (yet) cover it.
 
 ### Source (pseudonymized)
@@ -37,68 +41,53 @@ import com.acme.shop.account.usecase.GetCustomerInformationUseCase;
 import com.acme.shop.account.usecase.GetDelegationsUseCase;
 import com.acme.shop.account.usecase.RecordLastVisitCustomerUseCase;
 import com.acme.shop.account.usecase.VerifyDelegationForTopicAccessUseCase;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.CacheControl;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
+import lombok.RequiredArgsConstructor;
+import org.jboss.resteasy.reactive.Cache;
 
-import java.time.Duration;
 import java.util.List;
 
-@RestController
+@RequiredArgsConstructor
 public class CustomerController implements AccountApi {
-    private final Duration cacheTimeout;
     private final GetDelegationsUseCase getDelegationsUseCase;
     private final GetCustomerInformationUseCase getCustomerInformationUseCase;
     private final RecordLastVisitCustomerUseCase createOrUpdateCustomerLastVisitUseCase;
     private final VerifyDelegationForTopicAccessUseCase verifyDelegationForTopicAccessUseCase;
 
-    public CustomerController(@Value("${cache.customer-profiles.expiration:1d}") Duration cacheTimeout,
-                              GetDelegationsUseCase getDelegationsUseCase,
-                              GetCustomerInformationUseCase getCustomerInformationUseCase,
-                              RecordLastVisitCustomerUseCase createOrUpdateCustomerLastVisitUseCase,
-                              VerifyDelegationForTopicAccessUseCase verifyDelegationForTopicAccessUseCase) {
-        this.cacheTimeout = cacheTimeout;
-        this.getDelegationsUseCase = getDelegationsUseCase;
-        this.getCustomerInformationUseCase = getCustomerInformationUseCase;
-        this.createOrUpdateCustomerLastVisitUseCase = createOrUpdateCustomerLastVisitUseCase;
-        this.verifyDelegationForTopicAccessUseCase = verifyDelegationForTopicAccessUseCase;
-    }
-
-    @GetMapping("api/delegation/verify-topic-access/{topic}")
-    public ResponseEntity<Boolean> verifyDelegationForTopic(@PathVariable Topic topic) {
-        return ResponseEntity.ok()
-                .body(verifyDelegationForTopicAccessUseCase.execute(topic));
+    @GET
+    @Path("api/delegation/verify-topic-access/{topic}")
+    public Boolean verifyDelegationForTopic(@PathParam("topic") Topic topic) {
+        return verifyDelegationForTopicAccessUseCase.execute(topic);
     }
 
     @Override
-    public ResponseEntity<List<DelegationDTO>> getAllDelegations() {
-        var delegations = getDelegationsUseCase.execute().stream()
+    @Cache(maxAge = 86400)
+    public List<DelegationDTO> getAllDelegations() {
+        return getDelegationsUseCase.execute().stream()
                 .map(DelegationToDTOMapper::map).toList();
-
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.maxAge(cacheTimeout))
-                .body(delegations);
     }
 
     @Override
-    public ResponseEntity<CustomerInformationDTO> getGeneralInformation(String nid) {
+    public CustomerInformationDTO getGeneralInformation(String nid) {
         var customerInformation = getCustomerInformationUseCase.execute(nid);
 
-        return ResponseEntity.ok().body(CustomerInformationToDTOMapper.map(customerInformation));
+        return CustomerInformationToDTOMapper.map(customerInformation);
     }
 
     @Override
-    public ResponseEntity<NotificationDTO> recordLastVisit() {
+    public void recordLastVisit() {
         var notification = createOrUpdateCustomerLastVisitUseCase.execute();
 
         if (notification.hasErrors()) {
-            return ResponseEntity.badRequest().body(NotificationDTO.builder().errors(notification.getErrors()).build());
+            throw new WebApplicationException(Response.status(Status.BAD_REQUEST)
+                    .entity(NotificationDTO.builder().errors(notification.getErrors()).build())
+                    .build());
         }
-
-        return ResponseEntity.ok().build();
     }
 }
 ```
@@ -106,15 +95,15 @@ public class CustomerController implements AccountApi {
 ### Edge cases
 Generated contract read with caching:
 ```java
-var response = controller.getAllDelegations();
-assertThat(response.getHeaders().getCacheControl()).contains("max-age");
+given().when().get("api/delegation")
+        .then().statusCode(200).header("Cache-Control", containsString("max-age"));
 ```
 Expected: generated-interface overrides can still add HTTP response metadata such as cache control.
 
 Manual route beside generated methods:
 ```java
-var response = controller.verifyDelegationForTopic(Topic.ORDERS);
-assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+given().when().get("api/delegation/verify-topic-access/ORDERS")
+        .then().statusCode(200);
 ```
 Expected: controller-owned routes can coexist with generated overrides without changing the contract-generated methods.
 
@@ -123,9 +112,10 @@ Write endpoint returning validation errors:
 when(recordLastCustomerVisitUseCase.execute()).thenReturn(Notification.builder()
         .error("Could not record Springfield storefront visit")
         .build());
-var response = controller.recordLastVisit();
+var thrown = catchThrowableOfType(controller::recordLastVisit, WebApplicationException.class);
+assertThat(thrown.getResponse().getStatus()).isEqualTo(400);
 ```
 Expected: the controller turns notification errors into `400 Bad Request` with a structured `NotificationDTO`.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg '@RestController' --glob '*.java'` (33 files / 14 modules)
+- Scanned at: `abc1234` · tool/query: `rg 'Controller implements [A-Za-z]+Api' --glob '*.java'` (33 files / 14 modules)

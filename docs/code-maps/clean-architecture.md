@@ -56,7 +56,7 @@ classes()
 noClasses()
         .that().resideInAPackage("..domain..")
         .should().beAnnotatedWith(jakarta.transaction.Transactional.class)
-        .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
+        .orShould().dependOnClassesThat().resideInAnyPackage("jakarta.enterprise..", "jakarta.ws.rs..", "io.quarkus..")
         .check(classes);
 ```
 
@@ -81,10 +81,10 @@ public interface ConsentRepository { }
 ```
 Expected: treat this as an inward-facing port because the module is `consent-usecase`.
 
-Spring transaction annotation on a controller:
+Jakarta `@Transactional` on a controller:
 ```java
-@RestController
-@org.springframework.transaction.annotation.Transactional
+@Path("/accounts")
+@jakarta.transaction.Transactional
 class AccountController { }
 ```
 Expected: architecture violation. Transaction boundaries belong in the usecase layer.
@@ -99,9 +99,9 @@ Expected: fail the purity rule or the compile-time module boundary check; domain
 
 ## Local conventions (the project facts the skill omits)
 - **Dependency direction is enforced by the module graph**, not by convention: a `-domain` module's
-  `build.gradle.kts` declares no Spring or JPA dependency at all, so a framework import in the domain
+  `build.gradle.kts` declares no Quarkus, CDI or JPA dependency at all, so a framework import in the domain
   fails to compile rather than failing review. Verified: **0** files under `*-domain/src/main` import
-  `org.springframework` or `jakarta.persistence` (as of `abc1234`).
+  `io.quarkus`, `jakarta.enterprise` or `jakarta.persistence` (as of `abc1234`).
 - **Runtime fitness rules** live in one place, `application/src/test/java/com/acme/shop/architecture/`,
   run by `:application:archTest` - see [archunit-fitness]. `application` is the module that depends on
   everything, so one `@AnalyzeClasses` suite sees the whole tree.
@@ -121,7 +121,7 @@ Expected: fail the purity rule or the compile-time module boundary check; domain
 ## Provenance
 - Scanned at: `abc1234` - tool/query: module listing from `settings.gradle.kts` + package-shape reads
   per capability; layer-purity check via `git ls-files -- '*-domain/src/main/**/*.java'` filtered for
-  Spring and JPA imports (0 hits). Not yet scanner-harvested.
+  Quarkus, CDI and JPA imports (0 hits). Not yet scanner-harvested.
 
 [archunit-fitness]: archunit-fitness.md
 [code-generation]: code-generation.md

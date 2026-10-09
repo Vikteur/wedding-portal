@@ -13,18 +13,19 @@ kind: worked-example
 ## Where this pattern lives (exemplars)
 | Exemplar | What it shows | Layer / module |
 |----------|---------------|----------------|
-| [`DefaultRegistryGateway.java`](exemplars/default-registry-gateway.md#resilience4j) | Circuit breaker with a degrade-to-empty fallback | adapter/gateway (`partner-gateway`) |
+| [`DefaultRegistryGateway.java`](exemplars/default-registry-gateway.md#resilience4j) | SmallRye Fault Tolerance circuit breaker with a degrade-to-empty fallback | adapter/gateway (`partner-gateway`) |
 
 ### Excerpts
 Degrade-to-empty fallback (full source in the [registry exemplar](exemplars/default-registry-gateway.md#resilience4j)):
 ```java
-@CircuitBreaker(name = "registry", fallbackMethod = "getRegistryLinksFallback")
+@CircuitBreaker
+@Fallback(fallbackMethod = "getRegistryLinksFallback")
 public List<RegistryLink> getRegistryLinks(final String nid) {
     ...
 }
 
-private List<RegistryLink> getRegistryLinksFallback(final String nid, final Throwable e) {
-    log.error("Circuit breaker: Failed to fetch registry links", e);
+private List<RegistryLink> getRegistryLinksFallback(final String nid) {
+    log.error("Circuit breaker: Failed to fetch registry links");
     return Collections.emptyList();
 }
 ```
@@ -40,19 +41,21 @@ Expected: the fallback returns an empty list and the caller keeps moving.
 
 Fallback signature drifts from the guarded method:
 ```java
-@CircuitBreaker(name = "registry", fallbackMethod = "brokenFallback")
+@CircuitBreaker
+@Fallback(fallbackMethod = "brokenFallback")
 public List<RegistryLink> getRegistryLinks(final String nid) { ... }
 ```
-Expected: startup or invocation fails loudly; fallback methods must mirror the original parameters plus a trailing `Throwable`.
+Expected: deployment fails loudly at build/startup (fault tolerance definition validation); fallback
+methods must have exactly the same parameters and return type as the guarded method.
 
 ## Local conventions (the project facts the skill omits)
-- Naming shape: `@CircuitBreaker(name = "<integration>", fallbackMethod = "<method>Fallback")` — the
-  breaker `name` matches the resilience4j config key for that integration; the fallback method has
-  the same signature as the guarded method plus a trailing `Throwable`.
-- Required collaborators / base types: fallback is a private method in the same class, never a
-  separate bean.
-- Config / wiring: per-integration circuit breaker config lives in `application-*.yml` under the
-  matching `name`.
+- Naming shape: `@CircuitBreaker` + `@Fallback(fallbackMethod = "<method>Fallback")` — the breaker
+  is identified by `<fully-qualified class>/<method>` (no `name` string); the fallback method has
+  the same signature as the guarded method.
+- Required collaborators / base types: fallback is a private method in the same `@ApplicationScoped`
+  gateway, never a separate bean or `FallbackHandler` class.
+- Config / wiring: per-integration overrides live in `application.properties` under
+  `quarkus.fault-tolerance."<FQCN>/<method>".circuit-breaker.*` (profile-specific with `%dev.`/`%prod.`).
 
 ## Frequency & coverage (why this earned a skill)
 - Occurrences: 9 `@CircuitBreaker` matches across 5 files, 2 modules — `partner-gateway`,

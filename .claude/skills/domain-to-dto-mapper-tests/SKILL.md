@@ -9,6 +9,9 @@ Verifying a mapper that converts a domain object to a transport DTO (or back): e
 nulls/optionals/collections handled, enums translated.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - Drive inputs from object-mothers ([[object-mother-builders]]); assert the DTO **field by field**, not
   by a serialized blob, so a wrong/dropped field is obvious.
 - Use `@ParameterizedTest` for the variants (empty collections, absent optionals, each enum value).
@@ -23,9 +26,11 @@ inputs from `*Mother`; per-field `assertThat(dto.getX()).isEqualTo(...)`.
 - Code map (mapper exemplars, parameterization style) → `docs/code-maps/domain-to-dto-mapper-tests.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't assert on a whole serialized JSON string — assert fields.
 - Don't skip the null/empty/enum edge cases — that's where mappers break.
 - Don't boot Spring for a pure mapper test.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] Field-by-field assertions, parameterized edge cases, mother-fed inputs, no Spring context; reverse round-trip covered if applicable.

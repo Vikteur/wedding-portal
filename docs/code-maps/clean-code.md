@@ -19,7 +19,7 @@ kind: worked-example
 |---|---|---|
 | Language level | Java 21 toolchain + `options.release = 21` | `build-logic/src/main/kotlin/shop.java-conventions.gradle.kts` |
 | Encoding | UTF-8, compiler and test JVM | same |
-| Parameter names retained | `-parameters` compiler arg (Spring MVC needs it for `@PathVariable` / `@RequestParam` without an explicit name) | same |
+| Parameter names retained | `-parameters` compiler arg (Jackson/records and CDI need it for parameter-name resolution without an explicit name) | same |
 | Coverage | JaCoCo per module, aggregated by `jacocoRootReport`, uploaded to SonarCloud | root `build.gradle.kts` |
 | Static analysis | SonarCloud, project key `shop-backend`, org `acme-platform` | root `build.gradle.kts`; run by `./gradlew clean build sonar` in `backend.yml` |
 | Layer purity | ArchUnit suite - see [archunit-fitness] | `application/src/test/java/com/acme/shop/architecture/` |
@@ -72,8 +72,8 @@ Expected: challenge it. The local style favors immutable domain types (`@Value` 
 
 Field injection:
 ```java
-@Autowired
-private OrderRepository orderRepository;
+@Inject
+OrderRepository orderRepository;
 ```
 Expected: reject it. Constructor injection via `@RequiredArgsConstructor` and `final` fields is the house style.
 
@@ -110,9 +110,9 @@ members carry `@lombok.Generated` and JaCoCo/Sonar exclude them from coverage. U
   not a style one; never log personal identifiers.
 
 ## Anti-patterns this repo has already decided against
-- Field injection (`@Autowired` on a field) - constructor injection everywhere instead.
+- Field injection (`@Inject` on a field) - constructor injection everywhere instead.
 - Reformatting on save across whole files; there is no formatter to make it deterministic.
-- Business logic in a `@Configuration` class - wiring only (see [bean-config-di]).
+- Business logic in a producer (`@Produces`) config class - wiring only (see [bean-config-di]).
 - Hand-editing generated code: OpenAPI stubs under `*/build/generated/*` and JAXB types under
   `*/build/generated-sources/*` are guarded by `.github/hooks/guard-generated.globs`, which denies the
   write outright. Change the contract, not the output.

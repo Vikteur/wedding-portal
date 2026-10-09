@@ -1,26 +1,26 @@
 ---
 runtime: lazy
-source: account-adapter/src/main/java/com/acme/shop/account/adapter/repository/customer/SalesRegionJpaRepository.java
+source: account-adapter/src/main/java/com/acme/shop/account/adapter/repository/customer/DefaultSalesRegionRepository.java
 serves: [persistence-repository]
 kind: worked-example
 ---
 
 <!-- AI_DISCLAIMER v1.0 -->
-# Exemplar — `account-adapter/.../repository/customer/SalesRegionJpaRepository.java` (project: `shop-backend`)
+# Exemplar — `account-adapter/.../repository/customer/DefaultSalesRegionRepository.java` (project: `shop-backend`)
 
 > This file has been created (totally or partially) with the assistance of artificial intelligence tools.
 > All content has been generated under the direct supervision of a named individual,
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-A thin adapter implementing a domain repository port over Spring Data JPA.
+A thin adapter implementing a domain repository port over Hibernate ORM with Panache.
 
 ## Port-implementing repository adapter {#persistence-repository}
 **Serves:** [`persistence-repository`](../persistence-repository.md)
 
-`public class SalesRegionJpaRepository implements SalesRegionRepository` (the port lives
+`public class DefaultSalesRegionRepository implements SalesRegionRepository` (the port lives
 in the `*-usecase` or `*-domain` module, this adapter in `*-adapter`) — delegates to a
-`SalesRegionSpringDataJpaRepository` (the actual `JpaRepository<...>`, see
+package-private `SalesRegionPanacheRepository` (the actual `PanacheRepository<...>`, see
 [sales-region-entity] for the `@Entity` it maps), converting the JPA entity to the
 domain value at the boundary (`SalesRegion.valueOf(entity.getRegion())`) with a safe default
 (`.orElse(SalesRegion.CENTRAL)`) rather than throwing when no row is found.
@@ -31,20 +31,37 @@ package com.acme.shop.account.adapter.repository.customer;
 
 import com.acme.shop.account.domain.customer.SalesRegion;
 import com.acme.shop.account.repository.SalesRegionRepository;
+import jakarta.enterprise.context.ApplicationScoped;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
 
-@Repository
+@ApplicationScoped
 @RequiredArgsConstructor
-public class SalesRegionJpaRepository implements SalesRegionRepository {
+public class DefaultSalesRegionRepository implements SalesRegionRepository {
 
-    private final SalesRegionSpringDataJpaRepository jpaRepository;
+    private final SalesRegionPanacheRepository panacheRepository;
 
     @Override
     public SalesRegion findByRegionCode(String regionCode) {
-        return jpaRepository.findByRegionCode(regionCode)
+        return panacheRepository.findByRegionCode(regionCode)
                 .map(entity -> SalesRegion.valueOf(entity.getRegion()))
                 .orElse(SalesRegion.CENTRAL);
+    }
+}
+```
+
+Its package-private Panache delegate, `SalesRegionPanacheRepository.java`:
+```java
+package com.acme.shop.account.adapter.repository.customer;
+
+import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.Optional;
+
+@ApplicationScoped
+class SalesRegionPanacheRepository implements PanacheRepository<SalesRegionEntity> {
+
+    Optional<SalesRegionEntity> findByRegionCode(String regionCode) {
+        return find("regionCode", regionCode).firstResultOptional();
     }
 }
 ```
@@ -52,19 +69,19 @@ public class SalesRegionJpaRepository implements SalesRegionRepository {
 ### Edge cases
 Unknown region code:
 ```java
-when(jpaRepository.findByRegionCode("00000")).thenReturn(Optional.empty());
+when(panacheRepository.findByRegionCode("00000")).thenReturn(Optional.empty());
 assertThat(repository.findByRegionCode("00000")).isEqualTo(SalesRegion.CENTRAL);
 ```
 Expected: the adapter returns the agreed safe default instead of propagating an empty optional into the domain API.
 
 Persisted enum drift:
 ```java
-when(jpaRepository.findByRegionCode("00000"))
+when(panacheRepository.findByRegionCode("00000"))
         .thenReturn(Optional.of(SalesRegionEntity.builder().region("UNKNOWN").regionCode("00000").build()));
 ```
 Expected: invalid persisted data fails at the adapter boundary instead of leaking a mismatched string deeper into the app.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg 'interface[[:space:]]+[A-Za-z]*Repository' --glob '*.java'` (50 files / 18 modules), `rg '@Cacheable'` (13 matches / 11 files / 8 modules)
+- Scanned at: `abc1234` · tool/query: `rg 'interface[[:space:]]+[A-Za-z]*Repository' --glob '*.java'` (50 files / 18 modules), `rg '@CacheResult'` (13 matches / 11 files / 8 modules)
 
 [sales-region-entity]: sales-region-entity.md
