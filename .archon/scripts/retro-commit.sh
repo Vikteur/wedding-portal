@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Check and commit a run's retro on the umbrella's main (P2: a script, not a model).
-#   retro-commit.sh <umbrella dir> <retro folder, e.g. docs/retro/TASK-7> <run id>
+#   retro-commit.sh <umbrella dir> <retro folder, e.g. docs/retro/TASK-7> <run id> [<run folder>...]
 # The gate: lessons-learned.md has a "## Run <id8> — <date> — <outcome>" section with every heading of the retro skill's
 # template filled in, and every adr/ADR-NN-<slug>.md has its "# ADR-NN: <title>" line and every section, and is linked
 # from lessons-learned.md. Then it regenerates the index in docs/retro/README.md and commits only the retro folder and
 # that index; anything else changed in the umbrella is left alone. A push rejected because main moved on is rebased
-# once and pushed again. A failed gate commits nothing: fix the files and resume the run.
+# once and pushed again. Each run folder given (the Archon artifacts dir of the build run, then of each related review
+# run; they stay outside the repo) is copied by retro.js archive into <retro folder>/runs/<its id8>/ after the gate and
+# before the add: the key files, every *.log and the retro transcripts, never a dotfile; a missing file is skipped. A failed gate commits nothing: fix the files and resume the run.
 # Prints one JSON line {"commit": "<short sha, or empty when there was nothing to commit>"}.
 set -euo pipefail
 home=$1 dir=$2 run=$3
+shift 3
 id8=${run:0:8}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 index=docs/retro/README.md
@@ -19,6 +22,7 @@ if [ "$(git -C "$home" symbolic-ref --short HEAD 2>/dev/null || true)" != main ]
 fi
 node "$here/retro.js" gate "$home" "$dir" "$id8"
 node "$here/retro.js" index "$home"
+for runfolder in "$@"; do node "$here/retro.js" archive "$home" "$dir" "$runfolder"; done
 
 git -C "$home" add -- "$dir" "$index"
 commit=""
