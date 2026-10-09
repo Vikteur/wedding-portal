@@ -11,12 +11,23 @@ PR_SHA=abcdef0123456789abcdef0123456789abcdef01
 EXPLICIT=1234567890abcdef1234567890abcdef12345678
 
 # gh answers: `pr view <n>` gives PR_SHA, `run list` records the commit it was asked about and returns one run id.
+# `pr view --json mergeable` walks MERGEABLE_SEQ (space-separated, the last one repeats; default MERGEABLE);
+# `pr list` answers PR_NUM (the open pull request of the branch, empty for none).
 mkdir -p "$root/bin"
 cat > "$root/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 echo "gh $*" >> "$GH_LOG"
+case "$*" in
+  *mergeable*)
+    n=$(cat "$GH_LOG.n" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$GH_LOG.n"
+    set -- ${MERGEABLE_SEQ:-MERGEABLE}
+    [ "$n" -gt "$#" ] && n=$#
+    eval "echo \${$n}"
+    exit 0 ;;
+esac
 case "$1 $2" in
   "pr view") echo "$PR_SHA" ;;
+  "pr list") echo "${PR_NUM:-}" ;;
   "run list") echo 11 ;;
   "run watch") exit 0 ;;
   "run view") echo "ci=failure https://example.invalid/run/11" ;;
@@ -37,7 +48,7 @@ repo() {
   log="$dir.log"; : > "$log"
 }
 run() { # run <args...>: ci-by-sha inside the repo; sets out, rc
-  out=$( (cd "$dir" && PATH="$root/bin:$PATH" PR_SHA="$PR_SHA" GH_LOG="$log" CI_GRACE_POLLS=1 bash "$script" "$@") 2>&1 ); rc=$?
+  out=$( (cd "$dir" && PATH="$root/bin:$PATH" PR_SHA="$PR_SHA" GH_LOG="$log" CI_GRACE_POLLS=1 MERGE_POLLS=3 MERGE_WAIT=0 bash "$script" "$@") 2>&1 ); rc=$?
 }
 check() { # check <name> <condition exit code>
   if [ "$2" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; echo "$out" | sed 's/^/    /'; fi
@@ -77,6 +88,34 @@ sed -i 's/"run watch") exit 0/"run watch") exit 1/' "$root/bin/gh"
 run --check "$EXPLICIT"
 check "5 red exits 1" $([ "$rc" -eq 1 ]; echo $?)
 check "5 red state" $(echo "$out" | grep -q '"state": "red"'; echo $?)
+
+# 6. A pull request that conflicts with its base never gets CI: answer "conflict" at once, without polling for runs.
+sed -i 's/"run watch") exit 1/"run watch") exit 0/' "$root/bin/gh"   # test 5 left the runs failing; green again
+repo six feat/x; MERGEABLE_SEQ=CONFLICTING run 5
+check "6 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "6 conflict state" $(echo "$out" | grep -q '"state": "conflict"'; echo $?)
+check "6 json carries the pr head" $(echo "$out" | grep -q "\"sha\": \"$PR_SHA\""; echo $?)
+check "6 detail says to merge main" $(echo "$out" | grep -q '"detail": ".*merge'; echo $?)
+check "6 ci not asked" $(! grep -q "run list" "$log"; echo $?)
+repo sixb feat/x; MERGEABLE_SEQ=CONFLICTING run --check 5
+check "6b --check exits 1 on conflict" $([ "$rc" -eq 1 ]; echo $?)
+check "6b conflict state" $(echo "$out" | grep -q '"state": "conflict"'; echo $?)
+
+# 7. UNKNOWN means GitHub is still computing: ask again until it knows.
+repo seven feat/x; MERGEABLE_SEQ="UNKNOWN UNKNOWN CONFLICTING" run 5
+check "7 conflict after unknown" $(echo "$out" | grep -q '"state": "conflict"'; echo $?)
+repo sevenb feat/x; MERGEABLE_SEQ="UNKNOWN MERGEABLE" run 5
+check "7b mergeable after unknown goes on to CI" $(echo "$out" | grep -q '"state": "green"'; echo $?)
+repo sevenc feat/x; MERGEABLE_SEQ=UNKNOWN run 5
+check "7c still unknown after the retries goes on to CI" $(echo "$out" | grep -q '"state": "green"'; echo $?)
+
+# 8. No argument: the open pull request of the current branch is looked up.
+repo eight feat/x; PR_NUM=7 MERGEABLE_SEQ=CONFLICTING run
+check "8 conflict found via the branch's pr" $(echo "$out" | grep -q '"state": "conflict"'; echo $?)
+check "8 json carries HEAD" $(echo "$out" | grep -q "\"sha\": \"$head\""; echo $?)
+check "8 asked about pr 7" $(grep -q "^gh pr view 7 --json mergeable" "$log"; echo $?)
+repo eightb feat/x; run
+check "8b no open pr means no mergeable question" $(! grep -q mergeable "$log"; echo $?)
 
 echo "ci-by-sha tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

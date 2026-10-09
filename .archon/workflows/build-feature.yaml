@@ -11,8 +11,9 @@ description: |
   NOT for: contract (spec) changes in the hub repo, or work spanning several tickets.
 interactive: true
 
-# Model policy (UD-21.a): @analyse (Claude Opus 5.5) plans, reviews and diagnoses; @build (Claude Sonnet 5.5) writes
-# code, tests and the pull request text. Both aliases are defined in .archon/config.yaml.
+# Model policy (UD-21.a, amended by UD-21.f): @analyse (Claude Opus 5.5) plans, reviews and diagnoses; @build (Claude
+# Sonnet 5.5) writes code, tests and the pull request text. The review node may commit test-first fixes for its own
+# findings. Every commit trailer names the model that wrote the commit. Both aliases are defined in .archon/config.yaml.
 # Deterministic steps are scripts in .archon/scripts (P2): reading the ticket, routing the STOP gate, the push, CI by SHA.
 nodes:
   - id: ticket
@@ -30,12 +31,24 @@ nodes:
     model: "@analyse"
     prompt: |
       Request: $ARGUMENTS
-      Backlog ticket: $ticket.output.task (its full text is in $ARTIFACTS_DIR/ticket.md when the request names one).
+      Backlog ticket: $ticket.output.task. Read its full text in $ARTIFACTS_DIR/ticket.md first (it is there when the
+      request names one); never search the disk for it.
       Explore the codebase and write an implementation plan for exactly this request to $ARTIFACTS_DIR/plan.md.
+      Copy every literal input the ticket gives (values, names, messages, paths, limits) into the step that uses it, word
+      for word: the build agents read the plan, not the ticket.
+      Trace every path that writes what a step changes (each caller, each node, each script), not only the first one.
+      When a step relies on a tool's default (a flag, an exit code, a format), run the tool once and write what it
+      actually does into the step.
+      Name only workflow nodes that exist in .archon/workflows/build-feature.yaml.
+      When the ticket names a guard or a gate, list up front everything it must refuse, each with the test that
+      proves the refusal.
+      Add a `## Decisions → tests` table: every owner decision, STOP option and acceptance criterion in the ticket,
+      with the test that fails without it. A row with no test is a gap in the plan.
       Write every step as a Markdown checkbox line `- [ ] ...`; each step names the tests that are written first and fail
       until the step is built (tests first, always). Fold a docs-only change into the step it documents.
       A step that adds no behaviour (it only runs checks, or only reads or updates docs) cannot have a failing test:
-      write it as `- [ ] (verify only) ...`.
+      write it as `- [ ] (verify only) ...`. A step that only adds tests for behaviour that already exists (it pins the
+      behaviour) is `- [ ] (pin only) ...`: its tests are proven by a mutation that turns them red.
       Plan only code, tests and local commits: the push, the pull request and reading CI are later nodes of this
       workflow, so never write them as a checkbox step.
       Then decide whether the plan touches the STOP list of .claude/CLAUDE.md (a contract push, a database migration,
@@ -70,20 +83,35 @@ nodes:
     depends_on: [stop-route]
     when: "$stop-route.output.pause == 'true'"
     approval:
+      decisions:
+        - { id: approve, label: "Implement the plan" }
+        - { id: reject, label: "End the run here" }
       message: |
         STOP: $stop-route.output.why
         Read the plan in $ARTIFACTS_DIR/plan.md before any code is written. Approve to implement it, reject to end
-        the run here.
+        the run here. With your answer, write one line per decision you take: `Decision: <option> (<why>)`, and
+        name yourself when you decide for the owner (`by: <name>`). The run records your words in the plan.
+
+  # The STOP answer goes on record before any code (P2): a script writes the gate's text into plan.md under
+  # `## Owner decisions`, so the build agents, the review and the pull request read the same decision. A reject ends the run.
+  - id: decision-record
+    depends_on: [stop-gate]
+    bash: |
+      decision=$stop-gate.output.decision
+      text=$stop-gate.output.text
+      bash .archon/scripts/decision-record.sh "$ARTIFACTS_DIR/plan.md" "$decision" "$text"
 
   # Tests first, always (TDD): per plan step the test agent writes the failing tests and commits them alone, then the
   # build agent writes the code that makes them pass. tdd-check proves the order before anything is pushed.
+  # The loop also ends on a `BLOCKED:` line in plan.md: a build agent writes it instead of asking a question nobody
+  # can answer mid-loop, and the run fails visibly instead of spinning to max_iterations.
   - id: implement
-    depends_on: [stop-route, stop-gate]
+    depends_on: [stop-route, decision-record]
     trigger_rule: none_failed_min_one_success
     loop_group:
       max_iterations: 10
       until_bash: |
-        ! grep -qE '^\s*- \[ \]' "$ARTIFACTS_DIR/plan.md"
+        grep -qE '^BLOCKED:' "$ARTIFACTS_DIR/plan.md" || ! grep -qE '^\s*- \[ \]' "$ARTIFACTS_DIR/plan.md"
       nodes:
         - id: write-tests
           model: "@build"
@@ -95,11 +123,19 @@ nodes:
             A step that pushes, opens the pull request or reads CI is done by later nodes of this workflow: write
             nothing for it and stop.
             A step marked `- [ ] (verify only)` adds no behaviour: write nothing for it and stop.
+            A step marked `- [ ] (pin only)` pins behaviour that exists: write its tests, then break the code once (remove
+            the guard or flip the condition the test pins), run the tests, save that red output to
+            $ARTIFACTS_DIR/red/step-<n>.log with a first line `MUTATION: <file>: <what you broke>`, and revert the code
+            from git, that file only. Commit only the tests.
             Otherwise write the tests the step names, and only tests: they state the behaviour the step adds, so they
             must fail now because that behaviour is missing (a compile error for a class the step creates counts).
-            Run them and save the full output to $ARTIFACTS_DIR/red/step-<n>.log. If they pass already, they do not
-            test the step: rewrite them. Commit the tests alone as `test(step <n>): <what they prove>`.
-            Do not edit the plan.
+            Run them and save the full output to $ARTIFACTS_DIR/red/step-<n>.log. The red log must show only the missing
+            behaviour: a failure to resolve a dependency, or a compile error outside the types this step creates, proves
+            nothing, so fix the build and run again. If they pass already, they do not test the step: rewrite them.
+            Commit the tests alone as `test(step <n>): <what they prove>`, ending the message with the trailer
+            `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+            When you cannot go on without an answer, write one line `BLOCKED: <question>` at the end of the plan and
+            stop. Otherwise do not edit the plan.
         - id: build-step
           depends_on: [write-tests]
           model: "@build"
@@ -110,9 +146,15 @@ nodes:
             it, mark it `- [x] (done by the workflow's open-pr and ci nodes)` and commit nothing for it.
             A step marked `- [ ] (verify only)` has no tests: run the checks the step names, fix nothing but docs,
             commit only the docs that changed (if any), and mark it `- [x] (verify only) ...`.
+            A step marked `- [ ] (pin only)` has its tests committed: run the whole suite, mark it `- [x] (pin only) ...`
+            and commit nothing else.
             Otherwise the test agent has committed this step's failing tests. Write the code that makes them pass,
-            without weakening them; when a test is wrong, fix it in the same commit and say why in the message. Run
-            the whole test suite. When it passes, mark the step `- [x]` in the plan and commit the code.
+            without weakening them; when a test is wrong, fix it in the same commit and give the reason on a line
+            `Test fix: <why>` in the message (tdd-check reports a test edit without one). Run the whole test suite. When
+            it passes, mark the step `- [x]` in the plan and commit the code, ending the message with the trailer
+            `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+            When you cannot go on without an answer, write one line `BLOCKED: <question>` at the end of the plan and
+            stop.
 
   - id: review
     depends_on: [implement]
@@ -120,13 +162,26 @@ nodes:
     prompt: |
       Request: $ARGUMENTS
       Review all changes on this branch against $ARTIFACTS_DIR/plan.md, including that every behaviour has a test.
-      Fix any issue tests first: commit the test that shows the issue alone, then the fix. Run the tests.
+      A green suite is not the verdict; check each of these and treat a miss as an issue:
+      - Mutations: remove each guard line the branch adds once, flip each new condition, shift each boundary by one, and
+        run the tests. A change no test catches is an issue. Revert each mutation from git, file by file.
+      - Claims: every comment, javadoc, doc line and the plan's own claims match what the code does. A claim stronger
+        than the code is an issue: fix the code or narrow the claim.
+      - Decisions: every row of `## Decisions → tests` and every line under `## Owner decisions` in the plan has a test
+        that fails without it.
+      - Write paths: every path that writes what the branch changes is covered, not only the one the plan traced.
+      - Gates: a gate or a guard the branch adds fails closed when its input is missing or empty.
+      Fix every issue tests first: commit the test that shows the issue alone, then the fix (UD-21.f). End each commit
+      message with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Run the tests.
 
   # Deterministic test-first gate (P2): every built step has a red run, and every code commit follows a test commit.
+  # The checked HEAD is kept, so `ready` checks again over the commits that came after (review and CI fixes).
   - id: tdd-check
     depends_on: [review]
     bash: |
+      set -e
       bash .archon/scripts/tdd-check.sh "$ARTIFACTS_DIR" "$BASE_BRANCH"
+      git rev-parse HEAD > "$ARTIFACTS_DIR/tdd-checked.sha"
 
   # The Groma architecture map (TASK-36), in a repo with groma/ only: a script commits a fresh scan; the model curates
   # only what that scan added and the repo's groma-check.sh still rejects. CI runs the same check, so it gates the merge.
@@ -176,14 +231,31 @@ nodes:
         dropped: { type: string }
       required: [files, refs]
 
+  # Merge the base into the branch before the pull request opens (TASK-45): parallel tickets append to the same files,
+  # and a conflicting pull request gets no CI. docs/memory.md merges as a union; any other conflict fails the run here.
+  - id: merge-main
+    depends_on: [map-links]
+    bash: |
+      bash .archon/scripts/merge-main.sh "$BASE_BRANCH"
+    output_format:
+      type: object
+      properties:
+        merged: { type: boolean }
+        pushed: { type: boolean }
+      required: [merged, pushed]
+
   # No review gate before the push: the user reviews and merges the pull request, which is the human approval.
   - id: pr-text
-    depends_on: [map-links]
+    depends_on: [merge-main]
     model: "@build"
     prompt: |
       Request: $ARGUMENTS
       Write the pull request description for the changes on this branch to $ARTIFACTS_DIR/pr-body.md: what changed
-      and why, the tests, and the Backlog ticket ($ticket.output.task) when there is one. Then add a section
+      and why, the tests, and the Backlog ticket ($ticket.output.task) when there is one. When the plan has a
+      `## Owner decisions` section, copy it into a section `## Decisions` word for word, each with who decided it
+      (the owner, or the coordinator acting for the owner); never credit a decision to someone the record does not
+      name. Leave a line `<!-- pr-refresh:start -->`, then `<!-- pr-refresh:end -->`, before `## Approval`: a
+      script fills that block from the branch after every CI round. Then add a section
       `## Approval` saying that merging this pull request records the human review and the approval of the STOP
       items, and name those items: "$stop-route.output.why" (when that is empty, say that the ticket touches no STOP
       item and the merge records the review). End it with:
@@ -216,7 +288,7 @@ nodes:
     output_format: &ci_state
       type: object
       properties:
-        state: { type: string, enum: [green, red, none] }
+        state: { type: string, enum: [green, red, none, conflict] }
         sha: { type: string }
         detail: { type: string }
       required: [state, sha, detail]
@@ -244,7 +316,9 @@ nodes:
             the test that shows the failure alone, then the fix. Run the tests, commit, and `git push`.
 
   # Green CI by SHA marks the pull request ready for your merge. The merge is the human review and the STOP approval
-  # (UD-21.e): the run asks for no approval comment.
+  # (UD-21.e): the run asks for no approval comment. A pull request that conflicts with its base (main moved while CI
+  # ran) gets the base merged in and CI asked again. Before the pull request turns ready, the test-first gate runs again
+  # over the commits since its first pass (review fixes, CI fixes), and the generated block of the body is refreshed.
   - id: ready
     depends_on: [ci, ci-fix]
     trigger_rule: none_failed_min_one_success
@@ -253,9 +327,19 @@ nodes:
       set -euo pipefail
       pr=$open-pr.output.pr
       result=$(bash .archon/scripts/ci-by-sha.sh)
+      case "$result" in
+        *'"state": "conflict"'*)
+          echo "$result"
+          bash .archon/scripts/merge-main.sh "$BASE_BRANCH"
+          result=$(bash .archon/scripts/ci-by-sha.sh) ;;
+      esac
       echo "$result"
       case "$result" in
-        *'"state": "green"'*) gh pr ready "$pr" ;;
+        *'"state": "green"'*)
+          bash .archon/scripts/tdd-check.sh "$ARTIFACTS_DIR" "$BASE_BRANCH" --since "$(cat "$ARTIFACTS_DIR/tdd-checked.sha")"
+          ARTIFACTS_DIR="$ARTIFACTS_DIR" bash .archon/scripts/pr-refresh.sh "$pr" "$BASE_BRANCH" "$ARTIFACTS_DIR/pr-body.md"
+          gh pr ready "$pr" ;;
+        *'"state": "conflict"'*) echo "The pull request still conflicts with $BASE_BRANCH: resolve it by hand." >&2; exit 1 ;;
         *'"state": "none"'*) echo "No CI run for this commit: the pull request stays a draft (P5)." >&2; exit 1 ;;
         *) echo "CI is not green: the pull request stays a draft." >&2; exit 1 ;;
       esac
@@ -281,12 +365,35 @@ nodes:
         backlog: { type: string }
       required: [state, merge, head, branch, ci, backlog]
 
-  - id: finalize
+  # CI on the merge commit itself (post-merge criteria read it), by SHA (P5).
+  - id: main-ci
     depends_on: [merged]
+    when: "$merged.output.state == 'merged'"
+    timeout: 3600000
+    bash: |
+      merge=$merged.output.merge
+      bash .archon/scripts/ci-by-sha.sh "$merge"
+    output_format: *ci_state
+
+  # The ticket's modified files come from the merged pull request, never from the model's memory of the run (P2).
+  - id: ticket-files
+    depends_on: [main-ci]
+    bash: |
+      task=$ticket.output.task
+      pr=$open-pr.output.pr
+      home=$merged.output.backlog
+      if [ -z "$task" ]; then echo "No ticket: no modified files to set."; exit 0; fi
+      bash .archon/scripts/ticket-files.sh "$task" "$pr" "$home"
+
+  - id: finalize
+    depends_on: [ticket-files]
     when: "$merged.output.state == 'merged'"
     model: "@analyse"
     prompt: |
       Pull request $open-pr.output.pr was merged as $merged.output.merge; CI on its head $merged.output.head is green.
+      CI on the merge commit is $main-ci.output.state ($main-ci.output.detail): cite it for any criterion that holds
+      only after the merge, and leave such a criterion unchecked when it is not green. The ticket's modified files
+      are already set from the pull request; do not change them.
       Backlog ticket: $ticket.output.task. When it is empty there is no ticket: change nothing and return close=true.
       Otherwise finalize the ticket. Run every backlog command with BACKLOG_CWD=$merged.output.backlog, change Backlog
       only through the backlog CLI, and commit nothing: the close-out node commits.
@@ -308,6 +415,8 @@ nodes:
         close: { type: boolean }
       required: [close]
 
+  # Close-out also writes the ticket's token and cost report and its agent report (tools, skills, instruction files,
+  # programs, subagents, tokens per agent) to docs/tokenomics/ and commits them (TASK-41, a script: P2).
   - id: close-out
     depends_on: [finalize]
     when: "$finalize.output.close == 'true'"
