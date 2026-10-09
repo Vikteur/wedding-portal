@@ -40,6 +40,6 @@ else
   commit=$(git -C "$home" rev-parse --short HEAD)
 fi
 if [ -z "${RETRO_NO_ARCHIVE:-}" ]; then
-  "$here/archive-runs.sh" "$home" >&2 || echo "warning: the Archon runs were not archived." >&2
+  bash "$here/archive-runs.sh" "$home" >&2 || echo "warning: the Archon runs were not archived." >&2
 fi
 node -e 'console.log(JSON.stringify({ commit: process.argv[1] }))' "$commit"
