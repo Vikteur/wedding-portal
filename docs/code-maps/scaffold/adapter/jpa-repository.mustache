@@ -1,0 +1,37 @@
+{{!
+  Port implementation: delegates to Spring Data, maps entity to domain, never leaks the entity.
+  Exemplar: account-adapter SalesRegionJpaRepository. The method must match the port exactly;
+  this shape assumes the port declares Optional<Name> findBy<Key>(keyType key).
+  Some modules keep ports in <package>.usecase.repository; check the existing import.
+  Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/<Name>JpaRepository.java
+  Vars:   package, Name, Key, key, keyType, fields[name, pascal]
+}}
+package {{package}}.adapter.repository;
+
+import {{package}}.domain.{{Name}};
+import {{package}}.repository.{{Name}}Repository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+@RequiredArgsConstructor
+public class {{Name}}JpaRepository implements {{Name}}Repository {
+
+    private final {{Name}}SpringDataJpaRepository jpaRepository;
+
+    @Override
+    public Optional<{{Name}}> findBy{{Key}}({{{keyType}}} {{key}}) {
+        return jpaRepository.findBy{{Key}}({{key}})
+                .map({{Name}}JpaRepository::toDomain);
+    }
+
+    private static {{Name}} toDomain({{Name}}Entity entity) {
+        return {{Name}}.builder()
+{{#fields}}
+                .{{name}}(entity.get{{pascal}}())
+{{/fields}}
+                .build();
+    }
+}

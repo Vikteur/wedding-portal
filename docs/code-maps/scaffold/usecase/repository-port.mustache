@@ -1,0 +1,16 @@
+{{!
+  Port owned by the usecase layer; names domain types only. Exemplar: account-usecase SalesRegionRepository.
+  Implemented in the adapter (jpa-repository) or a gateway module.
+  Target: <capability>-usecase/src/main/java/<package path>/repository/<Name>Repository.java
+  Vars:   package, Name, Result (domain return type), method, authenticated (bool)
+}}
+package {{package}}.repository;
+
+{{#authenticated}}
+import com.acme.shop.authentication.domain.AuthenticatedCustomer;
+{{/authenticated}}
+import {{package}}.domain.{{Result}};
+
+public interface {{Name}}Repository {
+    {{Result}} {{method}}({{#authenticated}}AuthenticatedCustomer authenticatedCustomer{{/authenticated}});
+}

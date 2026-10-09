@@ -1,0 +1,32 @@
+{{!
+  Value object whose construction must reject nulls. Exemplar: order-domain OrderCode.
+  Target: <capability>-domain/src/main/java/<package path>/domain/<Name>.java
+  Vars:   package, Name, fields[type, name, last]
+}}
+package {{package}}.domain;
+
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
+import java.util.Objects;
+
+@Getter
+@EqualsAndHashCode
+@ToString
+public class {{Name}} {
+
+{{#fields}}
+    private final {{{type}}} {{name}};
+{{/fields}}
+
+    {{Name}}({{#fields}}{{{type}}} {{name}}{{^last}}, {{/last}}{{/fields}}) {
+{{#fields}}
+        this.{{name}} = Objects.requireNonNull({{name}});
+{{/fields}}
+    }
+
+    public static {{Name}} of({{#fields}}final {{{type}}} {{name}}{{^last}}, {{/last}}{{/fields}}) {
+        return new {{Name}}({{#fields}}{{name}}{{^last}}, {{/last}}{{/fields}});
+    }
+}
