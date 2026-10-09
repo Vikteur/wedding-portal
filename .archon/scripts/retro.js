@@ -3,6 +3,8 @@
 //   node retro.js render <meta.json> <out.md>    the evidence a retro is written from
 //   node retro.js gate <umbrella> <folder> <id8> checks lessons-learned.md and the ADRs; exit 1 with the reasons
 //   node retro.js index <umbrella>               regenerates the index in docs/retro/README.md
+//   node retro.js archive <umbrella> <folder> <run folder>
+//                                                copies a run's key files, logs and transcripts to <folder>/runs/<id8>/
 //   node retro.js note <get.json> <reason> <action>
 //                                                keeps why a run was stopped beside its artifacts (stop-reason.json)
 //   node retro.js pending <runs.json> <workflow> the ids of that workflow's stopped (cancelled) runs
@@ -317,11 +319,40 @@ function stopped(mode, getFile, transcript, runsFile, home) {
   console.log(dir);
 }
 
+// ---------- archive a run folder ----------
+// The Archon run folder stays outside the repo and temporary; after the merge its key files, every log and the retro
+// transcripts are kept per ticket in <folder>/runs/<id8>/. Dotfiles and dot-folders (.archon/..., .pr-number) are never
+// copied, and a file that is not there is skipped silently.
+const RUN_FILES = ['ticket.md', 'plan.md', 'pr-body.md', 'ci-diagnosis.md', 'retro-evidence.md',
+  'review/consolidated-review.md', 'review/fix-report.md', 'review/scope.md',
+  'retro/transcript.jsonl', 'retro/runs.json', 'retro/meta.json', 'retro/commits.txt', 'retro/pr.json',
+  'retro/artifacts.txt'];
+function logsUnder(root, rel = '') {
+  let entries;
+  try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch { return []; }
+  return entries.filter(e => !e.name.startsWith('.')).flatMap(e => {
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    return e.isDirectory() ? logsUnder(root, r) : e.isFile() && e.name.endsWith('.log') ? [r] : [];
+  });
+}
+function archive(home, folder, runDir) {
+  if (!fs.existsSync(runDir) || !fs.statSync(runDir).isDirectory()) return;
+  const target = path.join(home, folder, 'runs', path.basename(runDir).slice(0, 8));
+  const files = [...new Set([...RUN_FILES, ...logsUnder(runDir)])];
+  for (const f of files) {
+    const src = path.join(runDir, f);
+    if (!fs.existsSync(src) || !fs.statSync(src).isFile()) continue;
+    fs.mkdirSync(path.dirname(path.join(target, f)), { recursive: true });
+    fs.copyFileSync(src, path.join(target, f));
+  }
+}
+
 const [cmd, ...args] = process.argv.slice(2);
 if (cmd === 'render') render(...args);
 else if (cmd === 'gate') gate(...args);
 else if (cmd === 'index') index(...args);
+else if (cmd === 'archive') archive(...args);
 else if (cmd === 'note') note(...args);
 else if (cmd === 'pending') pending(...args);
 else if (cmd === 'stopped') stopped(...args);
-else { console.error('usage: retro.js render|gate|index|note|pending|stopped ...'); process.exit(2); }
+else { console.error('usage: retro.js render|gate|index|archive|note|pending|stopped ...'); process.exit(2); }
