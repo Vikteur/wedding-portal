@@ -1,0 +1,42 @@
+{{!
+  Factory spec: one valid case + one missing-field case per field. Exemplar: BlockedAudienceFactoryTest.
+  Target: <capability>-domain/src/test/java/<package path>/domain/<Name>FactoryTest.java
+  Vars:   package, Name, fields[type, name, pascal, example, last]  (example = Java literal)
+}}
+package {{package}}.domain;
+
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class {{Name}}FactoryTest {
+
+    private final {{Name}}Factory factory = new {{Name}}Factory();
+
+    @Test
+    void givenValidRequest_whenCreate_thenReturn{{Name}}WithoutErrors() {
+        var creation = factory.create(validRequest().build());
+
+        assertThat(creation.getNotification().hasErrors()).isFalse();
+{{#fields}}
+        assertThat(creation.getValue().get{{pascal}}()).isEqualTo({{{example}}});
+{{/fields}}
+    }
+{{#fields}}
+
+    @Test
+    void givenRequestWithout{{pascal}}_whenCreate_thenReturnValidationError() {
+        var creation = factory.create(validRequest().{{name}}(null).build());
+
+        assertThat(creation.getNotification().hasErrors()).isTrue();
+        assertThat(creation.getNotification().errorMessage()).contains("{{name}}");
+    }
+{{/fields}}
+
+    private static Create{{Name}}Request.Create{{Name}}RequestBuilder validRequest() {
+        return Create{{Name}}Request.builder()
+{{#fields}}
+                .{{name}}({{{example}}}){{#last}};{{/last}}
+{{/fields}}
+    }
+}

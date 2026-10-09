@@ -1,0 +1,53 @@
+{{!
+  Adapter spec with the Spring Data repo mocked. Exemplar: account-adapter SalesRegionJpaRepositoryTest.
+  Target: <capability>-adapter/src/test/java/<package path>/adapter/repository/<Name>JpaRepositoryTest.java
+  Vars:   package, Name, Key, keyExample (Java literal), fields[name, example]
+}}
+package {{package}}.adapter.repository;
+
+import {{package}}.domain.{{Name}};
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class {{Name}}JpaRepositoryTest {
+
+    @Mock
+    private {{Name}}SpringDataJpaRepository springDataJpaRepository;
+
+    @InjectMocks
+    private {{Name}}JpaRepository repository;
+
+    @Test
+    void givenExisting{{Name}}_whenFindBy{{Key}}_thenReturnDomain() {
+        var entity = {{Name}}Entity.builder()
+                .id(1L)
+{{#fields}}
+                .{{name}}({{{example}}})
+{{/fields}}
+                .build();
+        when(springDataJpaRepository.findBy{{Key}}({{{keyExample}}})).thenReturn(Optional.of(entity));
+
+        assertThat(repository.findBy{{Key}}({{{keyExample}}}))
+                .contains({{Name}}.builder()
+{{#fields}}
+                        .{{name}}({{{example}}})
+{{/fields}}
+                        .build());
+    }
+
+    @Test
+    void givenUnknown{{Key}}_whenFindBy{{Key}}_thenReturnEmpty() {
+        when(springDataJpaRepository.findBy{{Key}}({{{keyExample}}})).thenReturn(Optional.empty());
+
+        assertThat(repository.findBy{{Key}}({{{keyExample}}})).isEmpty();
+    }
+}

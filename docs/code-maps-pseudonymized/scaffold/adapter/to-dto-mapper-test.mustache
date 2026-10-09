@@ -1,0 +1,25 @@
+{{!
+  Mapper spec: Mother in, DTO asserted field by field. Exemplar: account-adapter DelegationToDTOMapperTest.
+  example values must match what the Mother fixture sets.
+  Target: <capability>-adapter/src/test/java/<package path>/adapter/controller/<Domain>ToDTOMapperTest.java
+  Vars:   package, Domain, fixture, fields[name, example]
+}}
+package {{package}}.adapter.controller;
+
+import {{package}}.domain.{{Domain}}Mother;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class {{Domain}}ToDTOMapperTest {
+
+    @Test
+    void given{{Domain}}_whenMap_thenReturnDTO() {
+        assertThat({{Domain}}ToDTOMapper.map({{Domain}}Mother.{{fixture}}()))
+                .isEqualTo({{Domain}}DTO.builder()
+{{#fields}}
+                        .{{name}}({{{example}}})
+{{/fields}}
+                        .build());
+    }
+}

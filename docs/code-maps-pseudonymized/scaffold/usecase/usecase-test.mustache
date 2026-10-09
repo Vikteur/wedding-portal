@@ -1,0 +1,50 @@
+{{!
+  Use-case spec: ports mocked, domain values from a Mother, the scenario in the method name.
+  Exemplar: invoice-usecase GetInvoicesUseCaseTest.
+  Target: <capability>-usecase/src/test/java/<package path>/usecase/<Name>UseCaseTest.java
+  Vars:   same as usecase.mustache, plus name (camelCase of Name) and fixture (Mother method)
+}}
+package {{package}}.usecase;
+
+{{#authenticated}}
+import com.acme.shop.authentication.domain.AuthenticatedCustomer;
+import com.acme.shop.authentication.repository.AuthenticationFacade;
+{{/authenticated}}
+import {{package}}.domain.{{Result}}Mother;
+import {{package}}.repository.{{Repository}};
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class {{Name}}UseCaseTest {
+    @Mock
+    private {{Repository}} {{repository}};
+{{#authenticated}}
+
+    @Mock
+    private AuthenticationFacade authenticationFacade;
+
+    @Mock
+    private AuthenticatedCustomer customer;
+{{/authenticated}}
+
+    @InjectMocks
+    private {{Name}}UseCase {{name}}UseCase;
+
+    @Test
+    void givenExisting{{Result}}_when{{Name}}_thenReturn{{Result}}() {
+        var expected = {{Result}}Mother.{{fixture}}();
+{{#authenticated}}
+        when(authenticationFacade.getAuthentication()).thenReturn(customer);
+{{/authenticated}}
+        when({{repository}}.{{method}}({{#authenticated}}customer{{/authenticated}})).thenReturn(expected);
+
+        assertThat({{name}}UseCase.execute()).isEqualTo(expected);
+    }
+}
