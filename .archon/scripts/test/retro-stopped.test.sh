@@ -10,6 +10,7 @@ stopped="$here/retro-stopped.sh"
 stop="$here/stop-run.sh"
 pass=0; fail=0
 root="$(mktemp -d)"
+export ARCHON_HOME="$root/no-archon-home"   # the real ~/.archon is never read
 trap 'rm -rf "$root"' EXIT
 
 check() { # check <name> <condition exit code>
@@ -256,6 +257,15 @@ check "T7 exit 0" $([ "$rc" -eq 0 ]; echo $?)
 pushed t7 docs/retro/run-cccccccc/lessons-learned.md > "$root/t7.md" 2>/dev/null
 check "T7 one section" $([ "$(grep -c '^## Run cccccccc' "$root/t7.md")" -eq 1 ]; echo $?)
 check "T7 reason added" $(has 'superseded by a smaller ticket' "$root/t7.md" && ! has 'No reason was recorded' "$root/t7.md"; echo $?)
+
+# T8. The stopped-run sweep also archives every finished Archon run (archive-runs.sh), once, at the end.
+fixtures t8
+mkdir -p "$root/ah8/workspaces/Vikteur/weddingapp/logs"
+printf '%s
+' '{"type":"workflow_start","workflow_name":"build-feature","content":"TASK-7.1: x","ts":"2026-10-09T10:00:00Z"}' '{"type":"workflow_complete","ts":"2026-10-09T11:00:00Z"}' > "$root/ah8/workspaces/Vikteur/weddingapp/logs/aaaabbbbcccc.jsonl"
+ARCHON_HOME="$root/ah8" sh_ "$stopped" --sweep
+check "T8 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "T8 the finished run is archived" $(git --git-dir="$root/t8/origin.git" cat-file -e main:docs/retro/TASK-7.1/runs/aaaabbbb/run.json 2>/dev/null; echo $?)
 
 echo "retro-stopped: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

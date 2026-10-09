@@ -432,3 +432,14 @@ nodes:
         branch: { type: string }
         worktree: { type: string }
       required: [backlog, branch, worktree]
+
+  # Whatever happened above (merged, failed, stopped), this run's predecessors are archived next to their tickets under
+  # docs/retro/<TASK>/runs/<id8>/ (a script: P2). This run is still running here, so it is archived by the next sweep.
+  # Never fails the run: a problem is only a warning.
+  - id: archive-runs
+    depends_on: [close-out]
+    trigger_rule: all_done
+    bash: |
+      . .archon/scripts/retro-umbrella.sh
+      if find_umbrella; then bash .archon/scripts/archive-runs.sh "$umbrella" >&2 || echo "warning: the Archon runs were not archived." >&2; fi
+      echo done
