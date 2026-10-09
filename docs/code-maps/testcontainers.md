@@ -2,10 +2,6 @@
 runtime: lazy
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Code map - `testcontainers` (project: `shop-backend`)
@@ -124,8 +120,7 @@ Expected: also wire the matching port (and any API key) or the test still points
 - 4 initializer classes across 3 modules; 7 test sources reference an initializer or extend a base
   class that does (as of `abc1234`).
 - Everything else in the suite is a plain unit or slice test - the container path is the exception,
-  not the default. See [spring-boot-slice-tests] for the non-container slice conventions and
-  [wiremock-gateway-stubs] for the outbound-HTTP equivalent.
+  not the default.
 
 ## Drift / exceptions
 - **`TestDatabaseInitializer` exists twice**, in `application/src/test/java/com/acme/shop/` and
@@ -142,6 +137,3 @@ Expected: also wire the matching port (and any API key) or the test still points
 - Scanned at: `abc1234` - tool/query: `rg -l 'testcontainers|Testcontainers'` over Java and Gradle
   sources excluding `build/`, plus reads of the four initializers and `AbstractRepositoryTest`.
   Not yet scanner-harvested.
-
-[spring-boot-slice-tests]: spring-boot-slice-tests.md
-[wiremock-gateway-stubs]: wiremock-gateway-stubs.md

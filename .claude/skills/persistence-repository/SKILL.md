@@ -4,8 +4,6 @@ description: Implement a repository port as a Hibernate ORM with Panache adapter
 ---
 # Persistence repository (adapter)
 
-> **Generic "how" only.** No concrete repository/entity names in the body — those live in the code-map.
-
 ## When to use
 Backing a use-case's repository **port** (interface in the inner layer) with a real datastore — the
 adapter that turns domain aggregates into rows and back.
@@ -20,7 +18,7 @@ adapter that turns domain aggregates into rows and back.
 - Keep queries in the Panache repository / explicit query methods; keep transactions owned by the
   **use-case** ([[usecase-orchestration]]), not the repository.
 - Return domain types (or `Optional<domain>`); translate persistence exceptions to typed errors.
-- Cover it with a real-database test ([[spring-boot-slice-tests]] / [[testcontainers]]).
+- Cover it with a real-database integration test using [[testcontainers]].
 
 ## Pattern signals (discovery cues)
 A use-case-layer `*Repository` interface implemented by an adapter `Default*Repository`

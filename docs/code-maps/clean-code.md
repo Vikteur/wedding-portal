@@ -2,10 +2,6 @@
 runtime: lazy
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Code map - `clean-code` (project: `shop-backend`)
@@ -111,7 +107,7 @@ members carry `@lombok.Generated` and JaCoCo/Sonar exclude them from coverage. U
   invariants are enforced in a factory must not expose setters - `@Setter` in a `-domain` module is a
   smell worth challenging.
 - **`@Slf4j` for logging, never a hand-rolled logger field.** What may be logged is a policy question,
-  not a style one - see [security-review] before logging anything derived from a customer identifier.
+  not a style one; never log personal identifiers.
 
 ## Anti-patterns this repo has already decided against
 - Field injection (`@Autowired` on a field) - constructor injection everywhere instead.
@@ -130,4 +126,3 @@ members carry `@lombok.Generated` and JaCoCo/Sonar exclude them from coverage. U
 [bean-config-di]: bean-config-di.md
 [clean-architecture]: clean-architecture.md
 [object-mother-builders]: object-mother-builders.md
-[security-review]: security-review.md

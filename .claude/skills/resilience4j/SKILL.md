@@ -4,9 +4,6 @@ description: SmallRye Fault Tolerance timeouts, retries, circuit breakers and fa
 ---
 # Fault tolerance — timeouts, retries, circuit breakers, fallbacks
 
-> **Generic "how" only.** No service names, endpoints, or instance names in the body — those live in
-> the code-map leaf.
-
 ## When to use
 Adding fault tolerance to an outbound call (HTTP/SOAP/FHIR client) so a slow or failing dependency
 degrades gracefully instead of cascading: timeout, retry, circuit breaker, fallback.

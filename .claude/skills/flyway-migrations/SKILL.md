@@ -4,8 +4,6 @@ description: Versioned, forward-only SQL migrations applied on startup. Use when
 ---
 # Flyway migrations
 
-> **Generic "how" only.** No concrete table names or version numbers in the body — those live in the code-map.
-
 ## When to use
 Any schema change (new table/column, index, constraint, data backfill) in a project where the schema is
 owned by versioned migrations applied on startup.

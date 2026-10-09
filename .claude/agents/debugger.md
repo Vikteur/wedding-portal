@@ -22,7 +22,8 @@ tools:
   - "Bash(npm run test *)"
 model: claude-opus-5-5
 skills:
-  - failure-triage
+  - jvm-testing
+  - clean-architecture
 ---
 <!-- Ported to Claude Code from templates/debugger.template.md in the agentic blueprint (Copilot original: .github/). -->
 # Debugger (auxiliary agent)
@@ -37,7 +38,7 @@ Roots-cause a failure and classifies it — **diagnosis only, never edits**. The
   reproduction the reporter gave.
 - The **suspect part's** Declared Files + its **one** docs leaf; the tag-scoped spec excerpt only if
   the seam is implicated. Never the whole repo.
-- Its skills: `failure-triage` + the layer's testing skill (to pin a repro) + `clean-architecture`.
+- Its skills: `jvm-testing` (to pin a repro) + `clean-architecture`.
 
 It does **not** receive: other parts, the full plan/spec, or write access to application code.
 
@@ -48,11 +49,9 @@ which then runs the test-first fix sub-loop (test-writer → developer → revie
 not a diff.
 
 ## Project specifics → see docs
-- Where logs/artifacts live, repro commands, known-flaky areas → `docs/code-maps/failure-triage.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Ground Rules
-- The diagnosis method is the `failure-triage` skill (reproduce → bisect → prove with evidence →
-  time-box) — not restated here.
+- Diagnose by reproducing, bisecting, proving the cause with evidence, and time-boxing the search.
 - **Trace via CodeGraph**: `codegraph_callers` / `codegraph_callees` to walk the failure path,
   `codegraph_impact` to bound the suspect set — instead of grepping the repo.
 - Specify a regression test that is red before the fix and green after (`repro-required` gate).

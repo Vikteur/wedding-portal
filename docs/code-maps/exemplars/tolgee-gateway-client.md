@@ -4,10 +4,6 @@ source: tolgee-gateway/build.gradle.kts
 serves: [openapi-rest-client-codegen]
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Exemplar — `tolgee-gateway/build.gradle.kts` (project: `shop-backend`)
@@ -21,7 +17,7 @@ A vendor-facing REST **client** generated from an in-repo copy of the vendor's o
 (`tolgee-openapi-spec.json`) — not the server-side codegen (`shop.openapi-conventions`, which
 generates controller stubs from *this project's own* central spec). Siblings using the same shape:
 `typesense-gateway/build.gradle.kts` (downloads the vendor spec at build time rather than vendoring
-a copy) and `partner-gateway` (generates SOAP clients instead, see [soap-cxf-gateway]).
+a copy) and `partner-gateway` (which also generates SOAP clients).
 
 ## `org.openapi.generator`, `library = "restclient"`, vendor spec {#openapi-rest-client-codegen}
 **Serves:** [`openapi-rest-client-codegen`](../openapi-rest-client-codegen.md)
@@ -94,5 +90,3 @@ Expected: the client stays disposable under `build/` and is never hand-edited or
 
 ## Provenance
 - Scanned at: `abc1234` · tool/query: manual read of `tolgee-gateway/build.gradle.kts`, `typesense-gateway/build.gradle.kts`, `partner-gateway/build.gradle.kts`
-
-[soap-cxf-gateway]: ../soap-cxf-gateway.md

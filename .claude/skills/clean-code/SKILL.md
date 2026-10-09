@@ -4,9 +4,6 @@ description: Small focused units, intention names, no duplication, guard clauses
 ---
 # Clean Code
 
-> **Generic "how" only.** Zero project nouns. Project facts (style config, naming conventions, where
-> exemplars live) go in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Any time you add or change code, and during review. The baseline every other skill assumes: it governs
 how a unit is written. *Where* that unit belongs is a placement question — [[clean-architecture]]; the

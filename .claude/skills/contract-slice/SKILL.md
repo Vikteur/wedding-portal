@@ -4,9 +4,6 @@ description: Slice an API contract to one tag or operation, self-contained and l
 ---
 # Contract slice
 
-> **Generic "how" only.** Zero project nouns — the spec source, slicer script, tag names, and
-> component roots live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 A downstream agent needs the part of an API contract relevant to one capability, and the full spec is
 too large to hand it. Use when scoping context by tag or operation — read the whole spec once, then

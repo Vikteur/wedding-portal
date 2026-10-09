@@ -4,9 +4,6 @@ description: Keep dependencies pointing inward — domain, use-cases, adapters. 
 ---
 # Clean Architecture
 
-> **Generic "how" only.** Zero project nouns. The concrete layer set, package roots and module map
-> live in the code-map / `docs/layer-model.md`, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Placing new code in a layer, slicing a feature across layers, or reviewing dependency direction.
 The one shared structural skill every code-writing agent (and the analyst) carries. It decides *where*

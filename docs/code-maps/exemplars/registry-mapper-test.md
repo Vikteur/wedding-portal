@@ -4,10 +4,6 @@ source: partner-gateway/src/test/java/com/acme/shop/partner/gateway/registry/Reg
 serves: [domain-to-dto-mapper-tests]
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Exemplar — `partner-gateway/.../registry/RegistryMapperTest.java` (project: `shop-backend`)

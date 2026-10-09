@@ -4,8 +4,6 @@ description: JPA entities kept separate from the domain and mapped at the reposi
 ---
 # JPA entity mapping
 
-> **Generic "how" only.** No concrete entity/table names in the body — those live in the code-map.
-
 ## When to use
 Adding or changing a persisted, table-backed type — the JPA `@Entity` that the persistence adapter
 reads/writes.

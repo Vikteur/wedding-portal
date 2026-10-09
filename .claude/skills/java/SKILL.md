@@ -4,9 +4,6 @@ description: Idiomatic modern Java — immutability, Optional, records, streams.
 ---
 # Java
 
-> **Generic "how" only.** Zero project nouns. The JDK version, build tool, and project idioms live
-> in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Writing or reviewing Java in any layer. Pairs with [[clean-code]] (general) and [[clean-architecture]]
 (placement); this skill is the language-idiom layer.

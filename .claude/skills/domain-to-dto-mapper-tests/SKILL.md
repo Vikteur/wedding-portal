@@ -4,8 +4,6 @@ description: Parameterized mapper tests fed by object-mothers, asserting field b
 ---
 # Domain-to-DTO mapper tests
 
-> **Generic "how" only.** No concrete mapper/DTO names in the body — those live in the code-map.
-
 ## When to use
 Verifying a mapper that converts a domain object to a transport DTO (or back): every field carried,
 nulls/optionals/collections handled, enums translated.

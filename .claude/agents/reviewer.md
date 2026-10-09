@@ -32,7 +32,7 @@ already ran.
 ## Inputs — per-part review (by path; layer slice only)
 - That part's **Declared Files** + its **acceptance-criteria** slice + its **one** docs leaf.
 - Its skills: `code-review-process` + **that layer's skills** (the review lens — e.g. domain review
-  loads `domain-modeling`/`domain-events`, adapter loads `api-first-controller`/`gateway-client-hygiene`).
+  loads `domain-modeling`/`domain-events`, adapter loads `api-first-controller`).
   Scoped by the blueprint-side `scripts/scope-skills.sh --reviewer <side.layer>`; consumer worktrees
   come pre-scoped from the bundled per-layer lists.
 - It does **not** receive: other parts, the full Declared Files, the full plan, or per-part

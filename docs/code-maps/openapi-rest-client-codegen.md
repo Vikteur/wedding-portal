@@ -2,10 +2,6 @@
 runtime: lazy
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Code map — `openapi-rest-client-codegen` (project: `shop-backend`)
@@ -77,8 +73,8 @@ Expected: generated sources stay under `build/`, are never committed, and are re
 
 ## Frequency & coverage (why this earned a skill)
 - 3 vendor-facing gateways generate a REST client this way (as of `abc1234`): `tolgee-gateway`,
-  `typesense-gateway`; `partner-gateway` follows the same generated-client shape for its SOAP clients
-  (see [soap-cxf-gateway] — different generator, same "don't hand-write the client" intent).
+  `typesense-gateway`; `partner-gateway` follows the same generated-client shape for its SOAP clients,
+  using a different generator but following the same "don't hand-write the client" intent.
 
 ## Drift / exceptions
 - None — both REST-client gateways use identical `openApiGenerate` config shape (only the spec source and
@@ -86,5 +82,3 @@ Expected: generated sources stay under `build/`, are never committed, and are re
 
 ## Provenance
 - Scanned at: `abc1234` · tool/query: manual read of `tolgee-gateway/build.gradle.kts`, `typesense-gateway/build.gradle.kts`, `partner-gateway/build.gradle.kts`
-
-[soap-cxf-gateway]: soap-cxf-gateway.md

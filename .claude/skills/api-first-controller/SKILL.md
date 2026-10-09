@@ -4,8 +4,6 @@ description: Thin controller implementing an OpenAPI-generated Api interface. Us
 ---
 # API-first controller
 
-> **Generic "how" only.** No concrete controller/tag/package names in the body — those live in the code-map.
-
 ## When to use
 Building a REST endpoint in a contract-first project where the controller interface + DTOs are
 **generated** from an OpenAPI spec at build time.

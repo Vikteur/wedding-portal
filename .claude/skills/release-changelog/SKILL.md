@@ -3,7 +3,6 @@ name: release-changelog
 description: Turn Conventional Commits into a reader-facing changelog. Use at release or closeout.
 ---
 # Release Changelog
-> **Generic "how" only.** Zero project nouns (no package roots, tag names, version scheme names). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 At release closeout, once commits since the last tag are known: turning a range of Conventional Commits into the changelog section that ships with a version bump. Pairs with [[conventional-commits]] — the commit shape this reads is that skill's output.

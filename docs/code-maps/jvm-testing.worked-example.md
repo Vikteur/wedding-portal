@@ -2,10 +2,6 @@
 runtime: lazy
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Code map — `jvm-testing` (project: `shop-backend`)
@@ -73,7 +69,7 @@ Expected: mocks sit at ports; domain and DTO values are real instances.
 - Repetition: `@ParameterizedTest` (+ `@EnumSource` for exhaustive enum coverage) and occasional
   `@Nested` grouping when it helps readability.
 - Fast units: plain JUnit 5 + Mockito + AssertJ; anything needing Spring context or containers
-  moves to the slice/integration tier (see [spring-boot-slice-tests]).
+  moves to the integration-test tier.
 - Test sources sit in `<module>/src/test/java`, mirroring the production package.
 
 ## Frequency & coverage (why this earned a skill)
@@ -88,4 +84,3 @@ Expected: mocks sit at ports; domain and DTO values are real instances.
 - Scanned at: `abc1234` · tool/query: `grep -rl 'void given.*_when.*_then' --include='*Test.java'`
 
 [object-mother-builders]: object-mother-builders.md
-[spring-boot-slice-tests]: spring-boot-slice-tests.md

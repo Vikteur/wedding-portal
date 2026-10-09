@@ -4,9 +4,6 @@ description: Framework-free entities and value objects with invariants enforced 
 ---
 # Domain Modeling
 
-> **Generic "how" only.** Zero project nouns. Concrete entities, factories, validators and the
-> creation-result helper live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Adding a new domain entity or value object, introducing creation rules / invariants, or refactoring
 an anaemic data holder into a real domain type. The core modelling skill for the inner layer.

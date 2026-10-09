@@ -3,7 +3,6 @@ name: conventional-commits
 description: Write Conventional Commits so changelog and version bumps derive. Use when committing.
 ---
 # Conventional Commits
-> **Generic "how" only.** Zero project nouns (no scope vocabulary, tag names, package roots, release-tool names). The allowed scopes and any local overrides live in a docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 Writing any commit message on a project where history, changelog, and version bumps are derived from commits. Applies per commit, before it lands.

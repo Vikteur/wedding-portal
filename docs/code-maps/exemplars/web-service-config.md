@@ -1,13 +1,9 @@
 ---
 runtime: lazy
 source: partner-gateway/src/main/java/com/acme/shop/partner/config/WebServiceConfig.java
-serves: [bean-config-di, soap-cxf-gateway]
+serves: [bean-config-di]
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Exemplar — `partner-gateway/.../config/WebServiceConfig.java` (project: `shop-backend`)
@@ -29,15 +25,6 @@ config classes with a name when multiple configuration classes could otherwise c
 Constructor injection for `@Value`-sourced endpoint URLs plus shared collaborators (`WSFactory`,
 CXF `Bus`); each `@Bean` method builds one SOAP port client from a WSDL path plus a security
 interceptor supplied as a method parameter.
-
-## Centralized `JaxWsProxyFactoryBean` wiring {#soap-cxf-gateway}
-**Serves:** [`soap-cxf-gateway`](../soap-cxf-gateway.md)
-
-This class never calls `JaxWsProxyFactoryBean` itself — the actual CXF proxy construction is
-centralized in `webservice-config/src/main/java/com/acme/shop/webservice/config/ws/WSFactory.java`,
-the single place in the repo that touches `JaxWsProxyFactoryBean`. Every SOAP-client
-`@Configuration` calls `WSFactory` with a WSDL path plus service interface and gets back a
-configured port client.
 
 ### Source (pseudonymized)
 ```java
@@ -137,4 +124,3 @@ Expected: the new client still goes through `WSFactory`; no local `JaxWsProxyFac
 
 ## Provenance
 - Scanned at: `abc1234` · tool/query: `rg '@Configuration'` (70 matches / 67 files / 24 modules), `rg '@Bean'` (90 matches / 43 files / 24 modules)
-- Scanned at: `abc1234` · tool/query: `rg 'JaxWsProxyFactoryBean'` (2 files: `WSFactory.java` + `WSFactoryTest.java`, 1 module — re-verified)

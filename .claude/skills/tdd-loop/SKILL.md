@@ -3,7 +3,6 @@ name: tdd-loop
 description: Red-green-refactor — one failing test first, minimal code, refactor under green. Use when implementing criteria.
 ---
 # TDD loop
-> **Generic "how" only.** Zero project nouns (no test-runner names, framework tags, module roots, fixture names). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 Turning acceptance criteria into code one behavior at a time. When each requirement can be pinned by a test before it exists — and you want the tests to double as the behavior spec.

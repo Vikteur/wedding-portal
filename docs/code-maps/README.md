@@ -14,16 +14,14 @@ placeholder into code. `jvm-testing` is this repo's own leaf and carries real fa
 - A decision and its reasoning go in `docs/memory.md`; the leaf links to it instead of repeating it.
 - Any agent may correct a stale line. Never replace a worked example's structure with a thinner one.
 
-The examples were copied from a pseudonymized reference set, now removed. Shared material from the same copy:
+The examples originate from a pseudonymized reference set. Shared material in this repo:
 `exemplars/` (worked examples per artifact), `scaffold/` (mustache templates), [jvm-testing.worked-example] (the
-worked example behind this repo's own [jvm-testing] leaf) and `openapi-contract.example.yaml`.
+worked example behind this repo's own [jvm-testing] leaf).
 
-Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-context-facade], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [failure-triage], [fhir-hapi-gateway], [flyway-migrations], [gateway-client-hygiene], [identifier-pseudonymization], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [scheduled-tasks], [security-review], [soap-cxf-gateway], [spring-boot-slice-tests], [spring-caching], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result], [wiremock-gateway-stubs].
+Leaves: [api-first-controller], [archunit-fitness], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [flyway-migrations], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result].
 
-[aes-gcm-encryption]: aes-gcm-encryption.md
 [api-first-controller]: api-first-controller.md
 [archunit-fitness]: archunit-fitness.md
-[auth-context-facade]: auth-context-facade.md
 [bean-config-di]: bean-config-di.md
 [clean-architecture]: clean-architecture.md
 [clean-code]: clean-code.md
@@ -34,11 +32,7 @@ Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-
 [domain-modeling]: domain-modeling.md
 [domain-to-dto-mapper-tests]: domain-to-dto-mapper-tests.md
 [exception-to-http]: exception-to-http.md
-[failure-triage]: failure-triage.md
-[fhir-hapi-gateway]: fhir-hapi-gateway.md
 [flyway-migrations]: flyway-migrations.md
-[gateway-client-hygiene]: gateway-client-hygiene.md
-[identifier-pseudonymization]: identifier-pseudonymization.md
 [java]: java.md
 [jpa-entity-mapping]: jpa-entity-mapping.md
 [junit-tests]: junit-tests.md
@@ -48,13 +42,7 @@ Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-
 [openapi-rest-client-codegen]: openapi-rest-client-codegen.md
 [persistence-repository]: persistence-repository.md
 [resilience4j]: resilience4j.md
-[scheduled-tasks]: scheduled-tasks.md
-[security-review]: security-review.md
-[soap-cxf-gateway]: soap-cxf-gateway.md
-[spring-boot-slice-tests]: spring-boot-slice-tests.md
-[spring-caching]: spring-caching.md
 [testcontainers]: testcontainers.md
 [usecase-bdd-spec]: usecase-bdd-spec.md
 [usecase-orchestration]: usecase-orchestration.md
 [validation-notification-result]: validation-notification-result.md
-[wiremock-gateway-stubs]: wiremock-gateway-stubs.md

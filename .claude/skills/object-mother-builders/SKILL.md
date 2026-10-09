@@ -4,8 +4,6 @@ description: Fluent Mother and builder classes shared as test artifacts. Use whe
 ---
 # Object-mother test-data builders
 
-> **Generic "how" only.** No concrete entity/module names in the body — those live in the code-map.
-
 ## When to use
 Building domain objects for tests without repeating constructor noise: a default-valid instance you can
 tweak per test, reused across modules.

@@ -2,10 +2,6 @@
 runtime: lazy
 kind: worked-example
 ---
-> **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
-> classes and their roles, the call order, the tests. Every name is a pseudonymized placeholder: the project, the
-> packages, the classes, the methods, the parameters and the fields. Map each one to this repo's own name, and never
-> copy a placeholder into code.
 
 <!-- AI_DISCLAIMER v1.0 -->
 # Code map — `validation-notification-result` (project: `shop-backend`)
@@ -18,7 +14,6 @@ kind: worked-example
 | Exemplar | What it shows | Layer / module |
 |----------|---------------|----------------|
 | [`Notification.java`](exemplars/notification.md#validation-notification-result) | The collector itself: errors + warnings, `hasErrors()`, joined messages, `empty()` / `of()` / `merge()` / `addNotification()` composition | domain (`common-domain`) |
-| [`CatalogSearchSchedulerConfig.java`](exemplars/catalog-search-scheduler-config.md#validation-notification-result) | Batch boundary: per-job `Notification` translated once into `BatchJobFailedException` | adapter (`storefront-adapter`) |
 
 ### Excerpts
 Collector factories + composition helpers:
@@ -40,14 +35,6 @@ public Notification addNotification(Notification notification) {
 }
 ```
 
-Batch boundary converts the collected result into control flow once:
-```java
-Notification notification = indexPagesUseCase.execute();
-if (notification.hasErrors()) {
-    throw new BatchJobFailedException(notification.errorMessage());
-}
-```
-
 ### Edge cases
 Merging siblings keeps errors but not warnings:
 ```java
@@ -66,15 +53,6 @@ parent.addNotification(null);
 ```
 Expected: no exception and no state change.
 
-Scheduled boundary receives multiple validation messages:
-```java
-var notification = Notification.empty();
-notification.addError("Page.slug is duplicated");
-notification.addError("Page.parentId creates a cycle");
-throw new BatchJobFailedException(notification.errorMessage());
-```
-Expected: the batch job throws once with the comma-joined message instead of failing on the first error only.
-
 ## Local conventions (the project facts the skill omits)
 - The result type is `com.acme.shop.common.domain.validation.Notification` (`common-domain`) — one shared
   class for the whole repo, never per-capability copies.
@@ -83,8 +61,7 @@ Expected: the batch job throws once with the comma-joined message instead of fai
   accumulator rather than returning their own; one accumulator per validation pass.
 - Entities expose `validate()` returning `Notification`; composite validations combine child
   results via `addNotification(...)` or `merge(...)`.
-- Boundary translations: `@Scheduled` batch jobs check `hasErrors()` and throw
-  `BatchJobFailedException`; creation flows validate before constructing.
+- Creation flows validate before constructing.
 - `merge(...)` propagates errors only; `addNotification(...)` propagates both errors and warnings.
 
 ## Frequency & coverage (why this earned a skill)

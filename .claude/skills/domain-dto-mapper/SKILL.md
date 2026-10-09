@@ -4,8 +4,6 @@ description: A pure, field-explicit mapper between domain and transport DTO. Use
 ---
 # Domain-to-DTO mapper
 
-> **Generic "how" only.** No concrete mapper/DTO names in the body — those live in the code-map.
-
 ## When to use
 Crossing the boundary between a domain object and a generated/transport DTO — in a controller
 (domain → response DTO) or a gateway (wire DTO → domain).

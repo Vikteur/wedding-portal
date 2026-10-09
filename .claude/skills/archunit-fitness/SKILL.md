@@ -4,9 +4,6 @@ description: Encode architecture rules as ArchUnit fitness tests. Use for the po
 ---
 # ArchUnit Fitness
 
-> **Generic "how" only.** Zero project nouns. The concrete package roots, allowed libraries and
-> exemplars live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Authoring or maintaining the **architecture-fitness suite** — the executable rules that the
 **post-part hook** runs after a developer/test-writer finishes (so a layering violation fails the

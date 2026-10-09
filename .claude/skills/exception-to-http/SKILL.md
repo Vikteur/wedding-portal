@@ -4,8 +4,6 @@ description: Map a domain exception hierarchy to HTTP status via one class of ex
 ---
 # Exception-to-HTTP mapping
 
-> **Generic "how" only.** No concrete exception/status mappings in the body — those live in the code-map.
-
 ## When to use
 Turning typed domain/gateway exceptions into consistent HTTP responses (status + error body) without
 try/catch scattered through resources.

@@ -4,9 +4,6 @@ description: Raise framework-free domain events in the domain and publish them f
 ---
 # Domain Events
 
-> **Generic "how" only.** Zero project nouns. Concrete event types, the publisher port, its adapter
-> and the listeners live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Adding a side-effect that should fire when a domain fact occurs (indexing, notifying, projecting,
 cache invalidation) without coupling the originating logic to that side-effect or to the framework.

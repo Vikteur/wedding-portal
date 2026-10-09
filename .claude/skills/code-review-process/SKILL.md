@@ -4,14 +4,10 @@ description: Review a part scoped to its files, then one integration pass over t
 ---
 # Code review process
 
-> **Generic "how" only.** Zero project nouns. What the part declares, which layer skills apply, and
-> where the overview lives are pipeline facts in the code-map docs leaf, referenced below. See
-> `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 When a part turns **green** (its checks/hooks pass) and it needs a review before hand-off. This is the
 *process* — how to run the pass; the judgment lens itself is a separate skill: the part's layer skills
-carry the domain lens, [[security-review]] runs alongside on a sensitive diff. Not for pre-build
+carry the domain lens. Not for pre-build
 framing — that is [[design-review]].
 
 ## How

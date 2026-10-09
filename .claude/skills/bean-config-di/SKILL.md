@@ -4,8 +4,6 @@ description: Wire collaborators with CDI producers, config mappings and construc
 ---
 # Bean configuration & dependency injection
 
-> **Generic "how" only.** No concrete bean/config-class names in the body — those live in the code-map.
-
 ## When to use
 Wiring a collaborator (client, gateway, cache, scheduler) into the CDI container, or choosing an
 implementation per environment.

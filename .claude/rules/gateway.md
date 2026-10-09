@@ -8,8 +8,7 @@ paths:
 
 > **Backstop, not a knowledge store.** Always-on for any edit in an outbound-integration module —
 > keep tiny and **project-noun-free**. **Hard cap: ≤5 invariant lines**; depth →
-> `gateway-client-hygiene` / `resilience4j` skills (lazy),
-> facts → `docs/code-maps/gateway-client-hygiene.md`. Do not restate skill steps here. See `ARCHITECTURE.md`
+> `resilience4j` skill (lazy). Do not restate skill steps here. See `ARCHITECTURE.md`
 > §2 (caution), §3 (blueprint repo).
 
 - Gateways isolate the outside world: no third-party SDK, wire or generated-binding type crosses

@@ -4,8 +4,6 @@ description: Transactional use-case over domain and ports, free of web and persi
 ---
 # Use-case orchestration
 
-> **Generic "how" only.** No concrete use-case/repository names in the body — those live in the code-map.
-
 ## When to use
 Implementing application logic that coordinates domain objects and repository ports for one business
 operation — the layer between controllers and the domain.

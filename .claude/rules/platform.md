@@ -8,8 +8,7 @@ paths:
 
 > **Backstop, not a knowledge store.** Always-on for the runnable application module and the shared
 > cross-cutting libraries — keep tiny and **project-noun-free**. **Hard cap: ≤5 invariant lines**;
-> depth → `bean-config-di` / `aes-gcm-encryption` / `exception-to-http` skills (lazy), facts →
-> `docs/code-maps/security-review.md`. Do not restate skill steps here. See `ARCHITECTURE.md`
+> depth → `bean-config-di` / `exception-to-http` skills (lazy). Do not restate skill steps here. See `ARCHITECTURE.md`
 > §2 (caution), §3 (blueprint repo).
 
 - This is where configuration, authentication mechanisms, interceptors and exception handling live: a change here
