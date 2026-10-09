@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: order-domain/src/test/java/com/acme/shop/order/domain/OrderMother.java
 serves: [object-mother-builders]
 kind: worked-example

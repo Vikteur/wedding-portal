@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: authentication-domain/src/main/java/com/acme/shop/authentication/domain/AuthenticatedCustomer.java
 serves: [auth-context-facade]
 kind: worked-example

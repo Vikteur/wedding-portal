@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: common-domain/src/main/java/com/acme/shop/common/domain/validation/Notification.java
 serves: [validation-notification-result]
 kind: worked-example

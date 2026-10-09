@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: build-logic/src/main/kotlin/shop.java-conventions.gradle.kts
 serves: [code-generation, java]
 kind: worked-example

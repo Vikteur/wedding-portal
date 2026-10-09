@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: account-adapter/src/test/java/com/acme/shop/account/adapter/controller/AbstractControllerTest.java
 serves: [spring-boot-slice-tests]
 kind: worked-example

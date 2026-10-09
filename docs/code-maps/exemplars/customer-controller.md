@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: account-adapter/src/main/java/com/acme/shop/account/adapter/controller/CustomerController.java
 serves: [api-first-controller]
 kind: worked-example

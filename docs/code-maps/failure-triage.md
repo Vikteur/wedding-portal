@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: manual (duplication-review follow-up, pseudonymized)
 kind: worked-example
 ---
 > **Worked example, not project facts.** The structure is the pattern to follow: the layers, the

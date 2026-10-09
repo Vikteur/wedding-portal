@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: partner-gateway/src/test/java/com/acme/shop/partner/gateway/registry/RegistryMapperTest.java
 serves: [domain-to-dto-mapper-tests]
 kind: worked-example

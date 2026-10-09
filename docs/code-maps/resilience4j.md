@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 kind: worked-example
 ---
 > **Worked example, not project facts.** The structure is the pattern to follow: the layers, the

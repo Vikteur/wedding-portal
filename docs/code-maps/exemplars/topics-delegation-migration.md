@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: account-adapter/src/main/resources/db/migration/ddl/V1.098__add_household_delegation_to_topics.sql
 serves: [flyway-migrations]
 kind: worked-example

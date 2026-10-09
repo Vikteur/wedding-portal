@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: storefront-adapter/src/main/java/com/acme/shop/storefront/adapter/config/CatalogSearchSchedulerConfig.java
 serves: [scheduled-tasks, validation-notification-result]
 kind: worked-example

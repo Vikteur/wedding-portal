@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: application/src/test/java/com/acme/shop/architecture/TransactionalConventionTest.java
 serves: [archunit-fitness]
 kind: worked-example

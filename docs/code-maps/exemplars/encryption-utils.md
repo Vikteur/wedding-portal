@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: encryption/src/main/java/com/acme/shop/encryption/EncryptionUtils.java
 serves: [aes-gcm-encryption]
 kind: worked-example

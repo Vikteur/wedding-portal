@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: account-adapter/src/main/java/com/acme/shop/account/adapter/repository/customer/SalesRegionEntity.java
 serves: [jpa-entity-mapping]
 kind: worked-example

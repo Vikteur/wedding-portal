@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: tolgee-gateway/build.gradle.kts
 serves: [openapi-rest-client-codegen]
 kind: worked-example

@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: fulfilment-gateway/src/test/java/com/acme/shop/fulfilment/gateway/FulfilmentFhirGatewayTest.java
 serves: [wiremock-gateway-stubs]
 kind: worked-example

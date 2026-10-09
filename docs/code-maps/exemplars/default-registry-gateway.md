@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: partner-gateway/src/main/java/com/acme/shop/partner/gateway/registry/DefaultRegistryGateway.java
 serves: [gateway-client-hygiene, resilience4j, spring-caching]
 kind: worked-example

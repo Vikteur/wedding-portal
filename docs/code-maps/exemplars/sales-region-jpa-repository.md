@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: account-adapter/src/main/java/com/acme/shop/account/adapter/repository/customer/SalesRegionJpaRepository.java
 serves: [persistence-repository, spring-caching]
 kind: worked-example

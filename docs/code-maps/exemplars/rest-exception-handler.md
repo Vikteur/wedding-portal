@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: application/src/main/java/com/acme/shop/exceptionhandling/RestExceptionHandler.java
 serves: [exception-to-http]
 kind: worked-example

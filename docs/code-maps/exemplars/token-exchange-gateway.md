@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: partner-gateway/src/main/java/com/acme/shop/partner/gateway/token/TokenExchangeGateway.java
 serves: [identifier-pseudonymization]
 kind: worked-example

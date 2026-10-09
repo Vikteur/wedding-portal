@@ -16,7 +16,7 @@ placeholder into code. `jvm-testing` is this repo's own leaf and carries real fa
 
 The examples were copied from a pseudonymized reference set, now removed. Shared material from the same copy:
 `exemplars/` (worked examples per artifact), `scaffold/` (mustache templates), [jvm-testing.worked-example] (the
-worked example behind this repo's own [jvm-testing] leaf), `_candidates.md` and `openapi-contract.example.yaml`.
+worked example behind this repo's own [jvm-testing] leaf) and `openapi-contract.example.yaml`.
 
 Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-context-facade], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [failure-triage], [fhir-hapi-gateway], [flyway-migrations], [gateway-client-hygiene], [identifier-pseudonymization], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [scheduled-tasks], [security-review], [soap-cxf-gateway], [spring-boot-slice-tests], [spring-caching], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result], [wiremock-gateway-stubs].
 

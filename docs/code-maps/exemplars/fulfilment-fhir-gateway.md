@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: fulfilment-gateway/src/main/java/com/acme/shop/fulfilment/gateway/FulfilmentFhirGateway.java
 serves: [gateway-client-hygiene, fhir-hapi-gateway, resilience4j]
 kind: worked-example

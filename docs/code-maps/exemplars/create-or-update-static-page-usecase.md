@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: storefront-usecase/src/main/java/com/acme/shop/storefront/usecase/CreateOrUpdateStaticPageUseCase.java
 serves: [domain-events]
 kind: worked-example

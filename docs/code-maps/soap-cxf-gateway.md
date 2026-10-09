@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 kind: worked-example
 ---
 > **Worked example, not project facts.** The structure is the pattern to follow: the layers, the
@@ -12,7 +11,7 @@ kind: worked-example
 # Code map — `soap-cxf-gateway` (project: `shop-backend`)
 
 > Thin by design: below the code-map frequency threshold, but recorded rather than
-> left a bare [_candidates] row because the below-threshold count is itself the local convention
+> left a bare candidate row because the below-threshold count is itself the local convention
 > (centralization), not a gap.
 
 > This file has been created (totally or partially) with the assistance of artificial intelligence tools.
@@ -81,12 +80,11 @@ Expected: only configuration changes; the factory wiring stays identical.
   `webservice-config`.
 
 ## Drift / exceptions
-- **Probe correction:** the first harvest's [_candidates] recorded 4 files / 1 module for this
+- **Probe correction:** the first harvest recorded 4 files / 1 module for this
   signal; re-scanning finds 2 files (1 main + 1 test) — the higher prior count came from a looser probe.
   The module count (1) was correct.
 
 ## Provenance
 - Scanned at: `abc1234` · tool/query: `rg 'JaxWsProxyFactoryBean'` (2 files / 1 module)
 
-[_candidates]: _candidates.md
 [bean-config-di]: bean-config-di.md

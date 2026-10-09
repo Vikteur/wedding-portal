@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: invoice-usecase/src/main/java/com/acme/shop/invoice/usecase/GetInvoicesUseCase.java
 serves: [usecase-orchestration]
 kind: worked-example

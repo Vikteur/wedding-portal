@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: partner-gateway/src/main/java/com/acme/shop/partner/config/WebServiceConfig.java
 serves: [bean-config-di, soap-cxf-gateway]
 kind: worked-example

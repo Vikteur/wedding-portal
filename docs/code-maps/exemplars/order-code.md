@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: order-domain/src/main/java/com/acme/shop/order/domain/OrderCode.java
 serves: [domain-modeling]
 kind: worked-example

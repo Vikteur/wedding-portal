@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: invoice-usecase/src/test/java/com/acme/shop/invoice/usecase/GetInvoicesUseCaseTest.java
 serves: [usecase-bdd-spec, junit-tests, jvm-testing]
 kind: worked-example

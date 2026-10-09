@@ -1,6 +1,5 @@
 ---
 runtime: lazy
-generated-by: pattern-scanner
 source: storefront-adapter/src/main/java/com/acme/shop/storefront/adapter/event/IndexPageEventListener.java
 serves: [domain-events]
 kind: worked-example
