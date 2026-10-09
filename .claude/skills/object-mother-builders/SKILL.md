@@ -9,6 +9,9 @@ Building domain objects for tests without repeating constructor noise: a default
 tweak per test, reused across modules.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - One `Mother` per domain type with static factories returning a **valid default**; expose a fluent
   builder (`with…` methods) so a test overrides only the field it cares about.
 - Keep mothers in `src/test/java`; publish them as **test artifacts** so other modules reuse them
@@ -25,9 +28,11 @@ test-jar/test-fixtures producer convention; `testImplementation(... "testArtifac
 - Code map (mother exemplars, the test-artifact convention) → `docs/code-maps/object-mother-builders.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't duplicate fixtures per module — share the mother as a test artifact.
 - Don't bake random values a test then asserts on.
 - Don't let a mother emit an invalid object — defaults must satisfy invariants.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] A `Mother` + fluent builder per heavily-used type; valid defaults; shared via test artifacts; tests override only what matters.

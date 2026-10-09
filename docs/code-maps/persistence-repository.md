@@ -56,6 +56,18 @@ when(jpaRepository.findByRegionCode("00000"))
 ```
 Expected: any invalid persisted value fails at the adapter boundary rather than leaking a JPA entity downstream.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. Each
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [adapter/spring-data-repository](scaffold/adapter/spring-data-repository.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>SpringDataJpaRepository.java` | `package`, `Name`, `Key`, `key`, `keyType` | other query methods |
+| [adapter/jpa-repository](scaffold/adapter/jpa-repository.mustache) | `.../adapter/repository/<Name>JpaRepository.java` | `package`, `Name`, `Key`, `key`, `keyType`, `fields[name, pascal]` | writes (`save`); other port methods; nested or collection mapping; a port that is not `Optional<Name> findBy<Key>` |
+
+The base case is one `findBy<Key>` lookup. The port comes from `usecase-orchestration` (repository-port), the entity
+from `jpa-entity-mapping`, the test from `jvm-testing` (jpa-repository-test).
+
 ## Local conventions (the project facts the skill omits)
 - Package root: port interface (`*Repository`) in the `*-usecase` or `*-domain` module; the
   Spring Data adapter (`*JpaRepository` implementing the port, plus a

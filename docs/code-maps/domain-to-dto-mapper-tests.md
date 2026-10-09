@@ -61,6 +61,14 @@ var result = registryMapper.mapRegistries(input);
 ```
 Expected: the test proves the mapper ignores unknown ids instead of creating a partial domain value.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. The
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [adapter/to-dto-mapper-test](scaffold/adapter/to-dto-mapper-test.mustache) | `<capability>-adapter/src/test/java/<pkg>/adapter/controller/<Domain>ToDTOMapperTest.java` | `package`, `Domain`, `fixture`, `fields[name, example]` (`example` must equal the Mother's default) | parameterized null, empty and enum cases; the round-trip if a reverse mapper exists |
+
 ## Local conventions (the project facts the skill omits)
 - Package root: same package as the mapper under test.
 - Naming shape: `*MapperTest`, with descriptive `test<Scenario>` method names rather than

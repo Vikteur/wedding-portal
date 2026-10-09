@@ -60,6 +60,14 @@ input.get(0).getIds().add(unknownRegistry);
 ```
 Expected: unknown ids are ignored instead of leaking a placeholder into the domain.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. The
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [adapter/to-dto-mapper](scaffold/adapter/to-dto-mapper.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/controller/<Domain>ToDTOMapper.java` | `package`, `Domain`, `domain`, `record` (true when the domain type is a record), `fields[name, pascal]` | enum translation; nested and collection fields; null handling; a `toDomain` direction |
+
 ## Local conventions (the project facts the skill omits)
 - Package root: alongside the type it converts (gateway package for wire → domain, adapter/controller
   package for domain → DTO).

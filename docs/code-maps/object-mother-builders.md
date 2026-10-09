@@ -62,6 +62,19 @@ assertThat(order.getNotes()).isNull();
 ```
 Expected: scenario factories only populate what the scenario needs.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. The
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [domain/mother](scaffold/domain/mother.mustache) | `<capability>-domain/src/test/java/<pkg>/domain/<Name>Mother.java` | `package`, `Name`, `fixture`, `fields[type, name, example]` (`example` is a Java literal that satisfies the invariants) | more named scenarios; a record type (`build()` uses the record's builder, not a request); imports for field types |
+
+Example:
+```bash
+scripts/scaffold.sh domain/mother '{"package":"<pkg>","Name":"Order","fixture":"standardGadget","fields":[{"type":"String","name":"description","example":"\"Standard Gadget\""}]}' order-domain/src/test/java/<pkg path>/domain/OrderMother.java
+```
+
 ## Local conventions (the project facts the skill omits)
 - Package root: `<capability>-domain/src/test/java/.../<capability>/domain/`, exported to other
   modules' tests via the shared test-artifacts convention plugin.

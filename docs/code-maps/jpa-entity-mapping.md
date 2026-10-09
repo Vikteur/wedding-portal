@@ -57,6 +57,14 @@ assertThat(Modifier.isProtected(constructor.getModifiers())).isTrue();
 ```
 Expected: JPA can still instantiate the entity, while callers outside the package cannot use a public no-args constructor.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. The
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [adapter/jpa-entity](scaffold/adapter/jpa-entity.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>Entity.java` | `package`, `Name`, `table`, `fields[type, name, column]` | nullable columns; relations and fetch types; enums (`@Enumerated`); the migration (a STOP item: get a human decision first) |
+
 ## Local conventions (the project facts the skill omits)
 - Package root: `<module>/.../repository/<subpackage>/` — entities live alongside the repository
   that maps them, not in a separate `entity` package.

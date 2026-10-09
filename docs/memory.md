@@ -21,3 +21,12 @@ How to add an entry:
   with conflict markers left.
 - Keep each section self-contained: a union merge can interleave two sections' lines if both edit the same spot, so
   append a new section, never edit an older one (the append-only rule above).
+
+## 2026-10-09 — (no ticket) Scaffold templates render the base case
+- The base case of a domain type, Mother, factory test, controller, mapper, JPA entity/repository, port and use case is
+  rendered from `docs/code-maps/scaffold/<layer>/*.mustache` by `scripts/scaffold.sh` (pinned `mustache@4.2.0` via
+  `npx`); agents hand-write only the edge cases. Why: deterministic boilerplate over model tokens (P2). Owner
+  decision, 2026-10-09.
+- Skills say "scaffold first" generically; the template list and variables live in each leaf's `## Scaffold` section
+  (P3). The script never overwrites an existing file, and a wrong base case is fixed in the template, not the output.
+- Variables are passed as one-line inline JSON, not a heredoc: `scope-guard.sh` splits commands on newlines.

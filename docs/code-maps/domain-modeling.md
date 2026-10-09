@@ -63,6 +63,22 @@ assertThatThrownBy(() -> OrderCode.of(null, OrderCodeType.SKU))
 ```
 Expected: fails fast at construction — no half-built instance exists.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. Each
+template's header comment lists its exact variables. Fill them from the ticket's data model; the script refuses to
+overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [domain/create-request](scaffold/domain/create-request.mustache) | `<capability>-domain/src/main/java/<pkg>/domain/Create<Name>Request.java` | `package`, `Name`, `fields[type, name]` | imports for field types; an update-request variant |
+| [domain/entity](scaffold/domain/entity.mustache) | `.../domain/<Name>.java` | `package`, `basePackage`, `Name`, `fields[type, name, pascal]` | `StringValidator.notBlank` for String fields; drop `notNull` on optional fields; cross-field rules; state-change methods; imports |
+| [domain/factory](scaffold/domain/factory.mustache) | `.../domain/<Name>Factory.java` | `package`, `basePackage`, `Name`, `name` | nothing for the base case |
+| [domain/record](scaffold/domain/record.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | imports |
+| [domain/value-object](scaffold/domain/value-object.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | format or range checks beyond null; imports |
+
+An aggregate is create-request + entity + factory, rendered together. Its tests come from `jvm-testing`
+(factory-test) and `object-mother-builders` (mother).
+
 ## Local conventions (the project facts the skill omits)
 - Package root: `<capability>-domain/src/main/java/.../domain/`.
 - Naming shape: two coexisting shapes — a plain `record` for value objects with no custom

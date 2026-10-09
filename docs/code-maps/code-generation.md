@@ -61,6 +61,12 @@ plugins {
 ```
 Expected: the module publishes its test helpers once, and consumers depend on the produced `testArtifacts` configuration.
 
+## Scaffold templates (this repo)
+Besides build-time codegen, this repo keeps mustache templates for the base case of hand-maintained code in
+[scaffold/](scaffold/), rendered once by `scripts/scaffold.sh` with a pinned `mustache@4.2.0`. Unlike contract
+codegen, the output is committed and then edited for edge cases, so the script never overwrites an existing file.
+A wrong base case is fixed in the template. Each skill's leaf lists its templates in a `## Scaffold` section.
+
 ## Local conventions (the project facts the skill omits)
 - Package root: `build-logic/src/main/kotlin/shop.<name>-conventions.gradle.kts` (4
   convention plugins: `java-conventions`, `bom-conventions`, `openapi-conventions`,

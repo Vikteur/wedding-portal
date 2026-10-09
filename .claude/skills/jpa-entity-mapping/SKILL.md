@@ -9,6 +9,9 @@ Adding or changing a persisted, table-backed type — the JPA `@Entity` that the
 reads/writes.
 
 ## How
+- **Scaffold the base case first.** If the code map has a `## Scaffold` section, render each listed
+  template with the scaffold script, filling its variables from the ticket and plan. Then hand-write only
+  what that section says the template leaves out (edge cases, extra rules, imports).
 - Keep the `@Entity` in the **adapter/persistence layer**, separate from the domain aggregate; map
   between them in the repository ([[persistence-repository]]). The domain stays JPA-free.
 - Annotate explicitly: `@Entity`, `@Table`, `@Id` + generation, `@Column` (names/nullability), relations
@@ -25,10 +28,12 @@ a separate domain type with a mapper between them; schema from migrations, not a
 - Code map (entity exemplars, relation/fetch conventions) → `docs/code-maps/jpa-entity-mapping.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
+- Don't hand-write what a scaffold template generates, and don't patch around a wrong template in its output — fix the template.
 - Don't reuse a JPA `@Entity` as the domain type — keep them separate.
 - Don't rely on auto-DDL for production schema — migrations own it.
 - Don't put business logic on entities.
 
 ## Definition of done
+- [ ] Base case rendered from the code map's scaffold templates; only the edge cases are hand-written.
 - [ ] `@Entity` in the persistence layer, explicit mappings + fetch types, schema from migrations, mapped to a distinct domain type; id-based equality.
 - [ ] Verified by: a repository slice test against a container database whose schema comes from the migrations, not from auto-DDL.

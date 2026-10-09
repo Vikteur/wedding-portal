@@ -4,12 +4,13 @@
   Set authenticated when the port needs the logged-in customer (module then needs authentication-usecase).
   Target: <capability>-usecase/src/main/java/<package path>/usecase/<Name>UseCase.java
   Vars:   package, Name (verb+noun, e.g. GetInvoices), Result (domain return type),
-          Repository (port type), repository (camelCase), method (port method), authenticated (bool)
+          Repository (port type), repository (camelCase), method (port method), authenticated (bool),
+          basePackage (root holding authentication/; only needed when authenticated)
 }}
 package {{package}}.usecase;
 
 {{#authenticated}}
-import com.acme.shop.authentication.repository.AuthenticationFacade;
+import {{basePackage}}.authentication.repository.AuthenticationFacade;
 {{/authenticated}}
 import {{package}}.domain.{{Result}};
 import {{package}}.repository.{{Repository}};

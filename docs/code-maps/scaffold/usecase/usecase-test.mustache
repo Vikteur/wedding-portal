@@ -7,8 +7,8 @@
 package {{package}}.usecase;
 
 {{#authenticated}}
-import com.acme.shop.authentication.domain.AuthenticatedCustomer;
-import com.acme.shop.authentication.repository.AuthenticationFacade;
+import {{basePackage}}.authentication.domain.AuthenticatedCustomer;
+import {{basePackage}}.authentication.repository.AuthenticationFacade;
 {{/authenticated}}
 import {{package}}.domain.{{Result}}Mother;
 import {{package}}.repository.{{Repository}};

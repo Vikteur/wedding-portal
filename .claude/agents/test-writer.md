@@ -13,6 +13,7 @@ tools:
   - "Bash(git status *)"
   - "Bash(git diff *)"
   - "Bash(gh run view *)"
+  - "Bash(scripts/scaffold.sh *)"
   - "Bash(./gradlew test *)"
   - "Bash(./gradlew integrationTest *)"
   - "Bash(./gradlew check *)"

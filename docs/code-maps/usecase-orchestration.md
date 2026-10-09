@@ -56,6 +56,17 @@ new InvoiceInfo(List.of(invoice), false, List.of("Acme Springfield"));
 ```
 Expected: `unavailableResultsFromPartners()` is preserved as-is while the use case still filters summaries.
 
+## Scaffold
+Render the base case with `scripts/scaffold.sh <template> '<json on one line>' <target>` from the repo root. Each
+template's header comment lists its exact variables; the script refuses to overwrite an existing file.
+
+| Template | Target | Variables | Left to you |
+|---|---|---|---|
+| [usecase/repository-port](scaffold/usecase/repository-port.mustache) | `<capability>-usecase/src/main/java/<pkg>/repository/<Name>Repository.java` | `package`, `basePackage`, `Name`, `Result`, `method`, `authenticated` | more methods; parameters beyond the authenticated customer |
+| [usecase/usecase](scaffold/usecase/usecase.mustache) | `.../usecase/<Name>UseCase.java` | `package`, `Name`, `Result`, `Repository`, `repository`, `method`, `authenticated`, `basePackage` (when authenticated) | a request input; creation through a factory and its Notification; several ports; events; writes |
+
+The base case is a read: `execute()` returns one port call. Its test comes from `jvm-testing` (usecase-test).
+
 ## Local conventions (the project facts the skill omits)
 - Package root: `<capability>-usecase/src/main/java/com/acme/shop/<capability>/usecase/`.
 - Naming shape: `*UseCase` — there is no `@UseCase` annotation in this codebase; the class-name

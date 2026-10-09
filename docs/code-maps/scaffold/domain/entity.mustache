@@ -2,13 +2,13 @@
   Aggregate built from a Create-request and validated into a Notification (never throws).
   Exemplar: authentication-domain BlockedAudience. Pair with create-request + factory.
   Target: <capability>-domain/src/main/java/<package path>/domain/<Name>.java
-  Vars:   package, Name, fields[type, name, pascal]
+  Vars:   package, basePackage (root holding common/), Name, fields[type, name, pascal]
   Use StringValidator.notBlank instead of ObjectValidator.notNull for String fields.
 }}
 package {{package}}.domain;
 
-import com.acme.shop.common.domain.validation.Notification;
-import com.acme.shop.common.domain.validation.ObjectValidator;
+import {{basePackage}}.common.domain.validation.Notification;
+import {{basePackage}}.common.domain.validation.ObjectValidator;
 import lombok.*;
 
 import java.io.Serializable;
