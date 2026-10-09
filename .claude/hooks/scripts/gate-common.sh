@@ -110,7 +110,7 @@ gate_origin() {
 # gate_should_run <stdin-payload> — 0 when this subagentStop belongs to a code-writing role.
 #
 # `subagentStop` fires for EVERY subagent, so without this filter `analyst`, `reviewer`,
-# `design-critic`, `retro`, `pattern-scanner` … each pay a full formatter + fitness run for code they
+# `design-critic`, `retro` … each pay a full formatter + fitness run for code they
 # never wrote, and can be bounced for state they never touched. The payload carries `agent_type`
 # (Claude Code; `agentName` on Copilot), so use it.
 #

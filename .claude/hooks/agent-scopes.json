@@ -13,46 +13,6 @@
         "npm run test"
       ]
     },
-    "architecture-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/20-architecture-analyst.md",
-        "docs/layer-model.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "build-ci-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/50-build-ci-analyst.md",
-        "docs/workflow.new-feature.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "capability-mapper": {
-      "allowedFilePaths": [
-        "docs/_inventory/60-capability-mapper.md",
-        "docs/capability-register.backend.md",
-        "docs/capability-register.frontend.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
     "closeout": {
       "allowedFilePaths": [
         "docs/",
@@ -113,18 +73,6 @@
         "npm run test"
       ]
     },
-    "dependency-integration-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/70-dependency-integration-analyst.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
     "design-critic": {
       "allowedFilePaths": [
         "docs/"
@@ -149,23 +97,6 @@
         "npm",
         "scripts/worktree-consumer.sh",
         "gh run view"
-      ]
-    },
-    "onboarding-orchestrator": {
-      "allowedFilePaths": [
-        "docs/"
-      ],
-      "commandAllowlist": [
-        "scripts/scope-skills.sh",
-        "scripts/check-inventory.sh",
-        "scripts/assemble-inventory.sh",
-        "git status",
-        "git log",
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
       ]
     },
     "orchestrator": {
@@ -199,34 +130,6 @@
         "npm run test"
       ]
     },
-    "pattern-scanner": {
-      "allowedFilePaths": [
-        "docs/"
-      ],
-      "commandAllowlist": [
-        "scripts/scan-patterns.sh",
-        "git log",
-        "git rev-parse",
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "repo-structure-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/10-repo-structure-analyst.md",
-        "docs/project-profile.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
     "retro": {
       "allowedFilePaths": [
         "docs/"
@@ -247,46 +150,6 @@
         "git diff",
         "git status",
         "gh run view",
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "skill-author": {
-      "allowedFilePaths": [
-        "skills/",
-        "templates/skills.manifest.yaml",
-        "docs/",
-        ".claude/skills/"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "stack-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/30-stack-analyst.md",
-        "docs/code-maps/README.md"
-      ],
-      "commandAllowlist": [
-        "./gradlew test",
-        "./gradlew integrationTest",
-        "./gradlew check",
-        "npm test",
-        "npm run test"
-      ]
-    },
-    "test-architecture-analyst": {
-      "allowedFilePaths": [
-        "docs/_inventory/40-test-architecture-analyst.md"
-      ],
-      "commandAllowlist": [
         "./gradlew test",
         "./gradlew integrationTest",
         "./gradlew check",

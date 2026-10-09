@@ -12,8 +12,7 @@ placeholder into code. `jvm-testing` is this repo's own leaf and carries real fa
 - When a skill needs a real project fact, write it into the skill's leaf. Then drop `kind: worked-example` and the
   note, or keep the example below a clearly separate "This repo" section.
 - A decision and its reasoning go in `docs/memory.md`; the leaf links to it instead of repeating it.
-- The `pattern-scanner` agent writes and refreshes leaves from the code. It never overwrites a worked example's
-  structure with a thinner one; any agent may correct a stale line.
+- Any agent may correct a stale line. Never replace a worked example's structure with a thinner one.
 
 The examples were copied from a pseudonymized reference set, now removed. Shared material from the same copy:
 `exemplars/` (worked examples per artifact), `scaffold/` (mustache templates), [jvm-testing.worked-example] (the
