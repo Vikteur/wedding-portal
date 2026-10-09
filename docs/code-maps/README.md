@@ -15,8 +15,9 @@ placeholder into code. `jvm-testing` is this repo's own leaf and carries real fa
 - The `pattern-scanner` agent writes and refreshes leaves from the code. It never overwrites a worked example's
   structure with a thinner one; any agent may correct a stale line.
 
-The examples came from `docs/code-maps-pseudonymized/`. Shared material from the same copy: `exemplars/`
-(worked examples per artifact), `scaffold/`, `_candidates.md` and `openapi-contract.example.yaml`.
+The examples were copied from a pseudonymized reference set, now removed. Shared material from the same copy:
+`exemplars/` (worked examples per artifact), `scaffold/` (mustache templates), [jvm-testing.worked-example] (the
+worked example behind this repo's own [jvm-testing] leaf), `_candidates.md` and `openapi-contract.example.yaml`.
 
 Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-context-facade], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [failure-triage], [fhir-hapi-gateway], [flyway-migrations], [gateway-client-hygiene], [identifier-pseudonymization], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [scheduled-tasks], [security-review], [soap-cxf-gateway], [spring-boot-slice-tests], [spring-caching], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result], [wiremock-gateway-stubs].
 
@@ -43,6 +44,7 @@ Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-
 [jpa-entity-mapping]: jpa-entity-mapping.md
 [junit-tests]: junit-tests.md
 [jvm-testing]: jvm-testing.md
+[jvm-testing.worked-example]: jvm-testing.worked-example.md
 [object-mother-builders]: object-mother-builders.md
 [openapi-rest-client-codegen]: openapi-rest-client-codegen.md
 [persistence-repository]: persistence-repository.md
