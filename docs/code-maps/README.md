@@ -15,8 +15,8 @@ placeholder into code. `jvm-testing` is this repo's own leaf and carries real fa
 - Any agent may correct a stale line. Never replace a worked example's structure with a thinner one.
 
 The examples originate from a pseudonymized reference set. Shared material in this repo:
-`exemplars/` (worked examples per artifact), `scaffold/` (mustache templates), [jvm-testing.worked-example] (the
-worked example behind this repo's own [jvm-testing] leaf).
+`exemplars/` (worked examples per artifact), [jvm-testing.worked-example] (the worked example behind this repo's own
+[jvm-testing] leaf), and the mustache templates in `docs/Moustache scripts/`.
 
 Leaves: [api-first-controller], [archunit-fitness], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [flyway-migrations], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result].
 
