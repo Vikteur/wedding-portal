@@ -1,0 +1,19 @@
+{{!
+  Value object without validation beyond its types. Exemplar: account-domain CustomerAddress.
+  Target: <capability>-domain/src/main/java/<package path>/domain/<Name>.java
+  Vars:   package, Name, fields[type, name, last]  (last: true on the final field)
+  Types use triple braces so generics are not HTML-escaped.
+}}
+package {{package}}.domain;
+
+import lombok.Builder;
+
+import java.io.Serializable;
+
+@Builder
+public record {{Name}}(
+{{#fields}}
+        {{{type}}} {{name}}{{^last}},{{/last}}
+{{/fields}}
+) implements Serializable {
+}

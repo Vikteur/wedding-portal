@@ -1,0 +1,30 @@
+{{!
+  Use case: one execute() orchestrating domain + ports. Exemplar: invoice-usecase GetInvoicesUseCase.
+  No annotation needed: the capability's BeanConfig registers every class ending in "UseCase".
+  Set authenticated when the port needs the logged-in customer (module then needs authentication-usecase).
+  Target: <capability>-usecase/src/main/java/<package path>/usecase/<Name>UseCase.java
+  Vars:   package, Name (verb+noun, e.g. GetInvoices), Result (domain return type),
+          Repository (port type), repository (camelCase), method (port method), authenticated (bool)
+}}
+package {{package}}.usecase;
+
+{{#authenticated}}
+import com.acme.shop.authentication.repository.AuthenticationFacade;
+{{/authenticated}}
+import {{package}}.domain.{{Result}};
+import {{package}}.repository.{{Repository}};
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+
+@Transactional
+@RequiredArgsConstructor
+public class {{Name}}UseCase {
+    private final {{Repository}} {{repository}};
+{{#authenticated}}
+    private final AuthenticationFacade authenticationFacade;
+{{/authenticated}}
+
+    public {{Result}} execute() {
+        return {{repository}}.{{method}}({{#authenticated}}authenticationFacade.getAuthentication(){{/authenticated}});
+    }
+}

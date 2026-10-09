@@ -1,0 +1,29 @@
+{{!
+  JPA entity, separate from the domain type. Exemplar: account-adapter SalesRegionEntity.
+  A new table needs a Flyway migration: that is a STOP item, get a human decision first.
+  Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/<Name>Entity.java
+  Vars:   package, Name, table, fields[type, name, column]
+}}
+package {{package}}.adapter.repository;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Getter
+@Builder
+@Entity
+@Table(name = "{{table}}")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+public class {{Name}}Entity {
+
+    @Id
+    @Column(name = "id", columnDefinition = "serial")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+{{#fields}}
+
+    @Column(nullable = false, name = "{{column}}")
+    private {{{type}}} {{name}};
+{{/fields}}
+}
