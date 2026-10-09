@@ -25,3 +25,6 @@ How to add an entry:
 ## 2026-10-09 — union check B (throwaway, never merged)
 
 Line from branch B.
+## 2026-10-09 — union check A (throwaway, never merged)
+
+Line from branch A.
