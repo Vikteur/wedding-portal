@@ -1,6 +1,0 @@
-{
-  "capturedFrom": "rekord-api ec65ae35c182e6e25f571c76d45b15a78f183c10 built against rekord-contract f3ed000e14b40e55393bcb0990c7620ee1b36560, ./mvnw quarkus:dev on a scratch copy of the commit plus a public probe resource, GET probe that throws ApiException(503, SEARCH_UNAVAILABLE, \"Song search is offline — your text is saved exactly as typed.\"), no Accept-Language, en_US locale",
-  "status": 503,
-  "contentType": "application/json",
-  "body": "{\"detail\":{\"code\":\"SEARCH_UNAVAILABLE\",\"message\":\"Song search is offline — your text is saved exactly as typed.\"}}"
-}
