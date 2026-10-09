@@ -1,6 +1,7 @@
 {{!
   Resource spec over HTTP: @QuarkusTest + RestAssured, the use case replaced by @InjectMock
-  (it must be an @ApplicationScoped bean). Add @TestSecurity when the endpoint needs a user.
+  (it must be an @ApplicationScoped bean; @InjectMock needs the io.quarkus:quarkus-junit5-mockito test dependency).
+  Add @TestSecurity when the endpoint needs a user.
   Target: <capability>-adapter/src/test/java/<package path>/adapter/controller/<Name>ControllerTest.java
   Vars:   package, Name, UseCase, useCase, OperationId (PascalCase), Domain, fixture, path (URL), expectedJson
 }}

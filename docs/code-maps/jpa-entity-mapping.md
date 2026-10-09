@@ -63,7 +63,7 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [adapter/jpa-entity](scaffold/adapter/jpa-entity.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>Entity.java` | `package`, `Name`, `table`, `fields[type, name, column]` | nullable columns; relations and fetch types; enums (`@Enumerated`); the migration (a STOP item: get a human decision first) |
+| [adapter/jpa-entity](../Moustache%20scripts/adapter/jpa-entity.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>Entity.java` | `package`, `Name`, `table`, `fields[type, name, column]` | nullable columns; relations and fetch types; enums (`@Enumerated`); the migration (a STOP item: get a human decision first) |
 
 ## Local conventions (the project facts the skill omits)
 - Package root: `<module>/.../repository/<subpackage>/` — entities live alongside the repository

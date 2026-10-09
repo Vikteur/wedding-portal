@@ -2,17 +2,13 @@
   Use case: one execute() orchestrating domain + ports. Exemplar: invoice-usecase GetInvoicesUseCase.
   @ApplicationScoped on the class, not a CDI producer: interceptors such as @Transactional do not apply to
   produced beans.
-  Set authenticated when the port needs the logged-in customer (module then needs authentication-usecase).
+  Who the user is (session, roles, tenancy) is hand-written after rendering: it is a STOP item.
   Target: <capability>-usecase/src/main/java/<package path>/usecase/<Name>UseCase.java
   Vars:   package, Name (verb+noun, e.g. GetInvoices), Result (domain return type),
-          Repository (port type), repository (camelCase), method (port method), authenticated (bool),
-          basePackage (root holding authentication/; only needed when authenticated)
+          Repository (port type), repository (camelCase), method (port method)
 }}
 package {{package}}.usecase;
 
-{{#authenticated}}
-import {{basePackage}}.authentication.repository.AuthenticationFacade;
-{{/authenticated}}
 import {{package}}.domain.{{Result}};
 import {{package}}.repository.{{Repository}};
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,11 +20,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class {{Name}}UseCase {
     private final {{Repository}} {{repository}};
-{{#authenticated}}
-    private final AuthenticationFacade authenticationFacade;
-{{/authenticated}}
 
     public {{Result}} execute() {
-        return {{repository}}.{{method}}({{#authenticated}}authenticationFacade.getAuthentication(){{/authenticated}});
+        return {{repository}}.{{method}}();
     }
 }

@@ -62,8 +62,8 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [usecase/repository-port](scaffold/usecase/repository-port.mustache) | `<capability>-usecase/src/main/java/<pkg>/repository/<Name>Repository.java` | `package`, `basePackage`, `Name`, `Result`, `method`, `authenticated` | more methods; parameters beyond the authenticated customer |
-| [usecase/usecase](scaffold/usecase/usecase.mustache) | `.../usecase/<Name>UseCase.java` | `package`, `Name`, `Result`, `Repository`, `repository`, `method`, `authenticated`, `basePackage` (when authenticated) | a request input; creation through a factory and its Notification; several ports; events; writes |
+| [usecase/repository-port](../Moustache%20scripts/usecase/repository-port.mustache) | `<capability>-usecase/src/main/java/<pkg>/repository/<Name>Repository.java` | `package`, `Name`, `Result`, `method` | more methods; parameters; who the user is (a STOP item) |
+| [usecase/usecase](../Moustache%20scripts/usecase/usecase.mustache) | `.../usecase/<Name>UseCase.java` | `package`, `Name`, `Result`, `Repository`, `repository`, `method` | who the user is (a STOP item); a request input; creation through a factory and its Notification; several ports; events; writes |
 
 The base case is a read: `execute()` returns one port call. Its test comes from `jvm-testing` (usecase-test).
 

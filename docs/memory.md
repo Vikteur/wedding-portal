@@ -24,8 +24,8 @@ How to add an entry:
 
 ## 2026-10-09 — (no ticket) Scaffold templates render the base case
 - The base case of a domain type, Mother, factory test, controller, mapper, JPA entity/repository, port and use case is
-  rendered from `docs/code-maps/scaffold/<layer>/*.mustache` by `scripts/scaffold.sh` (pinned `mustache@4.2.0` via
-  `npx`); agents hand-write only the edge cases. Why: deterministic boilerplate over model tokens (P2). Owner
+  rendered from `docs/Moustache scripts/<layer>/*.mustache` by `scripts/scaffold.sh` (`mustache@4.2.0` pinned by the lockfile
+  `scripts/scaffold/package-lock.json`, installed with `npm ci`; the test-writer may run it only with `--test`); agents hand-write only the edge cases. Why: deterministic boilerplate over model tokens (P2). Owner
   decision, 2026-10-09.
 - Skills say "scaffold first" generically; the template list and variables live in each leaf's `## Scaffold` section
   (P3). The script never overwrites an existing file, and a wrong base case is fixed in the template, not the output.

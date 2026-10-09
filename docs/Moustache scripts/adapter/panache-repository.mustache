@@ -1,6 +1,7 @@
 {{!
   Package-private Panache repository (repository pattern, not active record); only the
-  Default<Name>Repository adapter uses it.
+  Default<Name>Repository adapter uses it. find("<key>", value) is Panache's single-field shorthand for
+  "where <key> = ?1"; needs io.quarkus:quarkus-hibernate-orm-panache.
   Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/<Name>PanacheRepository.java
   Vars:   package, Name, Key (PascalCase lookup field), key (entity field name), keyType
 }}

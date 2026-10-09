@@ -68,7 +68,7 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [domain/mother](scaffold/domain/mother.mustache) | `<capability>-domain/src/test/java/<pkg>/domain/<Name>Mother.java` | `package`, `Name`, `fixture`, `fields[type, name, example]` (`example` is a Java literal that satisfies the invariants) | more named scenarios; a record type (`build()` uses the record's builder, not a request); imports for field types |
+| [domain/mother](../Moustache%20scripts/domain/mother.mustache) | `<capability>-domain/src/test/java/<pkg>/domain/<Name>Mother.java` | `package`, `Name`, `fixture`, `fields[type, name, example]` (`example` is a Java literal that satisfies the invariants) | more named scenarios; a record type (`build()` uses the record's builder, not a request); imports for field types |
 
 Example:
 ```bash

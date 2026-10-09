@@ -1,7 +1,8 @@
 {{!
   Port implementation: delegates to the Panache repository, maps entity to domain, never leaks the entity.
   The method must match the port exactly; this shape assumes the port declares
-  Optional<Name> findBy<Key>(keyType key). Transactions stay on the use case.
+  Optional<Name> findBy<Key>(keyType key), and that the domain type has a Lombok @Builder (domain/entity
+  renders one). Transactions stay on the use case.
   Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/Default<Name>Repository.java
   Vars:   package, Name, Key, key, keyType, fields[name, pascal]
 }}

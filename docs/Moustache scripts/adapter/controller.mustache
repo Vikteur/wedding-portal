@@ -4,11 +4,14 @@
   Never hand-write the Api interface or DTO; they are generated from the contract.
   Authorization (@RolesAllowed, ownership checks) is hand-written: it is a STOP item.
   Target: <capability>-adapter/src/main/java/<package path>/adapter/controller/<Name>Controller.java
-  Vars:   package, Name, Api (generated interface), UseCase, useCase (camelCase),
+  Vars:   package, Name, Api (generated interface), apiPackage (package of the generated interface),
+          modelPackage (package of the generated DTOs), UseCase, useCase (camelCase),
           operationId (generated method), Domain (use-case result type)
 }}
 package {{package}}.adapter.controller;
 
+import {{apiPackage}}.{{Api}};
+import {{modelPackage}}.{{Domain}}DTO;
 import {{package}}.usecase.{{UseCase}};
 import lombok.RequiredArgsConstructor;
 

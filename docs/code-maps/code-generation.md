@@ -63,7 +63,8 @@ Expected: the module publishes its test helpers once, and consumers depend on th
 
 ## Scaffold templates (this repo)
 Besides build-time codegen, this repo keeps mustache templates for the base case of hand-maintained code in
-[scaffold/](scaffold/), rendered once by `scripts/scaffold.sh` with a pinned `mustache@4.2.0`. Unlike contract
+[docs/Moustache scripts/](../Moustache%20scripts/), rendered once by `scripts/scaffold.sh` with `mustache@4.2.0`
+pinned by `scripts/scaffold/package-lock.json`. Unlike contract
 codegen, the output is committed and then edited for edge cases, so the script never overwrites an existing file.
 A wrong base case is fixed in the template. Each skill's leaf lists its templates in a `## Scaffold` section.
 

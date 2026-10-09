@@ -70,11 +70,11 @@ overwrite an existing file.
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [domain/create-request](scaffold/domain/create-request.mustache) | `<capability>-domain/src/main/java/<pkg>/domain/Create<Name>Request.java` | `package`, `Name`, `fields[type, name]` | imports for field types; an update-request variant |
-| [domain/entity](scaffold/domain/entity.mustache) | `.../domain/<Name>.java` | `package`, `basePackage`, `Name`, `fields[type, name, pascal]` | `StringValidator.notBlank` for String fields; drop `notNull` on optional fields; cross-field rules; state-change methods; imports |
-| [domain/factory](scaffold/domain/factory.mustache) | `.../domain/<Name>Factory.java` | `package`, `basePackage`, `Name`, `name` | nothing for the base case |
-| [domain/record](scaffold/domain/record.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | imports |
-| [domain/value-object](scaffold/domain/value-object.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | format or range checks beyond null; imports |
+| [domain/create-request](../Moustache%20scripts/domain/create-request.mustache) | `<capability>-domain/src/main/java/<pkg>/domain/Create<Name>Request.java` | `package`, `Name`, `fields[type, name]` | imports for field types; an update-request variant |
+| [domain/entity](../Moustache%20scripts/domain/entity.mustache) | `.../domain/<Name>.java` | `package`, `basePackage`, `Name`, `fields[type, name, pascal]` | `StringValidator.notBlank` for String fields; drop `notNull` on optional fields; cross-field rules; state-change methods; imports |
+| [domain/factory](../Moustache%20scripts/domain/factory.mustache) | `.../domain/<Name>Factory.java` | `package`, `basePackage`, `Name`, `name` | nothing for the base case |
+| [domain/record](../Moustache%20scripts/domain/record.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | imports |
+| [domain/value-object](../Moustache%20scripts/domain/value-object.mustache) | `.../domain/<Name>.java` | `package`, `Name`, `fields[type, name, last]` | format or range checks beyond null; imports |
 
 An aggregate is create-request + entity + factory, rendered together. Its tests come from `jvm-testing`
 (factory-test) and `object-mother-builders` (mother).

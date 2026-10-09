@@ -67,7 +67,7 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [adapter/to-dto-mapper-test](scaffold/adapter/to-dto-mapper-test.mustache) | `<capability>-adapter/src/test/java/<pkg>/adapter/controller/<Domain>ToDTOMapperTest.java` | `package`, `Domain`, `fixture`, `fields[name, example]` (`example` must equal the Mother's default) | parameterized null, empty and enum cases; the round-trip if a reverse mapper exists |
+| [adapter/to-dto-mapper-test](../Moustache%20scripts/adapter/to-dto-mapper-test.mustache) | `<capability>-adapter/src/test/java/<pkg>/adapter/controller/<Domain>ToDTOMapperTest.java` | `package`, `Domain`, `fixture`, `fields[name, example]` (`example` must equal the Mother's default) | parameterized null, empty and enum cases; the round-trip if a reverse mapper exists |
 
 ## Local conventions (the project facts the skill omits)
 - Package root: same package as the mapper under test.
