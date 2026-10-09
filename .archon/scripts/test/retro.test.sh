@@ -11,6 +11,7 @@ pass=0; fail=0
 root="$(mktemp -d)"
 trap 'rm -rf "$root"' EXIT
 run_id=73ef1981-f10d-44d1-a4f5-5f9ca3a3d373
+export ARCHON_HOME="$root/no-archon-home"   # the real ~/.archon is never read
 
 check() { # check <name> <condition exit code>
   if [ "$2" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; echo "$out" | sed 's/^/    /'; fi
@@ -301,73 +302,20 @@ commit_split
 check "C15 without the report script: exit 0" $([ "$rc" -eq 0 ]; echo $?)
 check "C15 nothing is said about the token reports" $(! grep -q "token reports" "$root/stderr.txt"; echo $?)
 
-# C16..C21. The run folder stays outside the repo; its key files, logs and transcripts are copied to
-# docs/retro/<TASK>/runs/<id8>/ before the retro is committed (the optional 4th and later arguments are run folders).
-runfolder() { # runfolder <dir>: a run folder with key files, logs at depth, review files, retro files and dotfiles
-  local r=$1; mkdir -p "$r/review" "$r/retro" "$r/red" "$r/mutations" "$r/.archon/typed-artifacts" "$r/.archon/checkout"
-  for n in ticket plan pr-body ci-diagnosis retro-evidence other; do echo "$n" > "$r/$n.md"; done
-  echo log > "$r/green.log"; echo log > "$r/red/t1.log"; echo log > "$r/mutations/m1.log"; echo txt > "$r/red/notes.txt"
-  for n in consolidated-review fix-report scope extra; do echo "$n" > "$r/review/$n.md"; done
-  for n in transcript.jsonl runs.json meta.json commits.txt pr.json artifacts.txt other.bin; do echo "$n" > "$r/retro/$n"; done
-  echo secret > "$r/.archon/typed-artifacts/a.json"; echo secret > "$r/.archon/checkout/b"; echo hidden > "$r/.hidden.log"
-  echo 42 > "$r/.pr-number"
-}
-commit_runs() { out=$(bash "$commit" "$u" docs/retro/TASK-7.1 "$run_id" "$@" 2>&1); rc=$?; }
+# C16. retro-commit.sh runs the Archon run sweep after its own commit (the sweep itself is tested in archive-runs.test.sh);
+# RETRO_NO_ARCHIVE=1 skips it; a failing sweep is only a warning.
+mkdir -p "$root/ah/workspaces/Vikteur/weddingapp/logs"
+printf '%s
+' '{"type":"workflow_start","workflow_name":"build-feature","content":"TASK-7.1: x","ts":"2026-10-09T10:00:00Z"}' '{"type":"workflow_complete","ts":"2026-10-09T11:00:00Z"}' > "$root/ah/workspaces/Vikteur/weddingapp/logs/aaaabbbbcccc.jsonl"
 umbrella c16; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-runfolder "$root/c16/$run_id"
-commit_runs "$root/c16/$run_id"
-d="docs/retro/TASK-7.1/runs/73ef1981"
-inorigin() { git --git-dir="$root/$1/origin.git" cat-file -e "main:$2" 2>/dev/null; }
+ARCHON_HOME="$root/ah" commit_split
 check "C16 exit 0" $([ "$rc" -eq 0 ]; echo $?)
-for fl in ticket.md plan.md pr-body.md ci-diagnosis.md retro-evidence.md green.log red/t1.log mutations/m1.log   review/consolidated-review.md review/fix-report.md review/scope.md retro/transcript.jsonl retro/runs.json   retro/meta.json retro/commits.txt retro/pr.json retro/artifacts.txt; do
-  check "C16 pushed $fl" $(inorigin c16 "$d/$fl"; echo $?)
-done
-for fl in other.md red/notes.txt review/extra.md retro/other.bin .pr-number .hidden.log .archon/typed-artifacts/a.json .archon/checkout/b; do
-  check "C16 not copied: $fl" $(! inorigin c16 "$d/$fl"; echo $?)
-done
-check "C16 keeps relative paths and content" $(git --git-dir="$root/c16/origin.git" show "main:$d/red/t1.log" | grep -qx log; echo $?)
-check "C16 same retro commit" $(origin_head c16 | grep -q '^retro: TASK-7.1 .*run 73ef1981'; echo $?)
-
-# C17. A related review run is copied into its own runs/<id8>/.
-umbrella c17; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-rev=aaaabbbb-1111-2222-3333-444455556666
-runfolder "$root/c17/$run_id"; mkdir -p "$root/c17/$rev/review"; echo r > "$root/c17/$rev/review/consolidated-review.md"
-commit_runs "$root/c17/$run_id" "$root/c17/$rev"
-check "C17 exit 0" $([ "$rc" -eq 0 ]; echo $?)
-check "C17 build run copied" $(inorigin c17 "docs/retro/TASK-7.1/runs/73ef1981/plan.md"; echo $?)
-check "C17 review run copied into its own folder" $(inorigin c17 "docs/retro/TASK-7.1/runs/aaaabbbb/review/consolidated-review.md"; echo $?)
-
-# C18. Missing files and a missing run folder are skipped silently.
-umbrella c18; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-mkdir -p "$root/c18/$run_id"; echo only > "$root/c18/$run_id/plan.md"
-commit_runs "$root/c18/$run_id" "$root/c18/gone-run-folder"
-check "C18 exit 0" $([ "$rc" -eq 0 ]; echo $?)
-check "C18 the existing file is copied" $(inorigin c18 "docs/retro/TASK-7.1/runs/73ef1981/plan.md"; echo $?)
-check "C18 nothing for the missing folder" $(! git --git-dir="$root/c18/origin.git" ls-tree -r --name-only main | grep -q 'gone-run'; echo $?)
-
-# C19. A failed gate copies nothing.
-umbrella c19; lessons "$f/lessons-learned.md" 73ef1981 "What dragged"; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-runfolder "$root/c19/$run_id"
-commit_runs "$root/c19/$run_id"
-check "C19 exit non-zero" $([ "$rc" -ne 0 ]; echo $?)
-check "C19 no runs folder left" $([ ! -e "$f/runs" ]; echo $?)
-check "C19 nothing pushed" $([ "$(origin_head c19)" = base ]; echo $?)
-
-# C20. A second call with unchanged files commits nothing; a changed log is committed again.
-umbrella c20; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-runfolder "$root/c20/$run_id"
-commit_runs "$root/c20/$run_id"; first=$(git --git-dir="$root/c20/origin.git" rev-parse main)
-commit_runs "$root/c20/$run_id"
-check "C20 unchanged: nothing new pushed" $([ "$(git --git-dir="$root/c20/origin.git" rev-parse main)" = "$first" ]; echo $?)
-echo more >> "$root/c20/$run_id/green.log"
-commit_runs "$root/c20/$run_id"
-check "C20 changed log: committed again" $([ "$(git --git-dir="$root/c20/origin.git" rev-parse main)" != "$first" ]; echo $?)
-
-# C21. Without run folders the behaviour is unchanged: no runs folder.
-umbrella c21; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
-commit_run
-check "C21 exit 0" $([ "$rc" -eq 0 ]; echo $?)
-check "C21 no runs folder" $([ ! -e "$f/runs" ]; echo $?)
+check "C16 the retro is committed" $(git --git-dir="$root/c16/origin.git" log --format=%s main | grep -q '^retro: TASK-7.1 lessons'; echo $?)
+check "C16 the run is archived on top of it" $(origin_head c16 | grep -q '^retro: archive'; echo $?)
+check "C16 the last stdout line is the retro commit" $(json_ok; echo $?)
+umbrella c16b; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
+RETRO_NO_ARCHIVE=1 ARCHON_HOME="$root/ah" commit_split
+check "C16b RETRO_NO_ARCHIVE: the run is not archived" $(origin_head c16b | grep -q '^retro: TASK-7.1 lessons'; echo $?)
 
 echo "retro: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

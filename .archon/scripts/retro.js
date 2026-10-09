@@ -3,8 +3,8 @@
 //   node retro.js render <meta.json> <out.md>    the evidence a retro is written from
 //   node retro.js gate <umbrella> <folder> <id8> checks lessons-learned.md and the ADRs; exit 1 with the reasons
 //   node retro.js index <umbrella>               regenerates the index in docs/retro/README.md
-//   node retro.js archive <umbrella> <folder> <run folder>
-//                                                copies a run's key files, logs and transcripts to <folder>/runs/<id8>/
+//   node retro.js sweep <umbrella> <archon home> <runs.json>
+//                                                copies every finished Archon run to docs/retro/<TASK>/runs/<id8>/
 //   node retro.js note <get.json> <reason> <action>
 //                                                keeps why a run was stopped beside its artifacts (stop-reason.json)
 //   node retro.js pending <runs.json> <workflow> the ids of that workflow's stopped (cancelled) runs
@@ -319,14 +319,19 @@ function stopped(mode, getFile, transcript, runsFile, home) {
   console.log(dir);
 }
 
-// ---------- archive a run folder ----------
-// The Archon run folder stays outside the repo and temporary; after the merge its key files, every log and the retro
-// transcripts are kept per ticket in <folder>/runs/<id8>/. Dotfiles and dot-folders (.archon/..., .pr-number) are never
-// copied, and a file that is not there is skipped silently.
+// ---------- archive every finished Archon run ----------
+// The Archon run folders stay outside the repo and temporary. The sweep copies each finished run's key files, logs and
+// transcript to docs/retro/<TASK>/runs/<id8>/ (docs/retro/unlinked/runs/<id8>/ when no ticket is found), with a run.json
+// manifest. Dotfiles and dot-folders (.archon/..., .pr-number) are never copied; a file that is not there is skipped.
+const { spawnSync } = require('child_process');
 const RUN_FILES = ['ticket.md', 'plan.md', 'pr-body.md', 'ci-diagnosis.md', 'retro-evidence.md',
   'review/consolidated-review.md', 'review/fix-report.md', 'review/scope.md',
   'retro/transcript.jsonl', 'retro/runs.json', 'retro/meta.json', 'retro/commits.txt', 'retro/pr.json',
   'retro/artifacts.txt'];
+const TERMINAL = { workflow_complete: 'completed', workflow_error: 'failed' };
+const TASK_ID = /task-[0-9]+(?:\.[0-9]+)*/i;
+const OWNER = 'Vikteur';
+
 function logsUnder(root, rel = '') {
   let entries;
   try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch { return []; }
@@ -335,24 +340,125 @@ function logsUnder(root, rel = '') {
     return e.isDirectory() ? logsUnder(root, r) : e.isFile() && e.name.endsWith('.log') ? [r] : [];
   });
 }
-function archive(home, folder, runDir) {
-  if (!fs.existsSync(runDir) || !fs.statSync(runDir).isDirectory()) return;
-  const target = path.join(home, folder, 'runs', path.basename(runDir).slice(0, 8));
-  const files = [...new Set([...RUN_FILES, ...logsUnder(runDir)])];
-  for (const f of files) {
+function copyRunFiles(runDir, target) {
+  for (const f of new Set([...RUN_FILES, ...logsUnder(runDir)])) {
     const src = path.join(runDir, f);
     if (!fs.existsSync(src) || !fs.statSync(src).isFile()) continue;
     fs.mkdirSync(path.dirname(path.join(target, f)), { recursive: true });
     fs.copyFileSync(src, path.join(target, f));
   }
 }
+// bash runs the command so that a stub or a shim on PATH is found the same way the scripts find it.
+function viaBash(cmd, args) {
+  const r = spawnSync('bash', ['-c', 'exec "$@"', 'x', cmd, ...args], { encoding: 'utf8' });
+  return r.status === 0 ? r.stdout : null;
+}
+// What the log says: workflow_start (name, request, start) and the last terminal event not followed by a resume.
+function readLog(file) {
+  const events = (read(file) || '').split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(Boolean);
+  const start = events.find(e => e.type === 'workflow_start') || {};
+  let state = null, ended = null;
+  for (const e of events) {
+    const t = TERMINAL[e.type] || (/cancel|abandon/.test(e.type || '') ? 'cancelled' : null);
+    if (t) { state = t; ended = e.ts || null; }
+    else if (e.type === 'workflow_resume') { state = null; ended = null; }
+  }
+  return { workflow: start.workflow_name || null, request: start.content || '', started: start.ts || null, state, ended };
+}
+function taskOf(s) { const m = TASK_ID.exec(s || ''); return m ? m[0].toUpperCase() : null; }
+function prNumber(runDir, request) {
+  const f = (read(path.join(runDir, '.pr-number')) || '').trim();
+  if (/^[0-9]+$/.test(f)) return f;
+  const m = /(?:\bPR|pull request|pull)\s*#?([0-9]+)/i.exec(request) || /\/pull\/([0-9]+)/.exec(request)
+    || /#([0-9]+)/.exec(request);
+  return m ? m[1] : null;
+}
+// The ticket of a run: ticket.md, else its pull request (branch, title, body), else its request, else none.
+function link(repo, runDir, request) {
+  const pr = prNumber(runDir, request);
+  const ticket = taskOf(read(path.join(runDir, 'ticket.md')));
+  if (ticket) return { ticket, rule: 'ticket.md', pr };
+  if (pr) {
+    const out = viaBash('gh', ['pr', 'view', pr, '--repo', `${OWNER}/${repo}`, '--json', 'headRefName,title,body']);
+    let d = null; try { d = out && JSON.parse(out); } catch { /* not JSON */ }
+    const t = d && (taskOf(d.headRefName) || taskOf(d.title) || taskOf(d.body));
+    if (t) return { ticket: t, rule: 'pr', pr };
+  }
+  const fromRequest = taskOf(request);
+  if (fromRequest) return { ticket: fromRequest, rule: 'request', pr };
+  return { ticket: null, rule: 'unlinked', pr };
+}
+// Where this run is archived already: its folder under docs/retro and its manifest, or null.
+function archivedAt(home, id8) {
+  const base = path.join(home, 'docs', 'retro');
+  let names;
+  try { names = fs.readdirSync(base); } catch { return null; }
+  for (const n of names) {
+    const manifest = json(path.join(base, n, 'runs', id8, 'run.json'));
+    if (manifest) return { dir: `docs/retro/${n}/runs/${id8}`, name: n, manifest };
+  }
+  return null;
+}
+// Prints {"archived":[...],"paths":[...]} for the shell to commit: paths are every folder written or removed.
+function sweep(home, archonHome, runsFile) {
+  const archonState = new Map(runList(json(runsFile)).map(r => [r.id, r.status]));
+  const attrFile = path.join(home, 'docs', 'tokenomics', 'attribution.json');
+  const attribution = json(attrFile) || {};
+  let attributionChanged = false;
+  const archived = [], paths = [];
+  const base = path.join(archonHome, 'workspaces', OWNER);
+  let repos = [];
+  try { repos = fs.readdirSync(base, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort(); } catch { /* none */ }
+  for (const repo of repos) {
+    const logs = path.join(base, repo, 'logs');
+    const arts = path.join(base, repo, 'artifacts', 'runs');
+    const ids = new Set();
+    try { for (const f of fs.readdirSync(logs)) if (f.endsWith('.jsonl')) ids.add(f.slice(0, -6)); } catch { /* none */ }
+    try { for (const f of fs.readdirSync(arts, { withFileTypes: true })) if (f.isDirectory()) ids.add(f.name); } catch { /* none */ }
+    for (const id of [...ids].sort()) {
+      const logFile = path.join(logs, `${id}.jsonl`);
+      const info = fs.existsSync(logFile) ? readLog(logFile)
+        : { workflow: null, request: '', started: null, state: null, ended: null };
+      const status = archonState.get(id);
+      let state = info.state;
+      if (status === 'running') state = null;
+      else if (!state && ['completed', 'failed', 'cancelled'].includes(status)) state = status;
+      if (!state) continue; // not finished (or unknown): the next sweep looks again
+      const id8 = id.slice(0, 8);
+      const old = archivedAt(home, id8);
+      const same = old && old.manifest.run === id && old.manifest.state === state;
+      if (same && old.name !== 'unlinked') continue; // archived in this state, and linked: nothing to do
+      const runDir = path.join(arts, id);
+      const l = link(repo, runDir, info.request);
+      const name = l.ticket || 'unlinked';
+      if (same && old.name === name) continue;
+      const rel = `docs/retro/${name}/runs/${id8}`;
+      const target = path.join(home, rel);
+      if (old && old.dir !== rel) { fs.rmSync(path.join(home, old.dir), { recursive: true, force: true }); paths.push(old.dir); }
+      if (fs.existsSync(runDir)) copyRunFiles(runDir, target);
+      fs.mkdirSync(target, { recursive: true });
+      if (fs.existsSync(logFile)) fs.copyFileSync(logFile, path.join(target, 'transcript.jsonl'));
+      const tokenReport = l.ticket ? `docs/tokenomics/ticket-token-reports/${l.ticket}.md` : null;
+      fs.writeFileSync(path.join(target, 'run.json'), JSON.stringify({
+        run: id, repo, workflow: info.workflow, started: info.started, ended: info.ended, state,
+        ticket: l.ticket, pr: l.pr ? Number(l.pr) : null, rule: l.rule, tokenReport }, null, 2) + '\n');
+      if (l.rule === 'pr' && !(id in attribution)) { attribution[id] = l.ticket; attributionChanged = true; }
+      paths.push(rel);
+      archived.push({ run: id, dir: rel, ticket: l.ticket, rule: l.rule, state });
+    }
+  }
+  if (attributionChanged) fs.mkdirSync(path.dirname(attrFile), { recursive: true });
+  if (attributionChanged) fs.writeFileSync(attrFile, JSON.stringify(attribution, null, 2) + '\n');
+  console.log(JSON.stringify({ archived, paths }));
+}
 
 const [cmd, ...args] = process.argv.slice(2);
 if (cmd === 'render') render(...args);
 else if (cmd === 'gate') gate(...args);
 else if (cmd === 'index') index(...args);
-else if (cmd === 'archive') archive(...args);
+else if (cmd === 'sweep') sweep(...args);
 else if (cmd === 'note') note(...args);
 else if (cmd === 'pending') pending(...args);
 else if (cmd === 'stopped') stopped(...args);
-else { console.error('usage: retro.js render|gate|index|archive|note|pending|stopped ...'); process.exit(2); }
+else { console.error('usage: retro.js render|gate|index|sweep|note|pending|stopped ...'); process.exit(2); }
