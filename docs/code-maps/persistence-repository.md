@@ -62,11 +62,12 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [adapter/spring-data-repository](scaffold/adapter/spring-data-repository.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>SpringDataJpaRepository.java` | `package`, `Name`, `Key`, `key`, `keyType` | other query methods |
-| [adapter/jpa-repository](scaffold/adapter/jpa-repository.mustache) | `.../adapter/repository/<Name>JpaRepository.java` | `package`, `Name`, `Key`, `key`, `keyType`, `fields[name, pascal]` | writes (`save`); other port methods; nested or collection mapping; a port that is not `Optional<Name> findBy<Key>` |
+| [adapter/panache-repository](scaffold/adapter/panache-repository.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/repository/<Name>PanacheRepository.java` | `package`, `Name`, `Key`, `key`, `keyType` | other query methods |
+| [adapter/default-repository](scaffold/adapter/default-repository.mustache) | `.../adapter/repository/Default<Name>Repository.java` | `package`, `Name`, `Key`, `key`, `keyType`, `fields[name, pascal]` | writes (`persist`); other port methods; nested or collection mapping; a port that is not `Optional<Name> findBy<Key>` |
 
 The base case is one `findBy<Key>` lookup. The port comes from `usecase-orchestration` (repository-port), the entity
-from `jpa-entity-mapping`, the test from `jvm-testing` (jpa-repository-test).
+from `jpa-entity-mapping`, the test from `jvm-testing` (default-repository-test). The templates follow the skill's
+Quarkus Panache shape; the worked example above is Spring Data, so take only its structure.
 
 ## Local conventions (the project facts the skill omits)
 - Package root: port interface (`*Repository`) in the `*-usecase` or `*-domain` module; the

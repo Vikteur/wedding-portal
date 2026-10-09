@@ -1,6 +1,7 @@
 {{!
   Use case: one execute() orchestrating domain + ports. Exemplar: invoice-usecase GetInvoicesUseCase.
-  No annotation needed: the capability's BeanConfig registers every class ending in "UseCase".
+  @ApplicationScoped on the class, not a CDI producer: interceptors such as @Transactional do not apply to
+  produced beans.
   Set authenticated when the port needs the logged-in customer (module then needs authentication-usecase).
   Target: <capability>-usecase/src/main/java/<package path>/usecase/<Name>UseCase.java
   Vars:   package, Name (verb+noun, e.g. GetInvoices), Result (domain return type),
@@ -14,9 +15,11 @@ import {{basePackage}}.authentication.repository.AuthenticationFacade;
 {{/authenticated}}
 import {{package}}.domain.{{Result}};
 import {{package}}.repository.{{Repository}};
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
+@ApplicationScoped
 @Transactional
 @RequiredArgsConstructor
 public class {{Name}}UseCase {

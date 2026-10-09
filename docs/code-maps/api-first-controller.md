@@ -63,7 +63,7 @@ template's header comment lists its exact variables; the script refuses to overw
 
 | Template | Target | Variables | Left to you |
 |---|---|---|---|
-| [adapter/controller](scaffold/adapter/controller.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/controller/<Name>Controller.java` | `package`, `Name`, `Api`, `UseCase`, `useCase`, `operationId`, `Domain`, optional `topic` (all from the contract's tag and operation) | path/query parameters and request bodies; non-200 responses; more operations on the same `Api`; list results |
+| [adapter/controller](scaffold/adapter/controller.mustache) | `<capability>-adapter/src/main/java/<pkg>/adapter/controller/<Name>Controller.java` | `package`, `Name`, `Api`, `UseCase`, `useCase`, `operationId`, `Domain` (all from the contract's tag and operation) | path/query parameters and request bodies; non-200 responses; more operations on the same `Api`; list results; authorization (a STOP item) |
 
 The mapper it calls comes from `domain-dto-mapper`; its test from `jvm-testing` (controller-test).
 

@@ -1,0 +1,36 @@
+{{!
+  Port implementation: delegates to the Panache repository, maps entity to domain, never leaks the entity.
+  The method must match the port exactly; this shape assumes the port declares
+  Optional<Name> findBy<Key>(keyType key). Transactions stay on the use case.
+  Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/Default<Name>Repository.java
+  Vars:   package, Name, Key, key, keyType, fields[name, pascal]
+}}
+package {{package}}.adapter.repository;
+
+import {{package}}.domain.{{Name}};
+import {{package}}.repository.{{Name}}Repository;
+import jakarta.enterprise.context.ApplicationScoped;
+import lombok.RequiredArgsConstructor;
+
+import java.util.Optional;
+
+@ApplicationScoped
+@RequiredArgsConstructor
+public class Default{{Name}}Repository implements {{Name}}Repository {
+
+    private final {{Name}}PanacheRepository panacheRepository;
+
+    @Override
+    public Optional<{{Name}}> findBy{{Key}}({{{keyType}}} {{key}}) {
+        return panacheRepository.findBy{{Key}}({{key}})
+                .map(Default{{Name}}Repository::toDomain);
+    }
+
+    private static {{Name}} toDomain({{Name}}Entity entity) {
+        return {{Name}}.builder()
+{{#fields}}
+                .{{name}}(entity.get{{pascal}}())
+{{/fields}}
+                .build();
+    }
+}

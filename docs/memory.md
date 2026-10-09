@@ -30,3 +30,11 @@ How to add an entry:
 - Skills say "scaffold first" generically; the template list and variables live in each leaf's `## Scaffold` section
   (P3). The script never overwrites an existing file, and a wrong base case is fixed in the template, not the output.
 - Variables are passed as one-line inline JSON, not a heredoc: `scope-guard.sh` splits commands on newlines.
+
+## 2026-10-09 — (no ticket) Scaffold templates target Quarkus
+- The adapter templates were ported from Spring to Quarkus: a REST resource implementing the generated JAX-RS
+  interface, `Default<Name>Repository` over a package-private `PanacheRepository`, `@QuarkusTest` + `@InjectMock`
+  controller tests and a Dev Services repository test. Why: the skills (`bean-config-di`, `persistence-repository`,
+  `testcontainers`) target Quarkus; the worked-example leaves are Spring and give structure only. Owner decision.
+- Use cases are `@ApplicationScoped` classes, not produced beans: CDI interceptors (`@Transactional`) do not apply to
+  beans from a producer method. Factories stay framework-free and are produced by the bean config.

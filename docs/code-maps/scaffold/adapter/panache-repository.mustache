@@ -1,0 +1,20 @@
+{{!
+  Package-private Panache repository (repository pattern, not active record); only the
+  Default<Name>Repository adapter uses it.
+  Target: <capability>-adapter/src/main/java/<package path>/adapter/repository/<Name>PanacheRepository.java
+  Vars:   package, Name, Key (PascalCase lookup field), key (entity field name), keyType
+}}
+package {{package}}.adapter.repository;
+
+import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+
+import java.util.Optional;
+
+@ApplicationScoped
+class {{Name}}PanacheRepository implements PanacheRepository<{{Name}}Entity> {
+
+    Optional<{{Name}}Entity> findBy{{Key}}({{{keyType}}} {{key}}) {
+        return find("{{key}}", {{key}}).firstResultOptional();
+    }
+}
