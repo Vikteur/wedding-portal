@@ -21,3 +21,7 @@ How to add an entry:
   with conflict markers left.
 - Keep each section self-contained: a union merge can interleave two sections' lines if both edit the same spot, so
   append a new section, never edit an older one (the append-only rule above).
+
+## 2026-10-09 — union check A (throwaway, never merged)
+
+Line from branch A.
