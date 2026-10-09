@@ -11,3 +11,13 @@ How to add an entry:
   skill needs goes in `docs/code-maps/<skill>.md`.
 
 <!-- No decisions yet: the code was removed by TASK-47 (2026-10-09) to start over. -->
+
+## 2026-10-09 — TASK-45 docs/memory.md merges as a union
+- `docs/memory.md` has `merge=union` in `.gitattributes`: parallel tickets each append a section at the end, and a
+  union merge keeps both sides without a hand resolution. Why: append conflicts on this file failed 14 of 18 runs
+  before the restart (umbrella `docs/archon/retro-synthesis.md`, row 2). Owner decision, 2026-10-09.
+- GitHub's mergeability check may not honour the union driver, so `.archon/scripts/merge-main.sh` merges `main` into
+  the branch locally before `open-pr`, and again when `ci-by-sha.sh` answers `conflict`. It refuses to push a tree
+  with conflict markers left.
+- Keep each section self-contained: a union merge can interleave two sections' lines if both edit the same spot, so
+  append a new section, never edit an older one (the append-only rule above).

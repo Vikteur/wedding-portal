@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# commit-msg hook: the first line must be a Conventional Commit, `type(scope)!?: subject`, with type one of
+# feat fix docs test refactor chore build ci perf style revert. Also accepted, because this repo's history uses them:
+# `Merge ...` and `Revert ...` (git's own), `retro: ...`, `backlog: ...` / `backlog(...): ...`, `follow-ups: ...`, and
+# autosquash `fixup! ` / `squash! ` prefixes. Switch on with: git config core.hooksPath .githooks
+set -uo pipefail
+
+msg_file=${1:?usage: commit-msg <message-file>}
+# First line that is not a comment (git's template lines start with #).
+subject="$(grep -v '^#' "$msg_file" | head -n 1 | tr -d '\r')"
+
+types='feat|fix|docs|test|refactor|chore|build|ci|perf|style|revert'
+others='retro|backlog|follow-ups'
+rest='(\([^)]+\))?!?: [^[:space:]].*'
+re="^((fixup|squash)! )?(($types|$others)$rest|Merge .*|Revert .*)$"
+
+if [[ "$subject" =~ $re ]]; then exit 0; fi
+
+cat >&2 <<EOF
+commit-msg: refused, the first line is not a Conventional Commit:
+  $subject
+
+Expected:  type(scope): subject      (scope optional; type!: for a breaking change)
+Types:     feat fix docs test refactor chore build ci perf style revert
+Also ok:   Merge ...  Revert ...  retro: ...  backlog: ...  backlog(...): ...  follow-ups: ...
+EOF
+exit 1

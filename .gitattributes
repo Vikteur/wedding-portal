@@ -9,3 +9,9 @@ gradlew text eol=lf
 *.properties text eol=lf
 # Git hooks have no .sh extension and run under bash: no CRLF.
 .githooks/* text eol=lf
+# JSON fixtures are hashed and Markdown is diffed and merged by scripts: no CRLF (three autocrlf traps in the retros).
+*.json text eol=lf
+*.md text eol=lf
+# Every ticket appends a section to the decision record; parallel branches must merge without a hand resolution
+# (owner decision 2026-10-09, TASK-45). A union merge keeps both sides' lines.
+docs/memory.md merge=union

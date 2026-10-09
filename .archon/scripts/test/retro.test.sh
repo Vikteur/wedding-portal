@@ -265,5 +265,41 @@ broken C11 "a stopped run without Why it stopped"
 umbrella C12; short_lessons "$f/lessons-learned.md" merged
 broken C12 "a merged run with only the short section"
 
+# C13..C15. The token report script: called with the umbrella dir when it exists, its failure is only a warning, and the
+# JSON line stays the last line of stdout.
+reports_stub() { # reports_stub <exit code>: a commit-reports.sh stub that records its arguments
+  mkdir -p "$u/scripts/tokenomics"
+  cat > "$u/scripts/tokenomics/commit-reports.sh" <<STUB
+#!/usr/bin/env bash
+echo "\$*" > "$(dirname "$u")/reports.args"
+echo '{"commit":"abc"}'
+exit $1
+STUB
+  chmod +x "$u/scripts/tokenomics/commit-reports.sh"
+}
+commit_split() { # like commit_run, but keeps stdout apart: sets out (stdout and stderr), json (stdout), rc
+  json=$(bash "$commit" "$u" docs/retro/TASK-7.1 "$run_id" 2> "$root/stderr.txt"); rc=$?
+  out="$json
+$(cat "$root/stderr.txt")"
+}
+json_ok() { echo "$json" | tail -1 | grep -qE '^\{"commit":"[0-9a-f]{7,}"\}$'; }
+umbrella c13; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"; reports_stub 0
+commit_split
+check "C13 exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "C13 report script called with the umbrella dir" $([ "$(cat "$(dirname "$u")/reports.args")" = "$u" ]; echo $?)
+check "C13 the last stdout line is the retro commit" $(json_ok; echo $?)
+check "C13 stdout has one line" $([ "$(echo "$json" | wc -l)" -eq 1 ]; echo $?)
+umbrella c14; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"; reports_stub 1
+commit_split
+check "C14 a failing report script: exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "C14 report script was called" $([ -f "$(dirname "$u")/reports.args" ]; echo $?)
+check "C14 warning on stderr" $(grep -q "token reports were not committed" "$root/stderr.txt"; echo $?)
+check "C14 the retro commit is still reported" $(json_ok; echo $?)
+check "C14 the retro was pushed" $(origin_head c14 | grep -q '^retro: TASK-7.1'; echo $?)
+umbrella c15; lessons "$f/lessons-learned.md" 73ef1981; adr "$f/adr/ADR-01-use-the-port.md" "ADR-01: Use the port"
+commit_split
+check "C15 without the report script: exit 0" $([ "$rc" -eq 0 ]; echo $?)
+check "C15 nothing is said about the token reports" $(! grep -q "token reports" "$root/stderr.txt"; echo $?)
+
 echo "retro: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

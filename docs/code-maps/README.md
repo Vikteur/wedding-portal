@@ -9,4 +9,6 @@ folder under `.claude/skills/`. The skill says *how* and holds no project nouns;
 - A decision and its reasoning go in `docs/memory.md`; the leaf links to it instead of repeating it.
 - The `pattern-scanner` agent writes and refreshes leaves from the code; any agent may correct a stale line.
 
-No leaves yet: the code was removed by TASK-47 (2026-10-09) to start over.
+Leaves: [jvm-testing].
+
+[jvm-testing]: jvm-testing.md
