@@ -4,8 +4,6 @@ description: A pure, field-explicit mapper between domain and transport DTO. Use
 ---
 # Domain-to-DTO mapper
 
-> **Generic "how" only.** No concrete mapper/DTO names in the body — those live in the code-map.
-
 ## When to use
 Crossing the boundary between a domain object and a generated/transport DTO — in a controller
 (domain → response DTO) or a gateway (wire DTO → domain).
@@ -23,7 +21,7 @@ Classes named `*DomainToDTOMapper` / `*Mapper` in the adapter layer with `toDto`
 methods; no framework/IO deps; a sibling `*MapperTest`.
 
 ## Project specifics → see docs
-- Code map (mapper exemplars, hand-coded vs generated DTOs) → `docs/code-maps/domain-dto-mapper.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (mapper exemplars, hand-coded vs generated DTOs) → `docs/code-maps/domain-dto-mapper.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't map inline in controllers/gateways — use the dedicated mapper.

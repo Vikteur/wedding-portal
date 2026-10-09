@@ -4,9 +4,6 @@ description: Keep dependencies pointing inward — domain, use-cases, adapters. 
 ---
 # Clean Architecture
 
-> **Generic "how" only.** Zero project nouns. The concrete layer set, package roots and module map
-> live in the code-map / `docs/layer-model.md`, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Placing new code in a layer, slicing a feature across layers, or reviewing dependency direction.
 The one shared structural skill every code-writing agent (and the analyst) carries. It decides *where*
@@ -28,7 +25,7 @@ code goes; how the unit itself is written is [[clean-code]].
 - Architecture-fitness tests present (e.g. ArchUnit) asserting dependency direction.
 
 ## Project specifics → see docs
-- Code map (layer→package mapping, module list, exemplars) → `docs/code-maps/clean-architecture.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (layer→package mapping, module list, exemplars) → `docs/code-maps/clean-architecture.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 - The project's layer set & per-layer plan files → `docs/layer-model.md`
 
 ## Guardrails (what NOT to do)

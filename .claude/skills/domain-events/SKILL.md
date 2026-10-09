@@ -4,9 +4,6 @@ description: Raise framework-free domain events in the domain and publish them f
 ---
 # Domain Events
 
-> **Generic "how" only.** Zero project nouns. Concrete event types, the publisher port, its adapter
-> and the listeners live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Adding a side-effect that should fire when a domain fact occurs (indexing, notifying, projecting,
 cache invalidation) without coupling the originating logic to that side-effect or to the framework.
@@ -36,7 +33,7 @@ cache invalidation) without coupling the originating logic to that side-effect o
 - Use-cases depending on the publisher port, never on a framework event type.
 
 ## Project specifics → see docs
-- Code map (marker interface, event types, publisher port + adapter, observers, exemplars) → `docs/code-maps/domain-events.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (marker interface, event types, publisher port + adapter, observers, exemplars) → `docs/code-maps/domain-events.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't make domain events extend or import a framework event type — keep the marker framework-free.

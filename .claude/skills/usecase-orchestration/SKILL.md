@@ -4,8 +4,6 @@ description: Transactional use-case over domain and ports, free of web and persi
 ---
 # Use-case orchestration
 
-> **Generic "how" only.** No concrete use-case/repository names in the body — those live in the code-map.
-
 ## When to use
 Implementing application logic that coordinates domain objects and repository ports for one business
 operation — the layer between controllers and the domain.
@@ -25,7 +23,7 @@ Classes named `*UseCase`/`*Service` in a use-case module with `@Transactional`; 
 repository/gateway interfaces; request/response value objects; no web/JPA imports.
 
 ## Project specifics → see docs
-- Code map (use-case exemplars, transaction + port conventions) → `docs/code-maps/usecase-orchestration.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (use-case exemplars, transaction + port conventions) → `docs/code-maps/usecase-orchestration.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't accept/return web DTOs or persistence entities — use request/response + domain types.

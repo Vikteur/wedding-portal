@@ -39,7 +39,7 @@ A **verdict + the trade-offs + open risks** (and named assumptions / one-way doo
 The team/analyst turns an accepted design into a Declared-Files plan.
 
 ## Project specifics → see docs
-- ADR location, architecture constraints, prior decisions → `docs/code-maps/design-review.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- ADR location, architecture constraints, prior decisions → `docs/code-maps/design-review.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Ground Rules
 - The critique method is the `design-review` skill (assumptions, ≥2 alternatives, architecture fit,

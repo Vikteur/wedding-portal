@@ -4,9 +4,6 @@ description: Small focused units, intention names, no duplication, guard clauses
 ---
 # Clean Code
 
-> **Generic "how" only.** Zero project nouns. Project facts (style config, naming conventions, where
-> exemplars live) go in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Any time you add or change code, and during review. The baseline every other skill assumes: it governs
 how a unit is written. *Where* that unit belongs is a placement question — [[clean-architecture]]; the
@@ -28,7 +25,7 @@ idiom it is written in is the side's language skill (`java` / `typescript`, whic
 - Test or review tooling that flags complexity/duplication (cyclomatic, copy-paste detectors).
 
 ## Project specifics → see docs
-- Code map (style config, naming, exemplars, anti-patterns to avoid) → `docs/code-maps/clean-code.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (style config, naming, exemplars, anti-patterns to avoid) → `docs/code-maps/clean-code.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't add comments to explain unclear code — rename/restructure instead.

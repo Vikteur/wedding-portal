@@ -93,7 +93,9 @@ green build: a dropped column and a leaked personal identifier both pass CI.
   has one home. *(plain references on purpose — linked files eager-load into every context; open them on demand)*
 - Decisions already taken, and approaches already tried and abandoned → `docs/memory.md` — read it before
   proposing a change that reverses one; the reasoning is not in the code
-- The project facts a skill needs, one leaf per skill → `docs/code-maps/<skill>.md` (see its `README.md`)
+- How a skill is applied, one leaf per skill → `docs/code-maps/<skill>.md` (see its `README.md`). A leaf marked
+  `kind: worked-example` shows the right structure with pseudonymized names: follow the structure, map every name to
+  this repo's own, never copy a placeholder
 - Tickets and their specs, owner decisions (`docs/rewrite/STATUS.md`), retros and follow-ups live in the umbrella
   repo `weddingapp` — not in this repo.
 

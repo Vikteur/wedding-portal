@@ -4,13 +4,6 @@ description: Accumulate validation errors in a Notification result instead of th
 ---
 # Validation Notification (collected-errors result)
 
-> **Generic "how" only.** Zero project nouns. The result type's location, its factory conventions
-> and exemplars go in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
->
-> Not to be confused with *delivery* notifications — sending messages to users over channels, a
-> separate concern (the `notification-pattern` skill, in bundles that carry it); this one is the GoF
-> *Notification* validation pattern: a Result-style object that collects rule violations.
-
 ## When to use
 Validating anything that can fail in several independent ways at once — domain factories and
 create-requests, use-case argument validation, per-item checks in batch/scheduled jobs — where the

@@ -4,8 +4,6 @@ description: Fluent Mother and builder classes shared as test artifacts. Use whe
 ---
 # Object-mother test-data builders
 
-> **Generic "how" only.** No concrete entity/module names in the body — those live in the code-map.
-
 ## When to use
 Building domain objects for tests without repeating constructor noise: a default-valid instance you can
 tweak per test, reused across modules.
@@ -24,7 +22,7 @@ Classes named `*Mother` / `*TestData` with static factory methods + an inner flu
 test-jar/test-fixtures producer convention; `testImplementation(... "testArtifacts")` style consumption.
 
 ## Project specifics → see docs
-- Code map (mother exemplars, the test-artifact convention) → `docs/code-maps/object-mother-builders.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (mother exemplars, the test-artifact convention) → `docs/code-maps/object-mother-builders.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't duplicate fixtures per module — share the mother as a test artifact.

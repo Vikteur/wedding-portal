@@ -3,9 +3,6 @@ name: jvm-testing
 description: JVM tests as behavior specs — Given-When-Then, JUnit 5 and AssertJ. Use when writing or reviewing tests.
 ---
 # JVM testing
-> **Generic "how" only.** Zero project nouns (no package roots, module names, tag names, fixture classes). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
->
-> Absorbs the former `junit-tests` skill — one skill for JVM test discipline plus its JUnit 5 idiom.
 
 ## When to use
 Writing or reviewing any test on the JVM: red tests before implementation, unit tests for a class's
@@ -21,7 +18,7 @@ test-writer's default; developers use it to keep tests green and meaningful.
 - **Parameterize repetitive cases** (`@ParameterizedTest`) instead of copy-pasting near-identical tests.
 - **Make tests deterministic** — no real clock/network/random; inject and fix them. Cover edge cases and failure paths, not just the happy path.
 - **Keep units fast and context-free** — no framework boot, no container, no I/O. A unit test is plain construction + call.
-- **Split the slow set** — anything needing a framework context, DB, or network is an integration test in a separate, separately-run set — not mixed with units. That set is where [[spring-boot-slice-tests]] and [[testcontainers]] apply.
+- **Split the slow set** — anything needing a framework context, DB, or network is an integration test in a separate, separately-run set — not mixed with units. Use the project's integration-test setup for that set.
 
 ## Pattern signals (discovery cues — how the scanner recognizes this in any codebase)
 - A test source tree mirroring `src/main`; `@Test`/`@ParameterizedTest`/`@Nested` (JUnit 5 `org.junit.jupiter`).
@@ -30,7 +27,7 @@ test-writer's default; developers use it to keep tests green and meaningful.
 - A separate slow/integration set (distinct source set, suffix, or tag) with its own build task.
 
 ## Project specifics → see docs
-- Code map (test layout, helpers/fixtures, naming, exemplars, generated) → `docs/code-maps/jvm-testing.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (test layout, helpers/fixtures, naming, exemplars, generated) → `docs/code-maps/jvm-testing.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't mock internal collaborators or the class under test — mock only its owned ports.

@@ -4,8 +4,6 @@ description: Parameterized mapper tests fed by object-mothers, asserting field b
 ---
 # Domain-to-DTO mapper tests
 
-> **Generic "how" only.** No concrete mapper/DTO names in the body — those live in the code-map.
-
 ## When to use
 Verifying a mapper that converts a domain object to a transport DTO (or back): every field carried,
 nulls/optionals/collections handled, enums translated.
@@ -22,7 +20,7 @@ Test classes named `*DomainToDTOMapperTest` / `*MapperTest`; `@ParameterizedTest
 inputs from `*Mother`; per-field `assertThat(dto.getX()).isEqualTo(...)`.
 
 ## Project specifics → see docs
-- Code map (mapper exemplars, parameterization style) → `docs/code-maps/domain-to-dto-mapper-tests.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (mapper exemplars, parameterization style) → `docs/code-maps/domain-to-dto-mapper-tests.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't assert on a whole serialized JSON string — assert fields.

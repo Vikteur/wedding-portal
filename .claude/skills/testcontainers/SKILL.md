@@ -4,12 +4,6 @@ description: Integration-test against real backing services with Testcontainers 
 ---
 # Testcontainers
 
-> **Generic "how" only.** Zero project nouns. Image tags, init scripts, base classes and the
-> module's migration location live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
->
-> Merges the former `testcontainers-postgres` and `testcontainers-services` skills — one mechanism,
-> two service flavors.
-
 ## When to use
 Integration tests that must exercise a real service instead of a substitute: repository/persistence
 tests that need true SQL behavior (vendor types, DDL, constraints, migrations, dialects) where an
@@ -48,11 +42,10 @@ real protocol, serialization, or readiness behavior.
 - `@QuarkusTest` with a migration tool enabled for tests; `.waitingFor(Wait.forHttp(...))` readiness probes.
 
 ## Project specifics → see docs
-- Code map (which services, images, base classes, migration location, init scripts, exemplars) → `docs/code-maps/testcontainers.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (which services, images, base classes, migration location, init scripts, exemplars) → `docs/code-maps/testcontainers.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't test repositories against an in-memory DB when production is Postgres — behavior diverges.
-  The adapter test this container serves is [[spring-boot-slice-tests]]'s repository test.
 - Don't start a fresh container per test method; share one instance per JVM.
 - Don't hand-build the schema in test code when a migration tool already owns it.
 - Don't hardcode published ports or rely on `Thread.sleep` — mapped ports + a real wait strategy.

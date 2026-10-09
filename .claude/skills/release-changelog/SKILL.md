@@ -3,7 +3,6 @@ name: release-changelog
 description: Turn Conventional Commits into a reader-facing changelog. Use at release or closeout.
 ---
 # Release Changelog
-> **Generic "how" only.** Zero project nouns (no package roots, tag names, version scheme names). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 At release closeout, once commits since the last tag are known: turning a range of Conventional Commits into the changelog section that ships with a version bump. Pairs with [[conventional-commits]] — the commit shape this reads is that skill's output.
@@ -22,7 +21,7 @@ At release closeout, once commits since the last tag are known: turning a range 
 - A release job/script in CI that assembles notes from the commit range.
 
 ## Project specifics → see docs
-- Code map (changelog location, versioning scheme, type→section mapping) → `docs/code-maps/release-changelog.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (changelog location, versioning scheme, type→section mapping) → `docs/code-maps/release-changelog.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't dump raw commit subjects — a changelog is edited prose, not `git log`.

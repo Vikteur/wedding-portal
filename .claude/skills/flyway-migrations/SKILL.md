@@ -4,8 +4,6 @@ description: Versioned, forward-only SQL migrations applied on startup. Use when
 ---
 # Flyway migrations
 
-> **Generic "how" only.** No concrete table names or version numbers in the body — those live in the code-map.
-
 ## When to use
 Any schema change (new table/column, index, constraint, data backfill) in a project where the schema is
 owned by versioned migrations applied on startup.
@@ -30,7 +28,7 @@ A `db/migration` resource folder with `V<n>__*.sql` (and `R__*.sql`); a migratio
 strictly increasing version prefixes; no edits to historical files.
 
 ## Project specifics → see docs
-- Code map (migration location, naming, dialect, exemplars) → `docs/code-maps/flyway-migrations.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (migration location, naming, dialect, exemplars) → `docs/code-maps/flyway-migrations.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't apply a migration on your own judgment — a human approves the SQL before it lands.

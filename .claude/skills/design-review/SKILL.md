@@ -4,9 +4,6 @@ description: Critique a design before build — assumptions, trade-offs, failure
 ---
 # Design Review
 
-> **Generic "how" only.** Zero project nouns. The architecture constraints and prior decisions to
-> weigh against live in docs leaves, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 Before building something non-trivial, or to frame a refactor: when the question is *how should this
 be shaped* and the cost of getting it wrong is high. Judgment, not mechanical checks. This runs
@@ -27,7 +24,7 @@ be shaped* and the cost of getting it wrong is high. Judgment, not mechanical ch
 - Architecture-fitness tests (the encoded constraints a design must satisfy).
 
 ## Project specifics → see docs
-- Code map (ADR location, architecture constraints, prior decisions) → `docs/code-maps/design-review.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (ADR location, architecture constraints, prior decisions) → `docs/code-maps/design-review.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't review without considering an alternative — a one-option "review" is a rubber stamp.

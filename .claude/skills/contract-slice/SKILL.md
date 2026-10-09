@@ -4,9 +4,6 @@ description: Slice an API contract to one tag or operation, self-contained and l
 ---
 # Contract slice
 
-> **Generic "how" only.** Zero project nouns — the spec source, slicer script, tag names, and
-> component roots live in the code-map docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 A downstream agent needs the part of an API contract relevant to one capability, and the full spec is
 too large to hand it. Use when scoping context by tag or operation — read the whole spec once, then
@@ -36,7 +33,7 @@ emit a self-contained excerpt so consumers get only the slice, never the entire 
 
 ## Project specifics → see docs
 - Code map (spec source, slicer script, tag/operation taxonomy, component roots, lint ruleset,
-  exemplars) → `docs/code-maps/contract-slice.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+  exemplars) → `docs/code-maps/contract-slice.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't hand the whole spec to a downstream agent when a tag/operation slice suffices — that's the

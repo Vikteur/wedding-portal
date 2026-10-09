@@ -4,9 +4,6 @@ description: Generate a typed REST client from an OpenAPI spec at build time. Us
 ---
 # OpenAPI REST client codegen
 
-> **Generic "how" only.** No service names, spec filenames, package roots, header names, or property
-> keys in the body — those live in the code-map leaf.
-
 ## When to use
 Integrating with an external HTTP service that publishes an OpenAPI spec, instead of hand-writing the
 client. Generate typed API + model classes at build time, then wire base path, auth, and headers onto
@@ -32,7 +29,7 @@ a compile task depending on the generate task; a config class building an `ApiCl
 HTTP client and registering `*Api` beans with interceptors or default headers for auth.
 
 ## Project specifics → see docs
-- Code map (generator config, spec locations, client wiring, exemplars) → `docs/code-maps/openapi-rest-client-codegen.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (generator config, spec locations, client wiring, exemplars) → `docs/code-maps/openapi-rest-client-codegen.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't commit generated client code — generate it on every build and gitignore the output dir.

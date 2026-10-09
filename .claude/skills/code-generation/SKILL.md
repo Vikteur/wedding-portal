@@ -4,12 +4,6 @@ description: Generate code from a contract or schema source of truth, regenerate
 ---
 # Code generation
 
-> **Generic "how" only.** Zero project nouns (no generator names, template paths, output dirs, package
-> roots). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
->
-> Absorbs the former `openapi-contract-workflow` skill — conforming a server to an upstream-owned
-> spec is this skill applied to a contract.
-
 ## When to use
 When a shape is derivable from a **source of truth** — a contract, schema, entity, or template — and
 hand-writing it would duplicate that truth. Reach for scaffolding/codegen instead of typing the artifact
@@ -42,7 +36,7 @@ truth and your job is to conform to it.
   generated types and domain types.
 
 ## Project specifics → see docs
-- Code map (generators, sources of truth, output locations, seam/mapper conventions, exemplars) → `docs/code-maps/code-generation.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (generators, sources of truth, output locations, seam/mapper conventions, exemplars) → `docs/code-maps/code-generation.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't hand-edit generated files — change the source or template and regenerate.

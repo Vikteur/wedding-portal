@@ -3,7 +3,6 @@ name: conventional-commits
 description: Write Conventional Commits so changelog and version bumps derive. Use when committing.
 ---
 # Conventional Commits
-> **Generic "how" only.** Zero project nouns (no scope vocabulary, tag names, package roots, release-tool names). The allowed scopes and any local overrides live in a docs leaf, referenced below. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 Writing any commit message on a project where history, changelog, and version bumps are derived from commits. Applies per commit, before it lands.
@@ -21,7 +20,7 @@ Writing any commit message on a project where history, changelog, and version bu
 - History where subjects consistently start with `feat`/`fix`/`chore` prefixes.
 
 ## Project specifics → see docs
-- Code map (allowed scopes, type set overrides, changelog config) → `docs/code-maps/conventional-commits.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (allowed scopes, type set overrides, changelog config) → `docs/code-maps/conventional-commits.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't bundle unrelated changes in one commit — it breaks the one-line-per-change changelog and muddies the bump.

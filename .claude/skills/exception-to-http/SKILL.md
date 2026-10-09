@@ -4,8 +4,6 @@ description: Map a domain exception hierarchy to HTTP status via one class of ex
 ---
 # Exception-to-HTTP mapping
 
-> **Generic "how" only.** No concrete exception/status mappings in the body — those live in the code-map.
-
 ## When to use
 Turning typed domain/gateway exceptions into consistent HTTP responses (status + error body) without
 try/catch scattered through resources.
@@ -25,7 +23,7 @@ A class with `@ServerExceptionMapper` methods (or `ExceptionMapper<T>` providers
 exception base class hierarchy; `Response` error bodies.
 
 ## Project specifics → see docs
-- Code map (the exception hierarchy → status table, mapper exemplar) → `docs/code-maps/exception-to-http.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (the exception hierarchy → status table, mapper exemplar) → `docs/code-maps/exception-to-http.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't catch exceptions in resources — let the mapper handle them.

@@ -3,7 +3,6 @@ name: usecase-bdd-spec
 description: Use-case behavior as Given/When/Then acceptance specs, observable-only. Use when specifying a use case.
 ---
 # Use-case BDD spec
-> **Generic "how" only.** Zero project nouns (no entity names, endpoint paths, field names, status codes, error keys). Link a docs leaf for any project fact. See `ARCHITECTURE.md` §1 (blueprint repo).
 
 ## When to use
 Turning a requirement into acceptance criteria the test-writer implements against and the reviewer checks against: when you need a shared, unambiguous statement of *what the use case must do* before code exists. Authored by the analyst, consumed by the test-writer.
@@ -21,7 +20,7 @@ Turning a requirement into acceptance criteria the test-writer implements agains
 - Acceptance-criteria blocks in tickets/docs mapped 1:1 to tests; test names that read as behaviors.
 
 ## Project specifics → see docs
-- Code map (spec location, scenario conventions, requirement→spec traceability) → `docs/code-maps/usecase-bdd-spec.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (spec location, scenario conventions, requirement→spec traceability) → `docs/code-maps/usecase-bdd-spec.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't leak implementation into a scenario — reference behavior, never classes, layers, or storage.

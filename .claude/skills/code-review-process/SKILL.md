@@ -4,14 +4,10 @@ description: Review a part scoped to its files, then one integration pass over t
 ---
 # Code review process
 
-> **Generic "how" only.** Zero project nouns. What the part declares, which layer skills apply, and
-> where the overview lives are pipeline facts in the code-map docs leaf, referenced below. See
-> `ARCHITECTURE.md` §1 (blueprint repo).
-
 ## When to use
 When a part turns **green** (its checks/hooks pass) and it needs a review before hand-off. This is the
 *process* — how to run the pass; the judgment lens itself is a separate skill: the part's layer skills
-carry the domain lens, [[security-review]] runs alongside on a sensitive diff. Not for pre-build
+carry the domain lens. Not for pre-build
 framing — that is [[design-review]].
 
 ## How
@@ -33,7 +29,7 @@ framing — that is [[design-review]].
 - A green-gate (passing hooks/CI) that precedes a human/agent review step; a combined-overview artifact.
 
 ## Project specifics → see docs
-- Code map (part manifest shape, layer-skill mapping, overview location, verdict format) → `docs/code-maps/code-review-process.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (part manifest shape, layer-skill mapping, overview location, verdict format) → `docs/code-maps/code-review-process.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't widen scope past the part's declared files + acceptance slice — a whole-tree sweep is a

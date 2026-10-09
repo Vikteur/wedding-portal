@@ -4,8 +4,6 @@ description: Thin controller implementing an OpenAPI-generated Api interface. Us
 ---
 # API-first controller
 
-> **Generic "how" only.** No concrete controller/tag/package names in the body — those live in the code-map.
-
 ## When to use
 Building a REST endpoint in a contract-first project where the controller interface + DTOs are
 **generated** from an OpenAPI spec at build time.
@@ -23,7 +21,7 @@ Controllers `implements <Name>Api` where `*Api` is under a generated source set;
 plugin wired into the build; DTOs from a generated `model` package; a sibling `*DomainToDTOMapper`.
 
 ## Project specifics → see docs
-- Code map (codegen plugin, tag→controller exemplars, mapper convention) → `docs/code-maps/api-first-controller.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (codegen plugin, tag→controller exemplars, mapper convention) → `docs/code-maps/api-first-controller.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't put business logic or persistence in the controller — delegate to the use-case.
