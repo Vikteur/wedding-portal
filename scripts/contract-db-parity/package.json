@@ -1,0 +1,8 @@
+{
+  "name": "contract-db-parity",
+  "private": true,
+  "description": "Pinned YAML parser for scripts/contract-db-parity.sh; installed with npm ci from the lockfile.",
+  "dependencies": {
+    "yaml": "2.8.1"
+  }
+}

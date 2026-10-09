@@ -1,0 +1,23 @@
+{
+  "tables": {
+    "guests": {
+      "columns": {
+        "id": { "type": "uuid", "nullable": false, "default": null, "maxLength": null, "identity": false, "generated": false },
+        "name": { "type": "character varying", "nullable": false, "default": null, "maxLength": 100, "identity": false, "generated": false },
+        "email": { "type": "text", "nullable": false, "default": null, "maxLength": null, "identity": false, "generated": false },
+        "status": { "type": "guest_status", "nullable": false, "default": null, "maxLength": null, "identity": false, "generated": false },
+        "seats": { "type": "integer", "nullable": false, "default": "1", "maxLength": null, "identity": false, "generated": false },
+        "external_ref": { "type": "text", "nullable": true, "default": null, "maxLength": null, "identity": false, "generated": false },
+        "badge_text": { "type": "text", "nullable": true, "default": null, "maxLength": null, "identity": false, "generated": false },
+        "created_at": { "type": "timestamp with time zone", "nullable": false, "default": "now()", "maxLength": null, "identity": false, "generated": false },
+        "org_id": { "type": "uuid", "nullable": false, "default": null, "maxLength": null, "identity": false, "generated": false }
+      },
+      "primaryKey": ["id"], "foreignKeys": [], "uniqueConstraints": [], "uniqueIndexes": [], "checks": []
+    },
+    "audit_log": {
+      "columns": { "id": { "type": "bigint", "nullable": false, "default": null, "maxLength": null, "identity": true, "generated": false } },
+      "primaryKey": ["id"], "foreignKeys": [], "uniqueConstraints": [], "uniqueIndexes": [], "checks": []
+    }
+  },
+  "enums": { "guest_status": ["INVITED", "CONFIRMED", "WAITLIST"] }
+}

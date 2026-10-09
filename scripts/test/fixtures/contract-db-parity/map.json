@@ -1,0 +1,1 @@
+{ "objects": { "venue": null }, "fields": { "guest.badge": "badge_text" }, "ignoreTables": ["audit_log"], "ignoreColumns": ["*.created_at"] }
