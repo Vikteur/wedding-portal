@@ -30,7 +30,7 @@ test-writer's default; developers use it to keep tests green and meaningful.
 - A separate slow/integration set (distinct source set, suffix, or tag) with its own build task.
 
 ## Project specifics → see docs
-- Code map (test layout, helpers/fixtures, naming, exemplars, generated) → `docs/code-maps/jvm-testing.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (test layout, helpers/fixtures, naming, exemplars, generated) → `docs/code-maps/jvm-testing.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't mock internal collaborators or the class under test — mock only its owned ports.

@@ -30,7 +30,7 @@ with a "never reuse" comment, IV prepended to ciphertext before Base64, a `Secre
 injected/externalized key, and paired `encrypt`/`decrypt` methods on a small utility/service.
 
 ## Project specifics → see docs
-- Code map (utility class, key source, IV/tag sizes, call sites, exemplars) → `docs/code-maps/aes-gcm-encryption.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (utility class, key source, IV/tag sizes, call sites, exemplars) → `docs/code-maps/aes-gcm-encryption.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't reuse an IV with the same key, and don't derive the IV deterministically — always random.

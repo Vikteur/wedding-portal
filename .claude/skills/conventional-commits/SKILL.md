@@ -21,7 +21,7 @@ Writing any commit message on a project where history, changelog, and version bu
 - History where subjects consistently start with `feat`/`fix`/`chore` prefixes.
 
 ## Project specifics → see docs
-- Code map (allowed scopes, type set overrides, changelog config) → `docs/code-maps/conventional-commits.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (allowed scopes, type set overrides, changelog config) → `docs/code-maps/conventional-commits.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't bundle unrelated changes in one commit — it breaks the one-line-per-change changelog and muddies the bump.

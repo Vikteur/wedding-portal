@@ -27,7 +27,7 @@ A use-case-layer `*Repository` interface implemented by an adapter `Default*Repo
 (`@ApplicationScoped`); a sibling `PanacheRepository`; domain↔entity mapping at the boundary.
 
 ## Project specifics → see docs
-- Code map (port↔impl pairs, entity mapping, query conventions) → `docs/code-maps/persistence-repository.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (port↔impl pairs, entity mapping, query conventions) → `docs/code-maps/persistence-repository.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't let `@Entity` / persistence types cross into domain or use-case code.

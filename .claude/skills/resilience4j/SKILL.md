@@ -29,7 +29,7 @@ degrades gracefully instead of cascading: timeout, retry, circuit breaker, fallb
 override keys in the configuration.
 
 ## Project specifics → see docs
-- Code map (configured instances, thresholds, fallbacks, exemplars) → `docs/code-maps/resilience4j.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (configured instances, thresholds, fallbacks, exemplars) → `docs/code-maps/resilience4j.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't share one breaker configuration across unrelated dependencies — tune per integration.

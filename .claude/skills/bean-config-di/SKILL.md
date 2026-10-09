@@ -27,7 +27,7 @@ Configuration classes with `@Produces` methods; constructor-injected `final` col
 `@IfBuildProfile` / qualifiers; `@ConfigMapping` / `@ConfigProperty` for externalized config.
 
 ## Project specifics → see docs
-- Code map (config classes, profiles, properties conventions) → `docs/code-maps/bean-config-di.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (config classes, profiles, properties conventions) → `docs/code-maps/bean-config-di.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't wire beans inside domain/use-case classes — that's the config layer's job.

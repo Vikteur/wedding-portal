@@ -33,7 +33,7 @@ layer.
 - `layeredArchitecture()`, `noClasses().that().resideInAPackage("..domain..")` style rules.
 
 ## Project specifics → see docs
-- Code map (package roots per layer, allowed libs, baselined exceptions, exemplars) → `docs/code-maps/archunit-fitness.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (package roots per layer, allowed libs, baselined exceptions, exemplars) → `docs/code-maps/archunit-fitness.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't assert runtime behavior here — fitness rules are static structure (keep them boot-free/fast).

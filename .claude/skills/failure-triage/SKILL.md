@@ -28,7 +28,7 @@ A red CI run, a failing test, a production error, or a bug report — whenever y
 - Repro tests named for a bug/ticket id; regression tests added alongside fixes.
 
 ## Project specifics → see docs
-- Code map (where logs/artifacts live, repro commands, known flaky areas) → `docs/code-maps/failure-triage.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (where logs/artifacts live, repro commands, known flaky areas) → `docs/code-maps/failure-triage.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't edit code while triaging — diagnosis and fix are separate roles (structural separation).

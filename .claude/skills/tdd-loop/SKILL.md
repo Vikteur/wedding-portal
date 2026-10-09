@@ -27,7 +27,7 @@ Turning acceptance criteria into code one behavior at a time. When each requirem
 - Commit history alternating test + implementation in small increments; a fast unit-test task in CI.
 
 ## Project specifics → see docs
-- Code map (test-runner setup, naming conventions, exemplar cycles) → `docs/code-maps/tdd-loop.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (test-runner setup, naming conventions, exemplar cycles) → `docs/code-maps/tdd-loop.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't write production code with no failing test asking for it — that's the whole discipline.

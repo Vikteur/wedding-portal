@@ -32,7 +32,7 @@ a compile task depending on the generate task; a config class building an `ApiCl
 HTTP client and registering `*Api` beans with interceptors or default headers for auth.
 
 ## Project specifics → see docs
-- Code map (generator config, spec locations, client wiring, exemplars) → `docs/code-maps/openapi-rest-client-codegen.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (generator config, spec locations, client wiring, exemplars) → `docs/code-maps/openapi-rest-client-codegen.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't commit generated client code — generate it on every build and gitignore the output dir.

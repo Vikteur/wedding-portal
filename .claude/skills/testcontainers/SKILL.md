@@ -48,7 +48,7 @@ real protocol, serialization, or readiness behavior.
 - `@QuarkusTest` with a migration tool enabled for tests; `.waitingFor(Wait.forHttp(...))` readiness probes.
 
 ## Project specifics → see docs
-- Code map (which services, images, base classes, migration location, init scripts, exemplars) → `docs/code-maps/testcontainers.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (which services, images, base classes, migration location, init scripts, exemplars) → `docs/code-maps/testcontainers.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't test repositories against an in-memory DB when production is Postgres — behavior diverges.

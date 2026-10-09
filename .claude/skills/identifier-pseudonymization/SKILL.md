@@ -25,7 +25,7 @@ A pseudonymization client/token at gateway boundaries; redaction helpers around 
 built from a token rather than the raw id; an env-gated test-identifier substitution in a gateway.
 
 ## Project specifics → see docs
-- Code map (the pseudonymization flow, redaction, test overrides, exemplars) → `docs/code-maps/identifier-pseudonymization.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (the pseudonymization flow, redaction, test overrides, exemplars) → `docs/code-maps/identifier-pseudonymization.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't log or cache-key the raw identifier — pseudonymize/redact first.

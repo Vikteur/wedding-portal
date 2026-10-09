@@ -25,7 +25,7 @@ A use-case-layer interface implemented by an adapter-layer `*Gateway`/`*Client`;
 generated/transport models and domain at the boundary; typed gateway exceptions; resilience annotations.
 
 ## Project specifics → see docs
-- Code map (port↔gateway pairs, mapping + error conventions, exemplars) → `docs/code-maps/gateway-client-hygiene.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (port↔gateway pairs, mapping + error conventions, exemplars) → `docs/code-maps/gateway-client-hygiene.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't let transport DTOs or client exceptions cross into domain/use-case code.

@@ -31,7 +31,7 @@ abstract `*ResourceTest` / `*RepositoryTest` base classes; Dev Services or testc
 `given_when_then` method names.
 
 ## Project specifics → see docs
-- Code map (base test classes, container setup, exemplars) → `docs/code-maps/spring-boot-slice-tests.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (base test classes, container setup, exemplars) → `docs/code-maps/spring-boot-slice-tests.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't use a `@QuarkusTest` where a plain unit test proves the behavior — it is the slow set.

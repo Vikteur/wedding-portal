@@ -21,7 +21,7 @@ Turning a requirement into acceptance criteria the test-writer implements agains
 - Acceptance-criteria blocks in tickets/docs mapped 1:1 to tests; test names that read as behaviors.
 
 ## Project specifics → see docs
-- Code map (spec location, scenario conventions, requirement→spec traceability) → `docs/code-maps/usecase-bdd-spec.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (spec location, scenario conventions, requirement→spec traceability) → `docs/code-maps/usecase-bdd-spec.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't leak implementation into a scenario — reference behavior, never classes, layers, or storage.

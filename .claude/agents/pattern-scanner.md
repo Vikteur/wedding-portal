@@ -54,6 +54,10 @@ maps), not in the per-ticket feature pipeline. It **writes no application code**
      `serves:` — never fork a second leaf for the same source path.
    The two must stay reciprocal (leaf `serves:` ↔ index link); the `code-map-link-integrity` gate
    checks this.
+   A leaf or exemplar marked `kind: worked-example` is a pseudonymized example of the right structure,
+   not this repo's facts. Write this repo's facts into a "This repo" section of the index, or replace the
+   leaf with a real harvest of at least the same structure and then drop the marker. Never copy a placeholder
+   name into a real section.
 3. **For each frequent pattern with no matching skill** → add a row to the **candidate-skills
    report** (`docs/code-maps/_candidates.md`): proposed skill name, the signals observed, exemplars,
    frequency.

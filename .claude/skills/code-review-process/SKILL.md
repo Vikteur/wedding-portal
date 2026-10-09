@@ -33,7 +33,7 @@ framing — that is [[design-review]].
 - A green-gate (passing hooks/CI) that precedes a human/agent review step; a combined-overview artifact.
 
 ## Project specifics → see docs
-- Code map (part manifest shape, layer-skill mapping, overview location, verdict format) → `docs/code-maps/code-review-process.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (part manifest shape, layer-skill mapping, overview location, verdict format) → `docs/code-maps/code-review-process.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't widen scope past the part's declared files + acceptance slice — a whole-tree sweep is a

@@ -24,7 +24,7 @@ reads/writes.
 a separate domain type with a mapper between them; schema from migrations, not auto-DDL.
 
 ## Project specifics → see docs
-- Code map (entity exemplars, relation/fetch conventions) → `docs/code-maps/jpa-entity-mapping.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (entity exemplars, relation/fetch conventions) → `docs/code-maps/jpa-entity-mapping.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't reuse a JPA `@Entity` as the domain type — keep them separate.

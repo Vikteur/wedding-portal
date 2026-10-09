@@ -28,7 +28,7 @@ in response to a request.
 delegating to a use-case.
 
 ## Project specifics → see docs
-- Code map (the scheduled jobs, cadences, guards) → `docs/code-maps/scheduled-tasks.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (the scheduled jobs, cadences, guards) → `docs/code-maps/scheduled-tasks.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't scale to a second instance without a guard against concurrent runs.

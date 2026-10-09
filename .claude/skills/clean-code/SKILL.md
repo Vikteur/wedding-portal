@@ -28,7 +28,7 @@ idiom it is written in is the side's language skill (`java` / `typescript`, whic
 - Test or review tooling that flags complexity/duplication (cyclomatic, copy-paste detectors).
 
 ## Project specifics → see docs
-- Code map (style config, naming, exemplars, anti-patterns to avoid) → `docs/code-maps/clean-code.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (style config, naming, exemplars, anti-patterns to avoid) → `docs/code-maps/clean-code.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't add comments to explain unclear code — rename/restructure instead.

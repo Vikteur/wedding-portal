@@ -36,7 +36,7 @@ emit a self-contained excerpt so consumers get only the slice, never the entire 
 
 ## Project specifics → see docs
 - Code map (spec source, slicer script, tag/operation taxonomy, component roots, lint ruleset,
-  exemplars) → `docs/code-maps/contract-slice.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+  exemplars) → `docs/code-maps/contract-slice.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't hand the whole spec to a downstream agent when a tag/operation slice suffices — that's the

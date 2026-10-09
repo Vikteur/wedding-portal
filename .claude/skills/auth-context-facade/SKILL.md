@@ -24,7 +24,7 @@ A domain value object representing the authenticated user threaded as a paramete
 resolution from the security context confined to the adapter layer; inner layers free of framework auth types.
 
 ## Project specifics → see docs
-- Code map (the principal type, where it's resolved, exemplars) → `docs/code-maps/auth-context-facade.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (the principal type, where it's resolved, exemplars) → `docs/code-maps/auth-context-facade.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't leak framework security types (`Authentication`, token) past the adapter.

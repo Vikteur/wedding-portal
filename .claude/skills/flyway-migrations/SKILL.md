@@ -30,7 +30,7 @@ A `db/migration` resource folder with `V<n>__*.sql` (and `R__*.sql`); a migratio
 strictly increasing version prefixes; no edits to historical files.
 
 ## Project specifics → see docs
-- Code map (migration location, naming, dialect, exemplars) → `docs/code-maps/flyway-migrations.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (migration location, naming, dialect, exemplars) → `docs/code-maps/flyway-migrations.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't apply a migration on your own judgment — a human approves the SQL before it lands.

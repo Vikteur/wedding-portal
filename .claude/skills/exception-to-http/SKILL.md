@@ -25,7 +25,7 @@ A class with `@ServerExceptionMapper` methods (or `ExceptionMapper<T>` providers
 exception base class hierarchy; `Response` error bodies.
 
 ## Project specifics → see docs
-- Code map (the exception hierarchy → status table, mapper exemplar) → `docs/code-maps/exception-to-http.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (the exception hierarchy → status table, mapper exemplar) → `docs/code-maps/exception-to-http.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't catch exceptions in resources — let the mapper handle them.

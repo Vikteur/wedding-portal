@@ -25,7 +25,7 @@ sent. The test discipline around it is [[jvm-testing]]'s.
 client base-URL pointed at `wireMock.baseUrl()` / a dynamic port in `src/test/java/**`.
 
 ## Project specifics → see docs
-- Code map (which gateways are stubbed, fixtures, exemplars) → `docs/code-maps/wiremock-gateway-stubs.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (which gateways are stubbed, fixtures, exemplars) → `docs/code-maps/wiremock-gateway-stubs.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't hit the real remote in a unit/slice test — stub it.

@@ -35,7 +35,7 @@ an anaemic data holder into a real domain type. The core modelling skill for the
 - Value objects expressed as records or equality-by-value types.
 
 ## Project specifics → see docs
-- Code map (entities, factories, create-requests, validators, creation-result helper, exemplars) → `docs/code-maps/domain-modeling.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (entities, factories, create-requests, validators, creation-result helper, exemplars) → `docs/code-maps/domain-modeling.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't import a framework/persistence/web type into a domain class (hook: archunit/dependency gate).

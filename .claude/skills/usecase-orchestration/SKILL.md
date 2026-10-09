@@ -25,7 +25,7 @@ Classes named `*UseCase`/`*Service` in a use-case module with `@Transactional`; 
 repository/gateway interfaces; request/response value objects; no web/JPA imports.
 
 ## Project specifics → see docs
-- Code map (use-case exemplars, transaction + port conventions) → `docs/code-maps/usecase-orchestration.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (use-case exemplars, transaction + port conventions) → `docs/code-maps/usecase-orchestration.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't accept/return web DTOs or persistence entities — use request/response + domain types.

@@ -48,7 +48,7 @@ which then runs the test-first fix sub-loop (test-writer → developer → revie
 not a diff.
 
 ## Project specifics → see docs
-- Where logs/artifacts live, repro commands, known-flaky areas → `docs/code-maps/failure-triage.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Where logs/artifacts live, repro commands, known-flaky areas → `docs/code-maps/failure-triage.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Ground Rules
 - The diagnosis method is the `failure-triage` skill (reproduce → bisect → prove with evidence →

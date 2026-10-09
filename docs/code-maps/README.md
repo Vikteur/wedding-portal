@@ -1,18 +1,22 @@
 # Code maps
 
-The project facts a skill needs, one leaf per skill: `docs/code-maps/<skill name>.md`, named exactly after the skill
-folder under `.claude/skills/`. The skill says *how* and holds no project nouns; the leaf says *what* for this repo
-(P3): the modules, packages, classes, commands and conventions the skill applies to.
+One leaf per skill, `docs/code-maps/<skill name>.md`, named exactly after the skill folder under
+`.claude/skills/`. The skill says *how* and holds no project nouns. The leaf shows it applied.
 
-- Write a leaf when a skill first needs a project fact; extend it when the fact changes. Keep it short and current:
-  describe the code as it is, never its history.
+**Most leaves are worked examples, not project facts.** A leaf or exemplar with `kind: worked-example` in its
+front matter shows the right structure for its skill: the layers, the classes and their roles, the call order, the
+tests. Its names are pseudonymized placeholders: the project (`shop-backend`), the packages, the classes, the
+methods, the parameters and the fields. Follow the structure, map every name to this repo's own, and never copy a
+placeholder into code. `jvm-testing` is this repo's own leaf and carries real facts.
+
+- When a skill needs a real project fact, write it into the skill's leaf. Then drop `kind: worked-example` and the
+  note, or keep the example below a clearly separate "This repo" section.
 - A decision and its reasoning go in `docs/memory.md`; the leaf links to it instead of repeating it.
-- The `pattern-scanner` agent writes and refreshes leaves from the code; any agent may correct a stale line.
+- The `pattern-scanner` agent writes and refreshes leaves from the code. It never overwrites a worked example's
+  structure with a thinner one; any agent may correct a stale line.
 
-Most leaves below are copied from `docs/code-maps-pseudonymized/` as a starting point: they describe a
-different project (pseudonymized), not this repo yet. Rewrite a leaf for this repo the first time a skill uses it.
-`jvm-testing` is this repo's own. Shared material from the same copy: `exemplars/`, `scaffold/`,
-`_candidates.md` and `openapi-contract.example.yaml`.
+The examples came from `docs/code-maps-pseudonymized/`. Shared material from the same copy: `exemplars/`
+(worked examples per artifact), `scaffold/`, `_candidates.md` and `openapi-contract.example.yaml`.
 
 Leaves: [aes-gcm-encryption], [api-first-controller], [archunit-fitness], [auth-context-facade], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [failure-triage], [fhir-hapi-gateway], [flyway-migrations], [gateway-client-hygiene], [identifier-pseudonymization], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [scheduled-tasks], [security-review], [soap-cxf-gateway], [spring-boot-slice-tests], [spring-caching], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result], [wiremock-gateway-stubs].
 

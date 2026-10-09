@@ -36,7 +36,7 @@ cache invalidation) without coupling the originating logic to that side-effect o
 - Use-cases depending on the publisher port, never on a framework event type.
 
 ## Project specifics → see docs
-- Code map (marker interface, event types, publisher port + adapter, observers, exemplars) → `docs/code-maps/domain-events.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (marker interface, event types, publisher port + adapter, observers, exemplars) → `docs/code-maps/domain-events.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't make domain events extend or import a framework event type — keep the marker framework-free.

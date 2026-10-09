@@ -27,7 +27,7 @@ Writing or reviewing Java in any layer. Pairs with [[clean-code]] (general) and 
 - Lombok or MapStruct annotations (project idiom), constructor-injection style.
 
 ## Project specifics → see docs
-- Code map (JDK version, build tool, allowed libs, project idioms, exemplars) → `docs/code-maps/java.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (JDK version, build tool, allowed libs, project idioms, exemplars) → `docs/code-maps/java.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't return or accept `null` where `Optional`/empty-collection is meaningful.

@@ -32,7 +32,7 @@ methods; `quarkus.cache.caffeine."<name>".*` keys declaring per-cache TTL and si
 invalidate caches between cases.
 
 ## Project specifics → see docs
-- Code map (named caches + TTLs, invalidating mutations, test config, exemplars) → `docs/code-maps/spring-caching.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (named caches + TTLs, invalidating mutations, test config, exemplars) → `docs/code-maps/spring-caching.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't add `@CacheResult` to a read without a matching invalidation on its mutations — stale data.

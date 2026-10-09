@@ -28,7 +28,7 @@ code goes; how the unit itself is written is [[clean-code]].
 - Architecture-fitness tests present (e.g. ArchUnit) asserting dependency direction.
 
 ## Project specifics → see docs
-- Code map (layer→package mapping, module list, exemplars) → `docs/code-maps/clean-architecture.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (layer→package mapping, module list, exemplars) → `docs/code-maps/clean-architecture.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 - The project's layer set & per-layer plan files → `docs/layer-model.md`
 
 ## Guardrails (what NOT to do)

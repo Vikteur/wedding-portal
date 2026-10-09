@@ -27,7 +27,7 @@ be shaped* and the cost of getting it wrong is high. Judgment, not mechanical ch
 - Architecture-fitness tests (the encoded constraints a design must satisfy).
 
 ## Project specifics → see docs
-- Code map (ADR location, architecture constraints, prior decisions) → `docs/code-maps/design-review.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (ADR location, architecture constraints, prior decisions) → `docs/code-maps/design-review.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't review without considering an alternative — a one-option "review" is a rubber stamp.

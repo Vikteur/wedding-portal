@@ -23,7 +23,7 @@ Controllers `implements <Name>Api` where `*Api` is under a generated source set;
 plugin wired into the build; DTOs from a generated `model` package; a sibling `*DomainToDTOMapper`.
 
 ## Project specifics → see docs
-- Code map (codegen plugin, tag→controller exemplars, mapper convention) → `docs/code-maps/api-first-controller.md` *(per-repo map, written by the pattern-scanner — resolves once harvested)*
+- Code map (codegen plugin, tag→controller exemplars, mapper convention) → `docs/code-maps/api-first-controller.md` *(per-repo map; if marked `kind: worked-example`, follow its structure and map its pseudonymized names to this repo's own)*
 
 ## Guardrails (what NOT to do)
 - Don't put business logic or persistence in the controller — delegate to the use-case.
