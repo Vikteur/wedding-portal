@@ -6,7 +6,6 @@ Every agent reads this before it writes a doc. One kind of fact has one home; pu
 |---|---|
 | `docs/memory.md` | Project-wide decisions and approaches tried and abandoned, one dated bullet each, with the ticket id. |
 | `docs/code-maps/<skill>.md` | The project facts a skill needs, one leaf per skill (P3). See `docs/code-maps/README.md`. |
-| `groma/` | The architecture map. Changed only through the `groma` CLI. |
 
 Kept in the umbrella repo `../weddingapp`, not here (its `docs/README.md` has the full map):
 - the tickets (`backlog/`, only via the `backlog` CLI) and their specs (`docs/rewrite/tickets/`);

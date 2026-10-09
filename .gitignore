@@ -9,3 +9,6 @@
 *.iml
 
 /contract/
+
+# The audit-log hook (.claude/hooks) writes here.
+/.apm-audit/
