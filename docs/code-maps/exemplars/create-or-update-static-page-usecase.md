@@ -23,8 +23,8 @@ The event (`DomainEvent createOrUpdateEvent`) is built during validation / creat
 `domainEventPublisher.publish(...)` call happens strictly after `pageRepository.save(page)` and only
 once `notification.hasErrors()` is false — never publish an event for a save that did not happen.
 `DomainEvent` is an empty marker interface; `DomainEventPublisher` is the port with one method,
-`publish(DomainEvent)`. The adapter-side implementation delegates to Spring's
-`ApplicationEventPublisher`, so the use case stays framework-free.
+`publish(DomainEvent)`. The adapter-side implementation, `CdiDomainEventPublisher`, fires through CDI's
+`Event<DomainEvent>`, so the use case stays framework-free.
 
 ### Source (pseudonymized)
 ```java
@@ -43,12 +43,14 @@ import com.acme.shop.storefront.domain.page.StaticPage;
 import com.acme.shop.storefront.events.PageCreatedEvent;
 import com.acme.shop.storefront.events.PageUpdatedEvent;
 import com.acme.shop.storefront.repository.PageRepository;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;
 import java.util.stream.Stream;
 
+@ApplicationScoped
 @Transactional
 @RequiredArgsConstructor
 public class CreateOrUpdateStaticPageUseCase {
@@ -125,4 +127,4 @@ return Notification.empty();
 Expected: persistence happens before the event is published, and callers receive an empty success notification.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg 'DomainEvent'`, `rg '@TransactionalEventListener'`
+- Scanned at: `abc1234` · tool/query: `rg 'DomainEvent'`, `rg '@Observes\(during'`

@@ -13,114 +13,113 @@ kind: worked-example
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-One of 67 `@Configuration` classes in the repo; this one wires three generated SOAP port clients
-(`RegistryPortType`, `AttributeServicePortType`, `CustomerServicePortType`) via a project-local
-`WSFactory` helper (`webservice-config` module) — the same shape used for every CXF/SOAP gateway.
+One of 67 CDI config classes in the repo; this one supplies the WS-Security interceptors for three
+generated SOAP port clients (`RegistryPortType`, `AttributeServicePortType`, `CustomerServicePortType`)
+via a project-local `WSFactory` helper (`webservice-config` module). The port clients themselves are
+declared in `application.properties` and built by the Quarkus CXF extension (`io.quarkiverse.cxf:quarkus-cxf`,
+which also manages the CXF `Bus`) — the same shape used for every CXF/SOAP gateway.
 
-## Named `@Configuration` with `@Bean` factory methods {#bean-config-di}
+## `@ApplicationScoped` config class with `@Produces` methods {#bean-config-di}
 **Serves:** [`bean-config-di`](../bean-config-di.md)
 
-`@Configuration("partnerWebServiceConfig")` — an explicit bean name (convention here: qualify
-config classes with a name when multiple configuration classes could otherwise collide/shadow).
-Constructor injection for `@Value`-sourced endpoint URLs plus shared collaborators (`WSFactory`,
-CXF `Bus`); each `@Bean` method builds one SOAP port client from a WSDL path plus a security
-interceptor supplied as a method parameter.
+An `@ApplicationScoped` config class with constructor injection of the shared `WSFactory` collaborator;
+each `@Produces` method returns one security interceptor, disambiguated with a module-prefixed
+`@Named("partner...")` (convention here: CDI resolves beans by type + qualifier, so two `WebServiceConfig`
+classes in different packages never clash, but two producers with the same `@Named` value would).
+The clients reference those beans by name (`#partnerSessionTokenOutInterceptor`) in config and are
+injected into gateways with `@CXFClient("<client>")`; no producer builds a proxy by hand.
 
 ### Source (pseudonymized)
 ```java
 package com.acme.shop.partner.config;
 
-import com.acme.partner.auth.protocol.v1.AttributeServicePortType;
-import com.acme.partner.customer.protocol.v1.CustomerServicePortType;
-import com.acme.partner.registry.protocol.v2.RegistryPortType;
 import com.acme.shop.webservice.config.ws.WSFactory;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.cxf.Bus;
 import org.apache.cxf.binding.soap.SoapMessage;
 import org.apache.cxf.interceptor.Interceptor;
 import org.apache.cxf.ws.security.wss4j.WSS4JOutInterceptor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
-@Configuration("partnerWebServiceConfig")
+@ApplicationScoped
 @Slf4j
 public class WebServiceConfig {
-    private final String registryBaseUrl;
-    private final String partnerAttributeAuthorityUrl;
-    private final String customerServiceUrl;
     private final WSFactory wsFactory;
-    private final Bus cxfBus;
 
-    public WebServiceConfig(@Value("${properties.endpoint.partner.registry}") String registryBaseUrl,
-                            @Value("${properties.endpoint.partner.attribute-authority}") String partnerAttributeAuthorityUrl,
-                            @Value("${properties.endpoint.partner.customer-service}") String customerServiceUrl,
-                            WSFactory wsFactory,
-                            Bus globalWsBus) {
-        this.registryBaseUrl = registryBaseUrl;
-        this.partnerAttributeAuthorityUrl = partnerAttributeAuthorityUrl;
-        this.customerServiceUrl = customerServiceUrl;
+    public WebServiceConfig(WSFactory wsFactory) {
         this.wsFactory = wsFactory;
-        this.cxfBus = globalWsBus;
     }
 
-    @Bean
-    public RegistryPortType registryPortType(Interceptor<SoapMessage> sessionTokenSecurityOutInterceptor) {
-        return (RegistryPortType) wsFactory.createProxyFactoryBean(registryBaseUrl,
-                "/wsdls/RegistryWebService-v2.wsdl",
-                "{urn:com:acme:shop:partner:registry:protocol:v2}RegistryService",
-                RegistryPortType.class,
-                "{urn:com:acme:shop:partner:registry:protocol:v2}RegistryPort",
-                sessionTokenSecurityOutInterceptor
-        ).create();
+    @Produces
+    @Singleton
+    @Named("partnerSessionTokenOutInterceptor")
+    Interceptor<SoapMessage> partnerSessionTokenOutInterceptor() {
+        return wsFactory.createSessionTokenOutInterceptor();
     }
 
-    @Bean
-    public AttributeServicePortType partnerAttributeAuthorityPortType(WSS4JOutInterceptor keyStoreSecurityOutInterceptor) {
-        return (AttributeServicePortType) wsFactory.createProxyFactoryBean(partnerAttributeAuthorityUrl,
-                "/wsdls/PartnerAttributeAuthority-v1.wsdl",
-                "{urn:com:acme:shop:partner:auth:protocol:v1}AttributeService",
-                AttributeServicePortType.class,
-                "{urn:com:acme:shop:partner:auth:protocol:v1}AttributeServicePort",
-                keyStoreSecurityOutInterceptor
-        ).create();
-    }
-
-    @Bean
-    public CustomerServicePortType customerServicePortType(Interceptor<SoapMessage> sessionTokenSecurityOutInterceptor) {
-        return (CustomerServicePortType) wsFactory.createProxyFactoryBean(customerServiceUrl,
-                "/wsdls/partner-customer-service-v1.wsdl",
-                "{urn:com:acme:shop:partner:customer:protocol:v1}CustomerService",
-                CustomerServicePortType.class,
-                "{urn:com:acme:shop:partner:customer:protocol:v1}CustomerServicePort",
-                sessionTokenSecurityOutInterceptor
-        ).create();
+    @Produces
+    @Singleton
+    @Named("partnerKeyStoreOutInterceptor")
+    WSS4JOutInterceptor partnerKeyStoreOutInterceptor() {
+        return wsFactory.createKeyStoreOutInterceptor();
     }
 }
+```
+
+```properties
+# partner-gateway/src/main/resources/application.properties
+quarkus.cxf.client."registry".wsdl=wsdls/RegistryWebService-v2.wsdl
+quarkus.cxf.client."registry".client-endpoint-url=${properties.endpoint.partner.registry}
+quarkus.cxf.client."registry".service-interface=com.acme.partner.registry.protocol.v2.RegistryPortType
+quarkus.cxf.client."registry".endpoint-namespace=urn:com:acme:shop:partner:registry:protocol:v2
+quarkus.cxf.client."registry".endpoint-name=RegistryPort
+quarkus.cxf.client."registry".out-interceptors=#partnerSessionTokenOutInterceptor
+
+quarkus.cxf.client."attribute-authority".wsdl=wsdls/PartnerAttributeAuthority-v1.wsdl
+quarkus.cxf.client."attribute-authority".client-endpoint-url=${properties.endpoint.partner.attribute-authority}
+quarkus.cxf.client."attribute-authority".service-interface=com.acme.partner.auth.protocol.v1.AttributeServicePortType
+quarkus.cxf.client."attribute-authority".endpoint-namespace=urn:com:acme:shop:partner:auth:protocol:v1
+quarkus.cxf.client."attribute-authority".endpoint-name=AttributeServicePort
+quarkus.cxf.client."attribute-authority".out-interceptors=#partnerKeyStoreOutInterceptor
+
+quarkus.cxf.client."customer-service".wsdl=wsdls/partner-customer-service-v1.wsdl
+quarkus.cxf.client."customer-service".client-endpoint-url=${properties.endpoint.partner.customer-service}
+quarkus.cxf.client."customer-service".service-interface=com.acme.partner.customer.protocol.v1.CustomerServicePortType
+quarkus.cxf.client."customer-service".endpoint-namespace=urn:com:acme:shop:partner:customer:protocol:v1
+quarkus.cxf.client."customer-service".endpoint-name=CustomerServicePort
+quarkus.cxf.client."customer-service".out-interceptors=#partnerSessionTokenOutInterceptor
 ```
 
 ### Edge cases
 Two modules define a `WebServiceConfig`:
 ```java
-@Configuration("partnerWebServiceConfig")
-class WebServiceConfig { ... }
+@ApplicationScoped
+class WebServiceConfig { ... }   // com.acme.shop.partner.config and com.acme.shop.fulfilment.config
 ```
-Expected: the explicit bean name avoids collisions in the application context.
+Expected: no collision — CDI identifies beans by type and qualifier, not class simple name; only the
+`@Named` producer values must stay unique, hence the module prefix.
 
 Absent interceptor bean:
-```java
-contextRunner.run(context -> context.getBean("sessionTokenSecurityOutInterceptor"));
+```properties
+quarkus.cxf.client."registry".out-interceptors=#partnerSessionTokenOutInterceptor
+# ...but no @Produces @Named("partnerSessionTokenOutInterceptor") exists
 ```
-Expected: startup fails immediately instead of creating an unsecured SOAP proxy.
+Expected: startup fails immediately instead of creating an unsecured SOAP client.
 
 Adding a new SOAP integration:
-```java
-@Bean
-public SupplierServicePortType supplierServicePortType(Interceptor<SoapMessage> sessionTokenSecurityOutInterceptor) {
-    return (SupplierServicePortType) wsFactory.createProxyFactoryBean(...).create();
-}
+```properties
+quarkus.cxf.client."supplier-service".wsdl=wsdls/SupplierService-v1.wsdl
+quarkus.cxf.client."supplier-service".client-endpoint-url=${properties.endpoint.partner.supplier-service}
+quarkus.cxf.client."supplier-service".service-interface=com.acme.partner.supplier.protocol.v1.SupplierServicePortType
+quarkus.cxf.client."supplier-service".out-interceptors=#partnerSessionTokenOutInterceptor
 ```
-Expected: the new client still goes through `WSFactory`; no local `JaxWsProxyFactoryBean` logic is duplicated.
+```java
+@CXFClient("supplier-service") SupplierServicePortType supplierServicePortType
+```
+Expected: the new client is declared in config and injected with `@CXFClient`; no `@Produces` method
+hand-builds a `JaxWsProxyFactoryBean`, and interceptor construction stays in `WSFactory`.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg '@Configuration'` (70 matches / 67 files / 24 modules), `rg '@Bean'` (90 matches / 43 files / 24 modules)
+- Scanned at: `abc1234` · tool/query: `rg '@ApplicationScoped' --glob '*Config.java'` (70 matches / 67 files / 24 modules), `rg '@Produces'` (90 matches / 43 files / 24 modules)

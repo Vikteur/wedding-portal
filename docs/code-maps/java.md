@@ -46,11 +46,12 @@ tasks.withType<JavaCompile>().configureEach {
 ```
 Expected: this is drift from the repo-wide Java 21 convention and should be removed unless the plugin changes centrally.
 
-Controller method relying on inferred parameter names:
+Jackson creator relying on inferred parameter names:
 ```java
-public ResponseEntity<Boolean> verifyDelegationForTopic(@PathVariable Topic topic) { ... }
+@JsonCreator
+public OrderLineDTO(String sku, int quantity) { ... }
 ```
-Expected: `-parameters` stays enabled centrally so Spring MVC can resolve the argument name without repeating it in annotations.
+Expected: `-parameters` stays enabled centrally so Jackson (records, creators) and CDI can resolve parameter names without repeating them in annotations.
 
 Value object written as a record:
 ```java

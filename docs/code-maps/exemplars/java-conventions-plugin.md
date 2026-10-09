@@ -21,11 +21,16 @@ The convention plugin replacing a shared parent-POM `<build>` block — applied 
 ## One convention plugin, applied everywhere {#code-generation}
 **Serves:** [`code-generation`](../code-generation.md)
 
-Centralizes: Java toolchain version (21), Lombok annotation-processor wiring, compiler flags
-(`-parameters`, required for Spring MVC's reflection-based parameter binding), JUnit Platform test
-config plus explicit launcher/engine pinning (comment explains *why*: Gradle 8's bundled launcher lags
-Spring Boot 4's JUnit 6), and JaCoCo reporting — a module's own `build.gradle.kts` only declares
-`plugins { id("shop.java-conventions") }` plus its dependencies, never repeats this setup.
+Centralizes: Java toolchain version (21), the Quarkus BOM (`enforcedPlatform("io.quarkus.platform:quarkus-bom:<version>")`),
+Lombok annotation-processor wiring, a Jandex index so ArC discovers CDI beans in library modules,
+compiler flags (`-parameters`, required for Jackson/records and CDI parameter-name resolution), JUnit
+Platform test config plus explicit launcher/engine pinning (comment explains *why*: Gradle 8's bundled
+launcher can lag the JUnit 5 version managed by the Quarkus BOM), and JaCoCo reporting — a module's own
+`build.gradle.kts` only declares `plugins { id("shop.java-conventions") }` plus its dependencies (for
+example `io.quarkus:quarkus-rest-jackson`, `io.quarkus:quarkus-arc`, `io.quarkus:quarkus-junit5`,
+`io.quarkus:quarkus-junit5-mockito`, `io.rest-assured:rest-assured`), never repeats this setup. The
+`io.quarkus` plugin itself is applied only by the runnable application module and by modules that run
+Quarkus codegen.
 
 ## Java 21 toolchain, applied repo-wide {#java}
 **Serves:** [`java`](../java.md)
@@ -46,6 +51,8 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 plugins {
     `java-library`
     jacoco
+    // library modules need a Jandex index so ArC discovers their CDI beans
+    id("org.kordamp.gradle.jandex")
 }
 
 group = "com.acme.shop"
@@ -58,6 +65,9 @@ java {
 }
 
 dependencies {
+    val quarkusVersion = "3.20.1"
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:$quarkusVersion"))
+
     val lombokVersion = "1.18.36"
     compileOnly("org.projectlombok:lombok:$lombokVersion")
     annotationProcessor("org.projectlombok:lombok:$lombokVersion")
@@ -68,8 +78,7 @@ dependencies {
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.release.set(21)
-    // -parameters is required for Spring MVC to resolve parameter names via reflection
-    // (for example @PathVariable, @RequestParam without an explicit name attribute)
+    // -parameters lets Jackson (records, creators) and CDI resolve parameter names via reflection
     options.compilerArgs.add("-parameters")
 }
 
@@ -84,6 +93,7 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // pin launcher + engine to the BOM-managed JUnit 5; Gradle 8's bundled launcher can lag it
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
@@ -125,7 +135,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api")
 }
 ```
-Expected: the shared plugin still supplies the launcher and engine at runtime.
+Expected: the shared plugin still supplies the launcher and engine at runtime, at the versions managed by the Quarkus BOM.
 
 Domain test helpers published for reuse:
 ```kotlin

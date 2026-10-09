@@ -13,7 +13,7 @@ kind: worked-example
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-A small, clean `@Entity` — no domain logic, kept separate from the `SalesRegion` domain enum it is
+A small, clean `@Entity` (plain Jakarta Persistence, not `PanacheEntity`) — no domain logic, kept separate from the `SalesRegion` domain enum it is
 mapped to and from at the repository edge (see [sales-region-jpa-repository]).
 
 ## `@Entity` kept out of the domain {#jpa-entity-mapping}
@@ -21,7 +21,7 @@ mapped to and from at the repository edge (see [sales-region-jpa-repository]).
 
 Lives under the adapter's `repository.*` package, never imported by `*-domain` or `*-usecase` code.
 Lombok `@Getter`/`@Builder`/`@NoArgsConstructor(PROTECTED)`/`@AllArgsConstructor(PACKAGE)` — no
-public no-args or all-args constructor, so instances are only built via the builder or JPA
+public no-args or all-args constructor, so instances are only built via the builder or Hibernate
 reflection. `@Table` declares an explicit `@UniqueConstraint` with a named constraint (matches the
 Flyway migration that created it, see [topics-delegation-migration] for the migration
 convention). `@GeneratedValue(strategy = IDENTITY)` with an explicit `columnDefinition = "serial"` —
@@ -75,8 +75,8 @@ Expected: application code can prepare an entity without an identifier; JPA assi
 
 Duplicate logical row:
 ```java
-salesRegionRepository.save(SalesRegionEntity.builder().region("CENTRAL").regionCode("00000").build());
-salesRegionRepository.save(SalesRegionEntity.builder().region("CENTRAL").regionCode("00000").build());
+salesRegionPanacheRepository.persistAndFlush(SalesRegionEntity.builder().region("CENTRAL").regionCode("00000").build());
+salesRegionPanacheRepository.persistAndFlush(SalesRegionEntity.builder().region("CENTRAL").regionCode("00000").build());
 ```
 Expected: the `unique_region_region_code` constraint rejects the second row.
 

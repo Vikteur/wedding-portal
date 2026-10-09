@@ -17,16 +17,18 @@ kind: worked-example
 > an anchor without updating the indexes in `serves:`.
 
 ## What this artifact is
-The adapter for the partner registry SOAP service (via a generated `RegistryPortType` CXF client).
-It demonstrates a circuit breaker with a degrade-to-empty fallback.
+The adapter for the partner registry SOAP service (via a generated `RegistryPortType` Quarkus CXF
+client, injected with `@CXFClient("registry")`).
+It demonstrates a SmallRye Fault Tolerance circuit breaker with a degrade-to-empty fallback.
 
 ## Circuit breaker with fallback {#resilience4j}
 **Serves:** [`resilience4j`](../resilience4j.md)
 
-`@CircuitBreaker(name = "registry", fallbackMethod = "getRegistryLinksFallback")` on the gateway
-method; the fallback is a private method with the same signature plus a trailing `Throwable`,
-returning a safe empty list and logging at `error`. Convention: `name` matches the Resilience4j
-config key for this integration, and the fallback never rethrows for a non-critical read.
+`@CircuitBreaker` plus `@Fallback(fallbackMethod = "getRegistryLinksFallback")` on the gateway
+method; the fallback is a private method with exactly the same signature, returning a safe empty
+list and logging at `error`. Convention: the breaker is identified by
+`com.acme.shop.partner.gateway.registry.DefaultRegistryGateway/getRegistryLinks`, which is also its
+config key, and the fallback never rethrows for a non-critical read.
 
 ### Source (pseudonymized)
 ```java
@@ -35,9 +37,11 @@ package com.acme.shop.partner.gateway.registry;
 import com.acme.shop.partner.registry.core.v2.GetCustomerLinksResponse;
 import com.acme.shop.partner.registry.protocol.v2.RegistryPortType;
 import com.acme.shop.partner.dto.RegistryLink;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.quarkiverse.cxf.annotation.CXFClient;
+import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Repository;
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.eclipse.microprofile.faulttolerance.Fallback;
 
 import java.util.Collections;
 import java.util.List;
@@ -46,19 +50,20 @@ import static com.acme.shop.partner.gateway.registry.RegistryRequestBuilder.buil
 
 
 @Slf4j
-@Repository
+@ApplicationScoped
 class DefaultRegistryGateway implements RegistryGateway {
     private final RegistryPortType registryPortType;
     private final RegistryMapper registryMapper;
 
-    public DefaultRegistryGateway(final RegistryPortType registryPortType,
+    public DefaultRegistryGateway(@CXFClient("registry") final RegistryPortType registryPortType,
                                   final RegistryMapper registryMapper) {
         this.registryPortType = registryPortType;
         this.registryMapper = registryMapper;
     }
 
     @Override
-    @CircuitBreaker(name = "registry", fallbackMethod = "getRegistryLinksFallback")
+    @CircuitBreaker
+    @Fallback(fallbackMethod = "getRegistryLinksFallback")
     public List<RegistryLink> getRegistryLinks(final String nid) {
         log.debug("Getting registry links");
         final GetCustomerLinksResponse customerLinks =
@@ -70,12 +75,15 @@ class DefaultRegistryGateway implements RegistryGateway {
         return registryMapper.mapRegistryLinks(customerLinks.getRegistryList().getEntries());
     }
 
-    private List<RegistryLink> getRegistryLinksFallback(final String nid,
-                                                        final Throwable e) {
-        log.error("Circuit breaker: Failed to fetch registry links", e);
+    private List<RegistryLink> getRegistryLinksFallback(final String nid) {
+        log.error("Circuit breaker: Failed to fetch registry links");
         return Collections.emptyList();
     }
 }
+```
+
+```properties
+quarkus.fault-tolerance."com.acme.shop.partner.gateway.registry.DefaultRegistryGateway/getRegistryLinks".circuit-breaker.request-volume-threshold=10
 ```
 
 ### Edge cases

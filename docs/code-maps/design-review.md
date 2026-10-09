@@ -31,7 +31,6 @@ The executable architecture rules are concrete enough to review a proposal again
 noClasses()
         .that().resideInAPackage("..adapter..controller..")
         .should().beAnnotatedWith(jakarta.transaction.Transactional.class)
-        .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
         .because("@Transactional belongs on the use case layer, not on controllers")
         .check(classes);
 ```

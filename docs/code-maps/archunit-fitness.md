@@ -35,12 +35,13 @@ classes()
 ```
 
 ### Edge cases
-Use-case class annotated with Spring's transaction annotation:
+Use-case class carrying `@Transactional` but no bean-defining annotation (wired from a `@Produces` method instead):
 ```java
-@org.springframework.transaction.annotation.Transactional
+@jakarta.transaction.Transactional
 class SubmitOrderUseCase { }
 ```
-Expected: the suite fails with the rule that bans Spring's `@Transactional` on use-cases.
+Expected: the suite fails with the rule that requires `@ApplicationScoped` on use-cases — CDI interceptors
+such as `@Transactional` do not apply to beans returned by producer methods.
 
 Domain type annotated with Jakarta transactions:
 ```java
@@ -62,7 +63,8 @@ Expected: the suite fails because controllers are not the transaction boundary i
   `@AnalyzeClasses(packages = "com.acme.shop")` sees the whole codebase from one test source set.
 - Naming shape: `*ConventionTest`, one `@ArchTest` method per rule, always with `.because("...")`.
 - Rules currently enforced: `TransactionalConventionTest` (use-case classes carry
-  `jakarta.transaction.Transactional`, never Spring's; domain/controller classes carry neither) and
+  `jakarta.transaction.Transactional` and `@ApplicationScoped`; domain classes carry neither `@Transactional`
+  nor any `jakarta.enterprise` / `jakarta.ws.rs` / `io.quarkus` type; controllers carry no `@Transactional`) and
   `BatchJobLoggingConventionTest` (every `@Scheduled` method also carries `@BatchJob`, and vice versa).
 - Config / wiring: none beyond the ArchUnit JUnit 5 extension already on the test classpath.
 

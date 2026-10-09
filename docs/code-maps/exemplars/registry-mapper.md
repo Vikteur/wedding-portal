@@ -13,7 +13,7 @@ kind: worked-example
 > and under the AI.Backbone Orchestrator Compliance framework
 
 ## What this artifact is
-A `@Component` mapper converting the wire shape (`List<PartnerRecordType>`) to the domain enum
+A CDI `@ApplicationScoped` mapper converting the wire shape (`List<PartnerRecordType>`) to the domain enum
 `Registry`, at the gateway edge.
 
 ## Wire-to-domain mapper {#domain-dto-mapper}
@@ -31,14 +31,14 @@ package com.acme.shop.partner.gateway.registry;
 import com.acme.partner.standards.catalog.schema.v1.PartnerRecordType;
 import com.acme.shop.partner.dto.Registry;
 import jakarta.annotation.PostConstruct;
-import org.springframework.stereotype.Component;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Component
+@ApplicationScoped
 public class RegistryMapper {
 
     private Map<String, Registry> registries;

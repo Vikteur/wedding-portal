@@ -17,12 +17,12 @@ Consumer side of the `storefront` domain-events pattern: reacts to `PageCreatedE
 `PageUpdatedEvent` by re-indexing the page in Typesense. Its sibling `DeletePageEventListener`
 removes deleted pages from the index.
 
-## `@TransactionalEventListener`, not `@EventListener` {#domain-events}
+## `@Observes(during = AFTER_SUCCESS)`, not plain `@Observes` {#domain-events}
 **Serves:** [`domain-events`](../domain-events.md)
 
-Every listener method uses `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`.
+Every observer method takes its event as `@Observes(during = TransactionPhase.AFTER_SUCCESS)`.
 The publisher fires the event synchronously inside the use case's `@Transactional` method, but
-`AFTER_COMMIT` defers the actual handler body until the surrounding transaction has committed — so a
+`AFTER_SUCCESS` defers the actual observer body until the surrounding transaction has committed — so a
 Typesense indexing failure can never roll back the page save that already succeeded.
 
 ### Source (pseudonymized)
@@ -34,26 +34,24 @@ import com.acme.shop.storefront.domain.page.AbstractPage;
 import com.acme.shop.storefront.events.PageCreatedEvent;
 import com.acme.shop.storefront.events.PageUpdatedEvent;
 import com.acme.shop.storefront.repository.SearchFacade;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.TransactionPhase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
-@Component
+@ApplicationScoped
 @RequiredArgsConstructor
 @Slf4j
 public class IndexPageEventListener {
 
     private final SearchFacade searchFacade;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void indexPageOnUpdate(final PageUpdatedEvent event) {
+    public void indexPageOnUpdate(@Observes(during = TransactionPhase.AFTER_SUCCESS) final PageUpdatedEvent event) {
         indexPage(event.page(), "update");
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void indexPageOnCreation(final PageCreatedEvent event) {
+    public void indexPageOnCreation(@Observes(during = TransactionPhase.AFTER_SUCCESS) final PageCreatedEvent event) {
         indexPage(event.page(), "create");
     }
 
@@ -70,10 +68,9 @@ public class IndexPageEventListener {
 ### Edge cases
 Update event arrives before commit completes:
 ```java
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void indexPageOnUpdate(final PageUpdatedEvent event) {
+public void indexPageOnUpdate(@Observes(during = TransactionPhase.AFTER_SUCCESS) final PageUpdatedEvent event) {
 ```
-Expected: handler execution waits until commit and never observes an uncommitted page.
+Expected: observer execution waits until commit and never observes an uncommitted page.
 
 Search backend throws during indexing:
 ```java
@@ -91,4 +88,4 @@ indexPage(event.page(), "update");
 Expected: both entry points keep the same logging and error-handling behavior.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg '@TransactionalEventListener'` — see [create-or-update-static-page-usecase](create-or-update-static-page-usecase.md#domain-events) for the paired publisher.
+- Scanned at: `abc1234` · tool/query: `rg '@Observes\(during'` — see [create-or-update-static-page-usecase](create-or-update-static-page-usecase.md#domain-events) for the paired publisher.

@@ -71,9 +71,11 @@ The base case is a read: `execute()` returns one port call. Its test comes from 
 - Package root: `<capability>-usecase/src/main/java/com/acme/shop/<capability>/usecase/`.
 - Naming shape: `*UseCase` — there is no `@UseCase` annotation in this codebase; the class-name
   suffix alone is the marker.
-- Required collaborators / base types: no interface, no base class. `@RequiredArgsConstructor` +
-  optional `@Transactional`. Entry point is always `execute(...)` (no-arg or with a request object).
-- Config / wiring: plain Spring bean (constructor injection), no special annotation.
+- Required collaborators / base types: no interface, no base class. `@ApplicationScoped` +
+  `@Transactional` (`jakarta.transaction`) + `@RequiredArgsConstructor`. Entry point is always
+  `execute(...)` (no-arg or with a request object).
+- Config / wiring: CDI bean annotated directly (constructor injection), never returned from a
+  `@Produces` method — CDI interceptors such as `@Transactional` do not apply to producer-method beans.
 
 ## Frequency & coverage (why this earned a skill)
 - Occurrences: 180 files across 14 `*-usecase` modules (as of `abc1234`).

@@ -38,3 +38,12 @@ How to add an entry:
   `testcontainers`) target Quarkus; the worked-example leaves are Spring and give structure only. Owner decision.
 - Use cases are `@ApplicationScoped` classes, not produced beans: CDI interceptors (`@Transactional`) do not apply to
   beans from a producer method. Factories stay framework-free and are produced by the bean config.
+
+## 2026-10-09 — (no ticket) Worked examples target Quarkus
+- Every worked-example leaf and exemplar under `docs/code-maps/` now shows Quarkus 3 instead of Spring Boot: Quarkus
+  REST resources, `@ServerExceptionMapper`, CDI producers, Panache repositories, CDI `Event` + `@Observes(during =
+  AFTER_SUCCESS)`, SmallRye Fault Tolerance, Quarkus CXF, `quarkus-openapi-generator`, Dev Services. Why: the leaves
+  should match the skills and the scaffold templates. Owner decision.
+- Controllers return what the generated `jaxrs-spec` interface declares (`returnResponse=false`): a fixed
+  `Cache-Control` via `@Cache`, a non-200 body via a thrown `WebApplicationException`, which the central catch-all
+  mapper passes through unchanged.

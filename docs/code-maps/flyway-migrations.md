@@ -61,7 +61,10 @@ Expected: the first update skips the row because the value already contains `HOU
 - Naming shape: `V<major>.<minor>__<snake_case_description>.sql` (two-part version, e.g. `V1.098`,
   not `V1__` / timestamp-based).
 - Required collaborators / base types: none — plain SQL, no Java migration classes observed.
-- Config / wiring: applied automatically on startup (Spring Boot Flyway auto-config).
+- Config / wiring: applied automatically on startup by `quarkus-flyway`
+  (`quarkus.flyway.migrate-at-start=true`; the default `db/migration` location is scanned
+  recursively, so `ddl/` is picked up). Hibernate never touches the schema:
+  `quarkus.hibernate-orm.database.generation=none`.
 
 ## Frequency & coverage (why this earned a skill)
 - Occurrences: 99 migration files across 5 modules — `application`, `authentication-adapter`,

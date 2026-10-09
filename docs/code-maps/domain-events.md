@@ -14,7 +14,7 @@ kind: worked-example
 | Exemplar | What it shows | Layer / module |
 |----------|---------------|----------------|
 | [`CreateOrUpdateStaticPageUseCase.java`](exemplars/create-or-update-static-page-usecase.md#domain-events) | Build the event, publish only after a successful save, via the `DomainEventPublisher` port | usecase (`storefront-usecase`) |
-| [`IndexPageEventListener.java`](exemplars/index-page-event-listener.md#domain-events) | `@TransactionalEventListener(phase = AFTER_COMMIT)` consumer, failure caught and not rethrown | adapter (`storefront-adapter`) |
+| [`IndexPageEventListener.java`](exemplars/index-page-event-listener.md#domain-events) | `@Observes(during = TransactionPhase.AFTER_SUCCESS)` consumer, failure caught and not rethrown | adapter (`storefront-adapter`) |
 
 ### Excerpts
 Publish only after persistence succeeds:
@@ -29,8 +29,7 @@ domainEventPublisher.publish(createOrUpdateEvent);
 
 Consume after commit so indexing cannot roll back the write:
 ```java
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void indexPageOnCreation(final PageCreatedEvent event) {
+public void indexPageOnCreation(@Observes(during = TransactionPhase.AFTER_SUCCESS) final PageCreatedEvent event) {
     indexPage(event.page(), "create");
 }
 ```
@@ -70,22 +69,23 @@ Expected: the failure is logged, the committed page stays stored, and the listen
 
 ## Local conventions (the project facts the skill omits)
 - Package root: marker interface + port in `common-domain/src/main/java/com/acme/shop/common/domain/event/`
-  (`DomainEvent`, `DomainEventPublisher`); the Spring adapter in
-  `common-adapter/src/main/java/com/acme/shop/common/adapter/event/SpringEventPublisher.java`;
+  (`DomainEvent`, `DomainEventPublisher`); the CDI adapter in
+  `common-adapter/src/main/java/com/acme/shop/common/adapter/event/CdiDomainEventPublisher.java`;
   concrete events and publishing use cases live per capability, for example
   `storefront-usecase/.../events/Page{Created,Updated,Deleted}Event.java`.
 - Naming shape: `Page{Created,Updated,Deleted}Event` (a `record` implementing `DomainEvent`, carrying the
   domain object); publishing use cases named `CreateOrUpdate*UseCase` / `Delete*UseCase`; listeners named
-  `*EventListener` in `storefront-adapter/.../event/`.
+  `*EventListener` (`@ApplicationScoped` beans) in `storefront-adapter/.../event/`.
 - Required collaborators / base types: publish only after the write succeeds and only when
-  `notification.hasErrors()` is false; consume via `@TransactionalEventListener(phase =
-  TransactionPhase.AFTER_COMMIT)`, not `@EventListener`.
-- Config / wiring: `SpringEventPublisher` is the only `DomainEventPublisher` implementation,
-  delegating to Spring's `ApplicationEventPublisher` so use-case code stays framework-free.
+  `notification.hasErrors()` is false; consume via `@Observes(during = TransactionPhase.AFTER_SUCCESS)`
+  (`jakarta.enterprise.event`), not plain `@Observes`.
+- Config / wiring: `CdiDomainEventPublisher` (`@ApplicationScoped`) is the only `DomainEventPublisher`
+  implementation, firing through an injected `jakarta.enterprise.event.Event<DomainEvent>`
+  (`event.fire(domainEvent)`) so use-case code stays framework-free.
 
 ## Frequency & coverage (why this earned a skill)
 - Occurrences (as of `abc1234`): `rg 'DomainEvent'` — 51 matches / 18 files (including tests); `rg
-  '@TransactionalEventListener'` — 4 matches / 3 files. Main-only: 13 files / 4 modules
+  '@Observes\(during'` — 4 matches / 3 files. Main-only: 13 files / 4 modules
   (`common-domain`, `common-adapter`, `storefront-usecase`, `storefront-adapter`).
 - Hotspot: `storefront-usecase/.../events/` and `.../usecase/`.
 
@@ -94,4 +94,4 @@ Expected: the failure is logged, the committed page stays stored, and the listen
   search index update is best-effort, not a source of truth.
 
 ## Provenance
-- Scanned at: `abc1234` · tool/query: `rg 'DomainEvent'` (51/18), `rg 'DomainEventPublisher'` (25/13), `rg '@TransactionalEventListener'` (4/3)
+- Scanned at: `abc1234` · tool/query: `rg 'DomainEvent'` (51/18), `rg 'DomainEventPublisher'` (25/13), `rg '@Observes\(during'` (4/3)

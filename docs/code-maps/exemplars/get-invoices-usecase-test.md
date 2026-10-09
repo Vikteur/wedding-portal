@@ -18,8 +18,8 @@ The unit test for `GetInvoicesUseCase` (see [get-invoices-usecase](get-invoices-
 ## `given..._when..._then...` test naming {#usecase-bdd-spec}
 **Serves:** [`usecase-bdd-spec`](../usecase-bdd-spec.md)
 
-`@ExtendWith(MockitoExtension.class)` + `@Mock` / `@InjectMocks`, no test framework beyond JUnit 5,
-Mockito, and AssertJ. Method names spell out the full scenario in one BDD-shaped sentence rather
+`@ExtendWith(MockitoExtension.class)` + `@Mock` / `@InjectMocks`, no Quarkus boot (`@QuarkusTest` is for
+integration tests) and no test framework beyond JUnit 5, Mockito, and AssertJ. Method names spell out the full scenario in one BDD-shaped sentence rather
 than relying on `@DisplayName` or Given/When/Then comment blocks. `@ParameterizedTest` +
 `@EnumSource` covers the exhaustive excluded-document-type cases.
 
