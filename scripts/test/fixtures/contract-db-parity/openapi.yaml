@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info: { title: Fixture, version: 1.0.0 }
+paths:
+  /guests:
+    get:
+      operationId: listGuests
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/guestPage' } } } }
+    post:
+      operationId: createGuest
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/guestCreate' } } }
+      responses:
+        '201': { content: { application/json: { schema: { $ref: '#/components/schemas/guest' } } } }
+  /guests/{guestId}:
+    parameters:
+      - { name: guestId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateGuest
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/guestPatch' } } }
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/guest' } } } }
+    delete:
+      operationId: deleteGuest
+      responses: { '204': { description: gone } }
+  /guests/{guestId}/check-in:
+    post:
+      operationId: checkInGuest
+      parameters:
+        - { name: guestId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/guest' } } } }
+  /venues/{venueId}:
+    get:
+      operationId: getVenue
+      parameters:
+        - { name: venueId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/venue' } } } }
+  /tables/{tableId}:
+    delete:
+      operationId: deleteTable
+      parameters:
+        - { name: tableId, in: path, required: true, schema: { type: string } }
+      responses: { '204': { description: gone } }
+components:
+  schemas:
+    guestPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/guest' } }
+        total: { type: integer }
+    guest:
+      type: object
+      required: [id, name, status, seats]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string, maxLength: 200 }
+        email: { type: string, nullable: true }
+        status: { type: string, enum: [INVITED, CONFIRMED, DECLINED] }
+        seats: { type: integer, format: int64 }
+        externalRef: { type: string, format: uuid }
+        badge: { type: string }
+        channel: { type: string, x-extensible-enum: [EMAIL, SMS] }
+        diet:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/dietKind'
+    dietKind: { type: string, enum: [VEGAN, NONE] }
+    guestCreate:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        name: { type: string, maxLength: 200 }
+        email: { type: string, nullable: true }
+        seats: { type: integer, format: int64 }
+        dietaryNote: { type: string }
+    guestPatch:
+      type: object
+      properties:
+        name: { type: string, maxLength: 200 }
+        status: { type: string, enum: [INVITED, CONFIRMED, DECLINED] }
+    venue:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        rooms: { type: array, items: { $ref: '#/components/schemas/room' } }
+    room:
+      type: object
+      properties:
+        label: { type: string }

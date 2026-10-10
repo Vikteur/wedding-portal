@@ -15,3 +15,4 @@
 
 # The scaffold renderer (scripts/scaffold.sh) installs here from its lockfile.
 /scripts/scaffold/node_modules/
+/scripts/contract-db-parity/node_modules/

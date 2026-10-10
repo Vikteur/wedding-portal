@@ -19,7 +19,7 @@ The examples originate from a pseudonymized reference set. Shared material in th
 [jvm-testing] leaf), and the mustache templates in `docs/Moustache scripts/` (rendered by `scripts/scaffold.sh`; each
 leaf's `## Scaffold` section lists its own).
 
-Leaves: [api-first-controller], [archunit-fitness], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [flyway-migrations], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result].
+Leaves: [api-first-controller], [archunit-fitness], [bean-config-di], [clean-architecture], [clean-code], [code-generation], [contract-db-parity], [design-review], [domain-dto-mapper], [domain-events], [domain-modeling], [domain-to-dto-mapper-tests], [exception-to-http], [flyway-migrations], [java], [jpa-entity-mapping], [junit-tests], [jvm-testing], [object-mother-builders], [openapi-rest-client-codegen], [persistence-repository], [resilience4j], [testcontainers], [usecase-bdd-spec], [usecase-orchestration], [validation-notification-result].
 
 [api-first-controller]: api-first-controller.md
 [archunit-fitness]: archunit-fitness.md
@@ -27,6 +27,7 @@ Leaves: [api-first-controller], [archunit-fitness], [bean-config-di], [clean-arc
 [clean-architecture]: clean-architecture.md
 [clean-code]: clean-code.md
 [code-generation]: code-generation.md
+[contract-db-parity]: contract-db-parity.md
 [design-review]: design-review.md
 [domain-dto-mapper]: domain-dto-mapper.md
 [domain-events]: domain-events.md

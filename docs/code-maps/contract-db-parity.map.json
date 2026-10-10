@@ -1,0 +1,88 @@
+{
+  "objects": {
+    "userAccount": "users",
+    "meResponse": "users",
+    "passwordChange": "users",
+    "invite": "invitations",
+    "inviteCreated": "invitations",
+    "invitePreview": "invitations",
+    "person": "wedding_people",
+    "teamSlot": "wedding_team",
+    "portalIntake": "weddings",
+    "blocklistResponse": "song_entries",
+    "portalSongsResponse": "song_entries",
+    "libraryInfo": "libraries",
+    "trackChoice": "preferences",
+    "path:imported-playlists": "rekordbox_playlists",
+    "playlistImportResult": "rekordbox_playlists",
+    "quote": "billing_documents",
+    "invoice": "billing_documents",
+    "creditNote": "billing_documents",
+    "auditEvent": "audit_log",
+    "coupleChange": "song_changes",
+    "signedOutResponse": null
+  },
+  "fields": {
+    "organization.billing.*": "billing_settings.*",
+    "userAccount.roles": "membership_roles.role",
+    "userAccount.vendorId": "memberships.vendor_id",
+    "meResponse.user.*": "users.*",
+    "meResponse.password": "password_hash",
+    "passwordChange.newPassword": "password_hash",
+    "passwordChange.currentPassword": null,
+    "invitePreview.invitedBy": null,
+    "libraryInfo.ownerId": "owner_user_id",
+    "playlistImportResult.playlist.*": "rekordbox_playlists.*",
+    "teamSlot.contactId": "vendor_contact_id",
+    "teamSlot.personName": "person_name_override",
+    "wedding.note": "notes",
+    "wedding.venueName": "venue_name_override",
+    "weddingCreated.note": "notes",
+    "weddingCreated.venueName": "venue_name_override",
+    "djWedding.note": "notes",
+    "djWedding.venueName": "venue_name_override",
+    "portalIntake.names": "portal_names",
+    "portalSongsResponse.kind": "song_lists.kind_code"
+  },
+  "accept": {
+    "creditNote.number": {
+      "db-allows-null": {
+        "constraint": "ck_billing_documents_issued",
+        "reason": "number is null only on a DRAFT, and a credit note is always ISSUED (ck_billing_documents_status)"
+      }
+    },
+    "quote.weddingId": {
+      "db-allows-null": {
+        "constraint": "ck_billing_documents_wedding",
+        "reason": "wedding_id is null only on an issued invoice or credit note kept after the erase; a quote goes with its wedding"
+      }
+    },
+    "quote.recipient.name": {
+      "optional-but-not-null": {
+        "reason": "an empty create body starts a pre-filled draft: the recipient is copied from the wedding's partners (quoteInput, UD-26.f)"
+      }
+    },
+    "invoice.recipient.name": {
+      "optional-but-not-null": {
+        "reason": "an empty create body starts a pre-filled draft: the recipient is copied from the wedding's partners (quoteInput, UD-26.f)"
+      }
+    },
+    "portalSongsResponse.position": {
+      "null-not-storable": {
+        "reason": "null asks the server to append: it stores the first free slot (portalSongInput.position)"
+      }
+    },
+    "portalIntake.names": {
+      "db-allows-null": {
+        "reason": "read as coalesce(portal_names, couple_display_name): the couple's names once set, the planner's NOT NULL name before (UD-18.b)"
+      }
+    }
+  },
+  "ignoreTables": [],
+  "ignoreColumns": [
+    "*.org_id",
+    "*.created_at",
+    "*.updated_at",
+    "*.deleted_at"
+  ]
+}
