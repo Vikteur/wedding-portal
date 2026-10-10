@@ -57,6 +57,22 @@ check "ignored tables and columns"   '[.findings[]|select(.table=="audit_log" or
 check "unexposed column is info"     '[.findings[]|select(.kind=="column-not-exposed" and .column=="org_id")][0].severity=="info"' "$r"
 check "findings sort errors first"   '[.findings[].severity]|(index("info") // 1e9) > (rindex("error") // -1)' "$r"
 
+# Cross-table and wildcard mappings, accepted findings, and the contract rules they lean on.
+out="$work/map"
+bash "$script" --spec "$fx/openapi-map.yaml" --db-schema "$fx/db-schema-map.json" --map "$fx/map-map.json" --out "$out" >/dev/null 2>&1
+s="$out/contract-surface.json"; r="$out/parity-report.json"
+check "a nullable parent makes its required fields optional" '.objects.order.fields|(.["seller.name"].alwaysPresent==false) and (.["buyer.name"].alwaysPresent==true)' "$s"
+check "a request-only object is never read" '.objects.passwordChange.fields.newPassword|(.update==true) and (.read==false)' "$s"
+check "a nullable parent's child column may be null" '[.findings[]|select(.field=="seller.name")]|length==0' "$r"
+check "a clock pattern matches a time column" '[.findings[]|select(.field=="slot")]|length==0' "$r"
+check "a cross-table field compares an array's items per row" '[.findings[]|select(.field=="tags")]|map(.kind+"@"+.table+"."+.column)==["enum-mismatch@order_tags.tag"]' "$r"
+check "a cross-table field reports its home table" '.tables.orders.fields["order.tags"].column=="order_tags.tag"' "$r"
+check "a wildcard maps a nested field by name" '[.findings[]|select(.field=="billing.iban")]|map(.kind+"@"+.table)==["length-mismatch@order_billing"]' "$r"
+check "a table reached only by a mapping lists its unexposed columns" '[.findings[]|select(.kind=="column-not-exposed" and .table=="order_billing")]|map(.column)==["order_id","swift"]' "$r"
+check "an accepted finding drops to info with its reason" '[.findings[]|select(.field=="ref")]|(length==1) and (.[0].severity=="info") and (.[0].accepted.constraint=="ck_orders_ref")' "$r"
+check "an acceptance naming a missing constraint is an error" '[.findings[]|select(.field=="total")]|map(.kind+"/"+.severity)|sort==["accept-constraint-missing/error","db-allows-null/warning"]' "$r"
+check "the summary counts accepted findings" '.summary.accepted==1 and .summary.matchedTables==4' "$r"
+
 bash "$script" --spec "$fx/openapi.yaml" --db-schema "$fx/db-schema.json" --map "$fx/map.json" --out "$work/strict" --strict >/dev/null 2>&1; rc=$?
 if [ "$rc" -eq 1 ]; then ok "--strict fails on an error"; else bad "--strict fails on an error" "exit $rc"; fi
 bash "$script" --spec "$fx/openapi.yaml" --only contract --out "$work/contract" >/dev/null 2>&1; rc=$?

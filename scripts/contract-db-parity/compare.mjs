@@ -5,8 +5,12 @@
 //
 // map.json (optional) settles what naming conventions cannot:
 //   { "objects": { "<object>": "<table>" | null },          null: the object is not stored (computed, a wrapper)
-//     "fields":  { "<object>.<field path>": "<column>" | null },
+//     "fields":  { "<object>.<field path>": "<column>" | "<table>.<column>" | null,
+//                  "<object>.<path prefix>.*": "<table>.*" },  every field under the prefix, matched by name in <table>
+//     "accept":  { "<object>.<field path>": { "<finding kind>": { "constraint": "<check name>", "reason": "..." } } },
 //     "ignoreTables": ["<table>"], "ignoreColumns": ["<table>.<column>", "*.<column>"] }
+// A field mapped into another table whose column is a scalar compares an array's items with it (one row per item).
+// An accepted finding drops to info; its constraint must exist on the finding's table, so the reason cannot go stale.
 import { readFileSync } from 'node:fs';
 
 const [surfacePath, schemaPath, mapPath] = process.argv.slice(2);
@@ -21,6 +25,7 @@ const objectMap = map.objects ?? {};
 const fieldMap = map.fields ?? {};
 const ignoreTables = new Set(map.ignoreTables ?? []);
 const ignoreColumns = map.ignoreColumns ?? [];
+const accepted = map.accept ?? {};
 
 // Read models and wrappers share their object's table: weddingSummary, weddingCreated -> wedding.
 const OBJECT_SUFFIXES = /(Summary|Detail|Details|View|Response|Result|Created|Issued|Preview|Dto|Resource|Model)$/;
@@ -32,6 +37,17 @@ const JSONISH = new Set(['json', 'jsonb']);
 
 const findings = [];
 function finding(severity, kind, detail, where) {
+  const accept = where.object && where.field ? accepted[`${where.object}.${where.field}`]?.[kind] : undefined;
+  if (accept && severity !== 'info') {
+    const checks = tables[where.table]?.checks ?? [];
+    if (accept.constraint && !checks.some((c) => c.name === accept.constraint)) {
+      findings.push({ severity: 'error', kind: 'accept-constraint-missing', ...where,
+        detail: `map.json accepts this ${kind} because of ${accept.constraint}, which ${where.table} does not have` });
+    } else {
+      findings.push({ severity: 'info', kind, ...where, detail, accepted: accept });
+      return;
+    }
+  }
   findings.push({ severity, kind, ...where, detail });
 }
 
@@ -75,21 +91,52 @@ function ignoredColumn(table, column) {
   return ignoreColumns.includes(`${table}.${column}`) || ignoreColumns.includes(`*.${column}`);
 }
 
-function columnFor(object, path, field, columns) {
+// The map entry for a field: its own key, else the nearest `<object>.<prefix>.*` above it.
+function fieldMapping(object, path) {
   const key = `${object}.${path}`;
-  if (Object.hasOwn(fieldMap, key)) return { column: fieldMap[key], how: 'map' };
+  if (Object.hasOwn(fieldMap, key)) return { target: fieldMap[key], rest: null };
+  const parts = path.split('.');
+  for (let k = parts.length - 1; k > 0; k--) {
+    const wild = `${object}.${parts.slice(0, k).join('.')}.*`;
+    if (Object.hasOwn(fieldMap, wild)) return { target: fieldMap[wild], rest: parts.slice(k).join('.') };
+  }
+  return null;
+}
+const mapped = (object, path) => fieldMapping(object, path) !== null;
+
+function byName(path, field, columns) {
   const plain = path.replace(/\[\]/g, '');
   const candidates = [snake(plain.replace(/\./g, '_')), snake(plain.split('.').pop())];
   // A nested object reference ({vendorId} inside `venue`) may be stored as its parent name plus `_id`.
   if (field.ref && field.container) candidates.push(`${snake(plain)}_id`);
-  for (const c of candidates) if (columns[c]) return { column: c, how: 'name' };
-  return { column: null, how: null };
+  return candidates.find((c) => columns[c]) ?? null;
+}
+
+// Where a field is stored: { table, column } — table is the object's own unless the map names another.
+function columnFor(object, path, field, table) {
+  const m = fieldMapping(object, path);
+  if (!m) return { table, column: byName(path, field, tables[table].columns), how: 'name' };
+  if (m.target === null) return { table, column: null, how: 'map' };
+  const [other, column] = m.target.includes('.') ? m.target.split('.') : [table, m.target];
+  if (column === '*') return { table: other, column: tables[other] ? byName(m.rest, field, tables[other].columns) : null, how: 'map' };
+  return { table: other, column, how: 'map' };
+}
+
+// A string whose pattern accepts a clock or calendar value is that value without a format (`clockTime`: ^..:..$).
+function patternFormat(field) {
+  if (!field.pattern) return null;
+  try {
+    const re = new RegExp(field.pattern);
+    if (re.test('09:30') && !re.test('x')) return 'time';
+    if (re.test('2027-06-12') && !re.test('x')) return 'date';
+  } catch { /* not an ECMAScript pattern */ }
+  return null;
 }
 
 function typeVerdict(field, column, enums) {
   const t = column.type;
   const isEnum = Object.hasOwn(enums, t);
-  const fmt = field.format;
+  const fmt = field.format ?? patternFormat(field);
   const ok = { ok: true };
   const bad = (why) => ({ ok: false, severity: 'error', why });
   const meh = (why) => ({ ok: false, severity: 'warning', why });
@@ -144,9 +191,8 @@ for (const [object, entry] of Object.entries(surface.objects ?? {})) {
 }
 
 const tableReport = {};
+const used = new Map(Object.keys(tables).map((t) => [t, new Set()]));
 for (const [table, objects] of [...byTable.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-  const columns = tables[table].columns;
-  const used = new Set();
   const report = (tableReport[table] = { objects: objects.map((o) => ({ object: o.object, matchedBy: o.how })), fields: {} });
 
   for (const { object, entry } of objects) {
@@ -155,69 +201,72 @@ for (const [table, objects] of [...byTable.entries()].sort(([a], [b]) => a.local
       // Items of a nested array belong to a child table (or a json column), never to this table's own columns.
       const inArray = path.match(/^(.*?)\[\]\./);
       if (inArray) {
-        if (!collections.has(inArray[1]) && !Object.hasOwn(fieldMap, `${object}.${path}`)) {
+        if (!collections.has(inArray[1]) && !mapped(object, path)) {
           collections.add(inArray[1]);
           const name = snake(inArray[1].split('.').pop());
           const child = [`${singular(table)}_${name}`, name].find((t) => tables[t]);
           finding('info', 'nested-collection', child ? `items of ${inArray[1]}[] are likely stored in ${child}`
             : `items of ${inArray[1]}[] need a child table or a json column; none matches by name`, { object, field: `${inArray[1]}[]`, table });
         }
-        if (!Object.hasOwn(fieldMap, `${object}.${path}`)) continue;
+        if (!mapped(object, path)) continue;
       }
       if (field.container && !field.ref) continue;
       const writable = field.create || field.update;
-      const { column, how } = columnFor(object, path, field, columns);
-      const where = { object, field: path, table };
+      const { table: home, column, how } = columnFor(object, path, field, table);
+      const where = { object, field: path, table: home };
       if (!column) {
-        if (Object.hasOwn(fieldMap, `${object}.${path}`)) continue;
+        if (fieldMapping(object, path)?.target === null) continue;
         if (field.container) continue;
         report.fields[`${object}.${path}`] = { column: null };
         finding(writable ? 'warning' : 'info', writable ? 'field-not-persisted' : 'derived-field',
           writable ? 'the contract accepts this field, but no column matches it' : 'read-only field with no matching column', where);
         continue;
       }
-      if (!columns[column]) {
-        finding('error', 'mapped-column-missing', `map.json points this field at ${column}, which ${table} does not have`, where);
+      if (!tables[home]?.columns[column]) {
+        finding('error', 'mapped-column-missing', `map.json points this field at ${home}.${column}, which the schema does not have`, where);
         continue;
       }
-      used.add(column);
-      const col = columns[column];
+      used.get(home).add(column);
+      const col = tables[home].columns[column];
+      // An array kept one row per item in another table compares its items with the column.
+      const perRow = home !== table && field.type === 'array' && field.items && !col.type.startsWith('_') && !JSONISH.has(col.type);
+      const subject = perRow ? { ...field.items, nullable: false } : field;
       const issues = [];
       Object.assign(where, { column });
-      report.fields[`${object}.${path}`] = { column, matchedBy: how, issues };
-      const verdict = typeVerdict(field, col, enums);
+      report.fields[`${object}.${path}`] = { column: home === table ? column : `${home}.${column}`, matchedBy: how, issues };
+      const verdict = typeVerdict(subject, col, enums);
       if (!verdict.ok) {
         issues.push('type');
         finding(verdict.severity, 'type-mismatch', verdict.why, where);
       }
-      if (field.maxLength && col.maxLength && field.maxLength > col.maxLength) {
+      if (subject.maxLength && col.maxLength && subject.maxLength > col.maxLength) {
         issues.push('maxLength');
-        finding('error', 'length-mismatch', `contract allows ${field.maxLength} characters, the column holds ${col.maxLength}`, where);
-      } else if (writable && !field.maxLength && !field.enum && col.maxLength && field.type === 'string' && !field.format) {
+        finding('error', 'length-mismatch', `contract allows ${subject.maxLength} characters, the column holds ${col.maxLength}`, where);
+      } else if (writable && !subject.maxLength && !subject.enum && col.maxLength && subject.type === 'string' && !subject.format) {
         issues.push('unbounded');
         finding('warning', 'unbounded-into-bounded', `contract sets no maxLength, the column holds ${col.maxLength}`, where);
       }
       const hasDefault = col.default !== null || col.identity || col.generated;
-      if (writable && field.nullable && !col.nullable) {
+      if (writable && subject.nullable && !col.nullable) {
         issues.push('nullability');
         finding('error', 'null-not-storable', 'contract accepts null, the column is NOT NULL', where);
-      } else if (field.create && !field.requiredOnCreate && !col.nullable && !hasDefault) {
+      } else if (!perRow && field.create && !field.requiredOnCreate && !col.nullable && !hasDefault) {
         issues.push('optional-on-create');
         finding('warning', 'optional-but-not-null', 'optional on create, but the column is NOT NULL with no default: the app must fill it', where);
       }
-      if (field.read && field.alwaysPresent && !field.nullable && col.nullable) {
+      if (!perRow && field.read && field.alwaysPresent && !field.nullable && col.nullable) {
         issues.push('db-allows-null');
         finding('warning', 'db-allows-null', 'contract promises a value, the column allows NULL', where);
       }
       const allowed = enums[col.type] ?? col.allowedValues;
-      if (field.enum && allowed) {
-        const api = new Set(field.enum.filter((v) => v !== null));
+      if (subject.enum && allowed) {
+        const api = new Set(subject.enum.filter((v) => v !== null));
         const dbValues = new Set(allowed);
         const onlyApi = [...api].filter((v) => !dbValues.has(v));
         const onlyDb = [...dbValues].filter((v) => !api.has(v));
         // A contract value the database cannot store is always an error. A stored value the contract does not list is
         // one too, unless the contract's enum is extensible: clients must then accept values it does not list yet.
-        if (onlyApi.length || (onlyDb.length && !field.extensibleEnum)) {
+        if (onlyApi.length || (onlyDb.length && !subject.extensibleEnum)) {
           issues.push('enum');
           finding('error', 'enum-mismatch', `only in contract: [${onlyApi.join(', ')}]; only in database: [${onlyDb.join(', ')}]`, where);
         } else if (onlyDb.length) {
@@ -227,16 +276,21 @@ for (const [table, objects] of [...byTable.entries()].sort(([a], [b]) => a.local
       }
     }
   }
-  for (const [column, col] of Object.entries(columns)) {
-    if (used.has(column) || ignoredColumn(table, column)) continue;
-    const creatable = objects.some((o) => o.entry.operations.create.length);
+}
+// A table only a cross-table field mapping reaches still reports the columns no field covers.
+const reached = new Set([...byTable.keys(), ...[...used].filter(([, cols]) => cols.size).map(([t]) => t)]);
+for (const table of [...reached].sort()) {
+  const objects = byTable.get(table) ?? [];
+  const creatable = objects.some((o) => o.entry.operations.create.length);
+  for (const [column, col] of Object.entries(tables[table].columns)) {
+    if (used.get(table).has(column) || ignoredColumn(table, column)) continue;
     const mustSet = creatable && !col.nullable && col.default === null && !col.identity && !col.generated;
     finding('info', 'column-not-exposed', mustSet ? 'NOT NULL with no default and not in the contract: the app sets it on create'
       : 'not in the contract', { table, column });
   }
 }
 for (const table of Object.keys(tables)) {
-  if (!byTable.has(table) && !ignoreTables.has(table)) finding('info', 'table-not-exposed', 'no contract object maps to this table', { table });
+  if (!reached.has(table) && !ignoreTables.has(table)) finding('info', 'table-not-exposed', 'no contract object maps to this table', { table });
 }
 
 const order = { error: 0, warning: 1, info: 2 };
@@ -247,9 +301,9 @@ const count = (s) => findings.filter((f) => f.severity === s).length;
 process.stdout.write(`${JSON.stringify({
   sources: { contract: surface.source, database: db.source ?? null, map: mapPath?.replace(/\\/g, '/') ?? null },
   summary: {
-    errors: count('error'), warnings: count('warning'), info: count('info'),
+    errors: count('error'), warnings: count('warning'), info: count('info'), accepted: findings.filter((f) => f.accepted).length,
     objects: Object.keys(surface.objects ?? {}).length, tables: Object.keys(tables).length,
-    matchedTables: byTable.size, objectsWithoutTable: unstored.length,
+    matchedTables: reached.size, objectsWithoutTable: unstored.length,
   },
   tables: tableReport,
   findings,

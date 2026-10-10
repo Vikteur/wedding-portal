@@ -22,7 +22,11 @@ a contract change, not after.
   fields with `read`/`create`/`update` flags, required-on-create/update, nullability, enum, format and maxLength.
 - **Settle names in the map file, not in code** — objects, fields and tables that naming conventions cannot pair
   (an object named after a role, a table holding several document kinds) go in the project's map file: `objects`,
-  `fields`, `ignoreTables`, `ignoreColumns`. An object mapped to `null` is not stored.
+  `fields`, `accept`, `ignoreTables`, `ignoreColumns`. An object or field mapped to `null` is not stored. A field may
+  name another table (`<table>.<column>`: an array kept one row per item compares its items), and `<prefix>.*` maps a
+  nested object onto a table by name.
+- **Accept a finding only with its reason** — `accept` drops one finding to info and carries the reason into the
+  report. When the reason is a CHECK constraint, name it: the script fails the acceptance if the constraint is gone.
 - **Triage by severity** — `error` is a value one side accepts and the other cannot hold (length, nullability, enum,
   type width, a mapped name that is missing); `warning` is likely drift (a writable field with no column, a writable
   object with no table, a promised value the column lets be NULL); `info` is the inventory (derived fields, nested
@@ -42,10 +46,12 @@ a contract change, not after.
 - Don't apply the DDL or migrations to any database but the throwaway container the script starts.
 - Don't edit the contract or write a migration because a finding says so: each is its own change, and both need a
   human decision first.
-- Don't silence a finding with the map file to make the report clean; map only real name differences, and say why.
+- Don't silence a finding with the map file to make the report clean; map only real name differences, and accept only
+  what the schema's own rules justify, with the reason written down.
 - Don't hand the full report to another agent; hand its summary and the findings that concern that agent.
 
 ## Definition of done
 - [ ] The script ran against the current contract and the chosen schema source; the three JSON files exist.
-- [ ] Every `error` is triaged to a side with a follow-up, or the map file shows it was a name difference.
+- [ ] Every `error` and `warning` is fixed on the side that is wrong, or the map file shows a name difference or an
+  acceptance with its reason.
 - [ ] New name pairings live in the map file, not in a script.

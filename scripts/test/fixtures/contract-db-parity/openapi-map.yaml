@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info: { title: Map fixture, version: 1.0.0 }
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/orderInput' } } }
+      responses:
+        '201': { content: { application/json: { schema: { $ref: '#/components/schemas/order' } } } }
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/order' } } } }
+  /password:
+    put:
+      operationId: changePassword
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/passwordChange' } } }
+      responses: { '204': { description: changed } }
+components:
+  schemas:
+    clockTime: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+    party:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    billing:
+      type: object
+      properties:
+        iban: { type: string, maxLength: 34 }
+    order:
+      type: object
+      required: [id, slot, buyer, seller, ref, total]
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        slot: { $ref: '#/components/schemas/clockTime' }
+        buyer: { $ref: '#/components/schemas/party' }
+        seller:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/party'
+        tags: { type: array, items: { type: string, enum: [A, B] } }
+        billing: { $ref: '#/components/schemas/billing' }
+        ref: { type: string, readOnly: true }
+        total: { type: integer, readOnly: true }
+    orderInput:
+      type: object
+      required: [slot]
+      properties:
+        slot: { $ref: '#/components/schemas/clockTime' }
+        tags: { type: array, items: { type: string, enum: [A, B] } }
+    passwordChange:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword: { type: string }

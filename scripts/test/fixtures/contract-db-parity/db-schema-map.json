@@ -1,0 +1,155 @@
+{
+  "tables": {
+    "orders": {
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "slot": {
+          "type": "time without time zone",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "buyer_name": {
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "seller_name": {
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "ref": {
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "total": {
+          "type": "integer",
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        }
+      },
+      "primaryKey": [],
+      "foreignKeys": [],
+      "uniqueConstraints": [],
+      "uniqueIndexes": [],
+      "checks": [
+        {
+          "name": "ck_orders_ref",
+          "definition": "CHECK (ref IS NOT NULL OR id IS NULL)"
+        }
+      ]
+    },
+    "order_tags": {
+      "columns": {
+        "order_id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "tag": {
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false,
+          "allowedValues": [
+            "A",
+            "B",
+            "C"
+          ]
+        }
+      },
+      "primaryKey": [],
+      "foreignKeys": [],
+      "uniqueConstraints": [],
+      "uniqueIndexes": [],
+      "checks": []
+    },
+    "order_billing": {
+      "columns": {
+        "order_id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "iban": {
+          "type": "character varying",
+          "nullable": true,
+          "default": null,
+          "maxLength": 30,
+          "identity": false,
+          "generated": false
+        },
+        "swift": {
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        }
+      },
+      "primaryKey": [],
+      "foreignKeys": [],
+      "uniqueConstraints": [],
+      "uniqueIndexes": [],
+      "checks": []
+    },
+    "users": {
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        },
+        "password_hash": {
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "identity": false,
+          "generated": false
+        }
+      },
+      "primaryKey": [],
+      "foreignKeys": [],
+      "uniqueConstraints": [],
+      "uniqueIndexes": [],
+      "checks": []
+    }
+  },
+  "enums": {}
+}

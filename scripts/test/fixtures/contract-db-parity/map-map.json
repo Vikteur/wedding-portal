@@ -1,0 +1,12 @@
+{
+  "objects": { "passwordChange": "users" },
+  "fields": {
+    "order.tags": "order_tags.tag",
+    "order.billing.*": "order_billing.*",
+    "passwordChange.newPassword": "password_hash"
+  },
+  "accept": {
+    "order.ref": { "db-allows-null": { "constraint": "ck_orders_ref", "reason": "null only before the order is placed" } },
+    "order.total": { "db-allows-null": { "constraint": "ck_orders_gone", "reason": "a constraint the schema does not have" } }
+  }
+}

@@ -108,5 +108,5 @@ echo "[parity] $out/parity-report.json"
 node -e '
   const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   const s = r.summary;
-  console.log(`[parity] ${s.errors} errors, ${s.warnings} warnings, ${s.info} info; ${s.matchedTables}/${s.tables} tables matched, ${s.objectsWithoutTable} objects without a table`);
+  console.log(`[parity] ${s.errors} errors, ${s.warnings} warnings, ${s.info} info (${s.accepted ?? 0} accepted); ${s.matchedTables}/${s.tables} tables matched, ${s.objectsWithoutTable} objects without a table`);
   if (process.argv[2] === "1" && s.errors > 0) process.exit(1);' "$out/parity-report.json" "$strict"

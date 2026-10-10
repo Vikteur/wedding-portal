@@ -113,9 +113,11 @@ function flatten(schema, prefix = '', required = false, fields = {}, stack = [])
 
   if (type === 'object' && resolved.properties) {
     if (prefix) fields[prefix] = { ...leaf(resolved, required), type: 'object', container: true, ...(name && { ref: name }) };
+    // A nested object that may be null or absent (a draft's `seller`) makes its required fields optional as columns.
+    const mayBeAbsent = prefix && (!required || fields[prefix].nullable);
     const req = new Set(resolved.required ?? []);
     for (const [key, prop] of Object.entries(resolved.properties)) {
-      flatten(prop, prefix ? `${prefix}.${key}` : key, req.has(key), fields, nextStack);
+      flatten(prop, prefix ? `${prefix}.${key}` : key, req.has(key) && !mayBeAbsent, fields, nextStack);
     }
     return fields;
   }
@@ -261,8 +263,11 @@ function markFields(obj, fields, flag, prefix = '') {
   }
 }
 for (const op of operations) objectFor(op.object);
+// Only an object some 2xx response returns is read; a request-only body (a password change) has nothing to read.
 for (const [name, obj] of Object.entries(objects)) {
-  if (obj.schema && spec.components?.schemas?.[name]) markFields(obj, flatten({ $ref: `#/components/schemas/${name}` }), 'read');
+  if (obj.schema && entities.has(name) && spec.components?.schemas?.[name]) {
+    markFields(obj, flatten({ $ref: `#/components/schemas/${name}` }), 'read');
+  }
 }
 for (const op of operations) {
   const obj = objects[op.object];
