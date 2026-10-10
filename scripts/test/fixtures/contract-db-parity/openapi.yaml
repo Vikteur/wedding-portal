@@ -64,6 +64,12 @@ components:
         seats: { type: integer, format: int64 }
         externalRef: { type: string, format: uuid }
         badge: { type: string }
+        channel: { type: string, x-extensible-enum: [EMAIL, SMS] }
+        diet:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/dietKind'
+    dietKind: { type: string, enum: [VEGAN, NONE] }
     guestCreate:
       type: object
       required: [name]

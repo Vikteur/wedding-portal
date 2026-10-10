@@ -215,9 +215,14 @@ for (const [table, objects] of [...byTable.entries()].sort(([a], [b]) => a.local
         const dbValues = new Set(allowed);
         const onlyApi = [...api].filter((v) => !dbValues.has(v));
         const onlyDb = [...dbValues].filter((v) => !api.has(v));
-        if (onlyApi.length || onlyDb.length) {
+        // A contract value the database cannot store is always an error. A stored value the contract does not list is
+        // one too, unless the contract's enum is extensible: clients must then accept values it does not list yet.
+        if (onlyApi.length || (onlyDb.length && !field.extensibleEnum)) {
           issues.push('enum');
           finding('error', 'enum-mismatch', `only in contract: [${onlyApi.join(', ')}]; only in database: [${onlyDb.join(', ')}]`, where);
+        } else if (onlyDb.length) {
+          issues.push('enum');
+          finding('warning', 'enum-not-listed', `the contract's extensible enum does not list yet: [${onlyDb.join(', ')}]`, where);
         }
       }
     }

@@ -8,7 +8,7 @@ runtime: lazy
 
 | Input | Where | Note |
 |---|---|---|
-| Contract | `../rekord-contract/dist/openapi.yaml` (sibling checkout of the hub repo) | Bundled OpenAPI 3.0.3; `v4.0.0` when this leaf was written. Only the contract-agent edits it. |
+| Contract | `../rekord-contract/dist/openapi.yaml` (sibling checkout of the hub repo) | Bundled OpenAPI 3.0.3; `v5.0.0` when this leaf was written. Only the contract-agent edits it. |
 | Designed schema | `../weddingapp/docs/rewrite/analysis/44-target-data-model/schema.sql` | Report 44's DDL, the source the UML diagrams (`*.png` next to it, mermaid in the report) are drawn from. No database runs it yet (UD-24). |
 | Migrations | `application/src/main/resources/db/migration` | None on `main` yet: each data-model ticket cuts its `V<n>__*.sql` from report 44, and each is a STOP item. |
 | Map file | [map] | Object→table pairs that names cannot settle, and the bookkeeping columns every table carries. |
@@ -36,6 +36,8 @@ Output lands in `build/contract-db-parity/` (git-ignored). The tests are `script
 - Every business table carries `org_id`, `created_at`, `updated_at` and some `deleted_at`; the map file ignores them,
   because the contract never exposes the tenant key or the soft-delete stamp.
 - The three append-only logs use a `bigint` identity, every other id is a `uuid`.
+- A list that grows (`auditAction` since contract v5.0.0) is an `x-extensible-enum`: every contract value must be
+  storable (error), but a stored value the contract does not list yet is only a warning, `enum-not-listed`.
 
 ## Map file decisions
 
@@ -49,16 +51,18 @@ Output lands in `build/contract-db-parity/` (git-ignored). The tests are `script
 | `auditEvent` | `audit_log` | |
 | `coupleChange` | `song_changes` | |
 
-## First run (contract v4.0.0 against report 44, 2026-10-10)
+## Last run (contract v5.0.0 against report 44, 2026-10-10)
 
-2 errors, 65 warnings, 178 info; 16 of 35 tables matched. The errors:
+2 errors, 65 warnings, 180 info; 16 of 35 tables matched. The errors:
 
-- `auditEvent.action`: the contract's actions (`SIGN_IN`, `SIGN_OUT`, `MEMBER_VENDOR_LINKED`, …) and the schema's
-  `ck_audit_log_action` (`SIGN_IN_SUCCEEDED`, `SIGNED_OUT`, `INVITE_ACCEPTED`, …) disagree.
+- `auditEvent.action`: six contract values have no place in `ck_audit_log_action` (`SIGN_IN`, `SIGN_OUT`,
+  `MEMBER_VENDOR_LINKED`, `MEMBER_VENDOR_UNLINKED`, `WEDDING_DELETED`, `WEDDING_PURGED`), and the check still says
+  `SIGN_IN_SUCCEEDED` and `SIGNED_OUT`, the names contract v5 replaced with `SIGN_IN` and `SIGN_OUT`.
 - `auditEvent.id`: a `uuid` in the contract, a `bigint` identity in the schema.
 
 The warnings worth a look: `organization.billing.*` has no column on `organizations` (the schema keeps it in
-`billing_settings`), `atTime`/`ceremonyTime`-style fields are plain strings over `time` columns, and `wedding.note`,
+`billing_settings`), `atTime`/`ceremonyTime`-style fields are plain strings over `time` columns, the document
+`seller.*` and `recipient.name` are promised but nullable in `billing_documents`, and `wedding.note`,
 `wedding.venueName`, `userAccount.roles`, `teamSlot.contactId` have no matching column.
 
 [map]: contract-db-parity.map.json

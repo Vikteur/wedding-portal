@@ -38,6 +38,8 @@ check "a delete with no schema falls back to its path" '.objects["path:tables"].
 check "readOnly is never writable"  '.objects.guest.fields.id|(.read==true) and (.create|not) and (.update|not)' "$s"
 check "required on create"          '.objects.guest.fields.name.requiredOnCreate==true' "$s"
 check "nested array items flatten"  '.objects.venue.fields["rooms[].label"].read==true' "$s"
+check "an extensible enum is read"    '.objects.guest.fields.channel|(.enum==["EMAIL","SMS"]) and (.extensibleEnum==true)' "$s"
+check "nullable allOf keeps the enum" '.objects.guest.fields.diet|(.enum==["VEGAN","NONE"]) and (.nullable==true)' "$s"
 check "a read-only object is not writable" '.objects.venue.operations|(.create|length)+(.update|length)+(.delete|length)==0' "$s"
 
 # Comparison findings.
@@ -47,6 +49,8 @@ has "nullable into NOT NULL is reported" null-not-storable email
 has "enum drift against a PG enum"      enum-mismatch status
 has "int64 into integer is reported"    type-mismatch seats
 has "a write-only field with no column" field-not-persisted dietaryNote
+check "a stored value an extensible enum lacks is a warning" '[.findings[]|select(.field=="channel")]|map(.kind+"/"+.severity)==["enum-not-listed/warning"]' "$r"
+check "matching CHECK values give no finding" '[.findings[]|select(.field=="diet")]|length==0' "$r"
 check "map.json maps a field"        '.tables.guests.fields["guest.badge"].column=="badge_text"' "$r"
 check "map.json null drops an object" '[.findings[]|select(.object=="venue")]|length==0' "$r"
 check "ignored tables and columns"   '[.findings[]|select(.table=="audit_log" or .column=="created_at")]|length==0' "$r"

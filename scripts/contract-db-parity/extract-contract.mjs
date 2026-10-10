@@ -56,8 +56,11 @@ function typeOf(schema) {
   if (schema.type) return { type: schema.type, nullable: schema.nullable === true };
   if (schema.properties || schema.additionalProperties) return { type: 'object', nullable: schema.nullable === true };
   if (schema.items) return { type: 'array', nullable: schema.nullable === true };
-  return { type: schema.enum ? 'string' : 'any', nullable: schema.nullable === true };
+  return { type: schema.enum || schema['x-extensible-enum'] ? 'string' : 'any', nullable: schema.nullable === true };
 }
+
+// Value keywords an allOf part carries: `nullable: true, allOf: [$ref: someEnum]` keeps the enum, format and bounds.
+const VALUE_KEYWORDS = ['format', 'enum', 'x-extensible-enum', 'maxLength', 'minLength', 'pattern', 'minimum', 'maximum', 'items'];
 
 // Merge allOf parts into one object schema; oneOf/anyOf variants are merged too, but none of their fields is required.
 function merged(schema, stack) {
@@ -73,6 +76,7 @@ function merged(schema, stack) {
     Object.assign(out.properties, part.properties ?? {});
     out.required.push(...(part.required ?? []));
     out.type ??= part.type;
+    for (const key of VALUE_KEYWORDS) if (part[key] !== undefined) out[key] ??= part[key];
     if (part.nullable) out.nullable = true;
   }
   for (const variant of variants) {
@@ -89,6 +93,8 @@ function leaf(schema, required) {
   for (const key of ['format', 'enum', 'maxLength', 'minLength', 'pattern', 'minimum', 'maximum', 'readOnly', 'writeOnly', 'default']) {
     if (schema[key] !== undefined) field[key] = schema[key];
   }
+  // An extensible enum lists today's values; a client must accept others (a value added later is not breaking).
+  if (!field.enum && Array.isArray(schema['x-extensible-enum'])) Object.assign(field, { enum: schema['x-extensible-enum'], extensibleEnum: true });
   if (schema['x-variant']) field.variant = true;
   return field;
 }
